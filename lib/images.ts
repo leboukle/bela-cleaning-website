@@ -18,9 +18,11 @@ function unsplash(id: string, width = 1600) {
 }
 
 export const images = {
+  // Quiet, airy hero image: sheer drapery, a large residential window, and
+  // bright daylight, with open negative space for the hero text panel.
   homeHero: {
-    src: unsplash("photo-1522708323590-d24dbb6b0267", 2000),
-    alt: "Bright, modern living room with large windows, hardwood floors, and neatly arranged furniture.",
+    src: unsplash("photo-1760243790660-a7958d7843ee", 2000),
+    alt: "Soft sunlight streaming through sheer curtains and blinds in a calm, minimal interior.",
   } satisfies SiteImage,
 
   introInterior: {
@@ -48,23 +50,13 @@ export const images = {
     alt: "Calm, bright bedroom with fresh white linens and natural light.",
   } satisfies SiteImage,
 
-  aboutHero: {
-    src: unsplash("photo-1493663284031-b7e3aefcae8e", 1800),
-    alt: "Refined, bright living room in a modern apartment with large windows.",
-  } satisfies SiteImage,
-
-  aboutLocal: {
-    src: unsplash("photo-1502672260266-1c1ef2d93688", 1400),
-    alt: "Contemporary apartment building exterior with floor-to-ceiling windows.",
-  } satisfies SiteImage,
-
   serviceArea: {
     src: unsplash("photo-1567016432779-094069958ea5", 1600),
     alt: "Bright, modern living space typical of Jersey City and Hoboken apartments.",
   } satisfies SiteImage,
 
-  aboutContact: {
-    src: unsplash("photo-1598928506311-c55ded91a20c", 1200),
-    alt: "Neatly organized entryway with natural light.",
+  workWithUsHero: {
+    src: unsplash("photo-1493663284031-b7e3aefcae8e", 1800),
+    alt: "Refined, bright living room in a modern apartment with large windows.",
   } satisfies SiteImage,
 } as const;

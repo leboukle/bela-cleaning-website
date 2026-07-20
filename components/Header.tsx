@@ -50,21 +50,22 @@ export default function Header() {
     };
   }, [mobileOpen]);
 
-  const transparent = isHome && !scrolled && !mobileOpen;
-  const textColor = transparent ? "text-pure-white" : "text-charcoal";
-  const surfaceClasses = transparent
-    ? "bg-transparent border-transparent"
-    : "bg-warm-white/95 backdrop-blur-sm border-soft-gray";
+  // Navigation text is always dark charcoal for legibility — never white —
+  // per feedback that white nav text over the pale hero was hard to read.
+  // The homepage starts with a lightly translucent, blurred warm-white bar
+  // over the hero and settles to a nearly solid surface on scroll. Internal
+  // pages always render the solid surface.
+  const surfaceClasses =
+    isHome && !scrolled
+      ? "bg-warm-white/70 backdrop-blur-md border-soft-gray/50"
+      : "bg-warm-white/95 backdrop-blur-md border-soft-gray";
 
   return (
     <header
       className={`sticky top-0 z-50 border-b transition-colors duration-300 ${surfaceClasses}`}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <Link
-          href="/"
-          className={`flex items-baseline gap-1.5 transition-colors duration-300 ${textColor}`}
-        >
+        <Link href="/" className="flex items-baseline gap-1.5 text-charcoal">
           <span className="font-heading text-2xl">BeLa</span>
           <span className="font-sans text-sm font-medium tracking-wide">Cleaning</span>
         </Link>
@@ -74,7 +75,7 @@ export default function Header() {
             <Link
               key={item.href}
               href={item.href}
-              className={`text-sm font-medium transition-colors duration-300 hover:underline underline-offset-4 ${textColor}`}
+              className="text-sm font-medium text-charcoal hover:underline underline-offset-4"
             >
               {item.label}
             </Link>
@@ -91,7 +92,7 @@ export default function Header() {
           aria-controls={MOBILE_MENU_ID}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           onClick={() => setMobileOpen((open) => !open)}
-          className={`md:hidden inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-300 ${textColor}`}
+          className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-full text-charcoal"
         >
           {mobileOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
         </button>

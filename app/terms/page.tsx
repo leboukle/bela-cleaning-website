@@ -1,51 +1,319 @@
 import type { Metadata } from "next";
-import SectionHeading from "@/components/SectionHeading";
+import LegalLayout, { type LegalTOCItem } from "@/components/LegalLayout";
+import LegalSection from "@/components/LegalSection";
 import { businessConfig } from "@/lib/config";
+import { legalConfig, termsLastUpdatedDisplay } from "@/lib/legal";
 
-// DEVELOPER NOTE: Legal content requires review and finalization before
-// public launch. The copy below is a concise, honest placeholder and does
-// not claim attorney review or make specific contractual commitments.
 export const metadata: Metadata = {
   title: { absolute: "Terms of Service | BeLa Cleaning" },
-  description: `Terms of service placeholder for ${businessConfig.businessName}.`,
+  description:
+    "Review the terms governing use of the BeLa Cleaning website, booking links, and cleaner application.",
   alternates: { canonical: "/terms" },
 };
 
+const toc: LegalTOCItem[] = [
+  { id: "agreement", title: "Agreement to Terms" },
+  { id: "about", title: "About BeLa Cleaning" },
+  { id: "online-booking", title: "Online Booking" },
+  { id: "services-availability", title: "Services, Availability, and Pricing" },
+  { id: "accurate-info", title: "Accurate Service Information" },
+  { id: "home-access", title: "Home Access and Customer Responsibilities" },
+  { id: "cancellations", title: "Cancellations and Rescheduling" },
+  { id: "payment", title: "Payment" },
+  { id: "satisfaction", title: "Satisfaction Concerns" },
+  { id: "applications", title: "Work With Us Applications" },
+  { id: "permitted-use", title: "Permitted Website Use" },
+  { id: "intellectual-property", title: "Intellectual Property" },
+  { id: "third-party", title: "Third-Party Services and Links" },
+  { id: "availability", title: "Website Availability and Accuracy" },
+  { id: "disclaimers", title: "Disclaimers" },
+  { id: "liability", title: "Limitation of Liability" },
+  { id: "governing-law", title: "Governing Law" },
+  { id: "severability", title: "Severability and No Waiver" },
+  { id: "changes", title: "Changes to Terms" },
+  { id: "contact", title: "Contact" },
+];
+
 export default function TermsPage() {
   return (
-    <section className="py-20 sm:py-28">
-      <div className="mx-auto max-w-3xl px-6">
-        <SectionHeading eyebrow="Legal" title="Terms of Service" as="h1" />
-        <div className="mt-8 space-y-5 text-warm-text leading-relaxed">
-          <p>
-            This page is a placeholder. BeLa Cleaning&rsquo;s final Terms of Service will
-            describe the terms that apply to using this website and booking services
-            through BeLa Cleaning&rsquo;s online booking platform, including scheduling,
-            rescheduling, and cancellation policies.
-          </p>
-          <p>
-            Final, legally reviewed terms will be published here before this website is
-            publicly launched.
-          </p>
-          <p>
-            If you have a question in the meantime, contact BeLa Cleaning at{" "}
-            <a
-              href={`mailto:${businessConfig.email}`}
-              className="text-deep-green underline underline-offset-2 hover:text-charcoal"
-            >
-              {businessConfig.email}
-            </a>{" "}
-            or{" "}
-            <a
-              href={businessConfig.phoneHref}
-              className="text-deep-green underline underline-offset-2 hover:text-charcoal"
-            >
-              {businessConfig.phoneDisplay}
+    <LegalLayout title="Terms of Service" lastUpdatedDisplay={termsLastUpdatedDisplay} toc={toc}>
+      <LegalSection id="agreement" number={1} title="Agreement to Terms">
+        <p>
+          These Terms of Service govern access to and use of belacleaning.com. By
+          accessing or using the website, you agree to these Terms. If you do not
+          agree, do not use the website.
+        </p>
+        <p>
+          Cleaning appointments booked through {legalConfig.bookingProviderName} may
+          also be subject to booking terms, policies, service selections, cancellation
+          provisions, and payment information displayed during the booking process.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="about" number={2} title="About BeLa Cleaning">
+        <p>
+          BeLa Cleaning provides residential cleaning services in Jersey City, Hoboken,
+          Newark, and selected nearby communities.
+        </p>
+        <p>
+          The website provides business information, links to online booking,
+          customer-service contact details, and a cleaner-interest application.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="online-booking" number={3} title="Online Booking">
+        <p>
+          Book Cleaning links direct customers to {legalConfig.bookingProviderName}.
+        </p>
+        <p>Customers are responsible for:</p>
+        <ul>
+          <li>Providing accurate booking information</li>
+          <li>Selecting the appropriate home size and service</li>
+          <li>Selecting applicable add-ons</li>
+          <li>Providing accurate access instructions</li>
+          <li>Reviewing the displayed price before confirming</li>
+          <li>Reviewing the booking terms and policies presented during checkout</li>
+        </ul>
+        <p>
+          {legalConfig.bookingProviderName} is a third-party platform with its own
+          terms and privacy policy.
+        </p>
+        <ul>
+          <li>
+            <a href={legalConfig.bookingPrivacyUrl} target="_blank" rel="noopener noreferrer">
+              {legalConfig.bookingProviderName} Privacy Policy
             </a>
-            .
-          </p>
-        </div>
-      </div>
-    </section>
+          </li>
+          <li>
+            <a href={legalConfig.bookingTermsUrl} target="_blank" rel="noopener noreferrer">
+              {legalConfig.bookingProviderName} Terms of Use
+            </a>
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection
+        id="services-availability"
+        number={4}
+        title="Services, Availability, and Pricing"
+      >
+        <ul>
+          <li>
+            Service availability varies by location, date, provider availability, home
+            condition, and selected service
+          </li>
+          <li>Prices and available options are displayed through the booking platform</li>
+          <li>
+            Website descriptions provide general information and do not override the
+            selections and details confirmed during booking
+          </li>
+          <li>BeLa Cleaning may decline or reschedule a service when reasonably necessary</li>
+          <li>No appointment is confirmed solely by browsing the website or sending an email</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection id="accurate-info" number={5} title="Accurate Service Information">
+        <p>Customers must provide reasonably accurate information concerning:</p>
+        <ul>
+          <li>Home size</li>
+          <li>Number of bedrooms and bathrooms</li>
+          <li>Condition of the home</li>
+          <li>Pets</li>
+          <li>Access</li>
+          <li>Parking or building restrictions</li>
+          <li>Selected add-ons</li>
+          <li>Material conditions that could affect the service</li>
+        </ul>
+        <p>
+          A material difference between the booked scope and the actual condition of
+          the home may require discussion, adjustment, rescheduling, or customer
+          approval before additional work is performed.
+        </p>
+      </LegalSection>
+
+      <LegalSection
+        id="home-access"
+        number={6}
+        title="Home Access and Customer Responsibilities"
+      >
+        <p>Customers are responsible for:</p>
+        <ul>
+          <li>Providing safe and lawful access</li>
+          <li>Supplying complete building and entry instructions</li>
+          <li>Ensuring utilities needed for cleaning are available</li>
+          <li>Securing pets where appropriate</li>
+          <li>Identifying fragile or high-value items</li>
+          <li>Removing unlawful, dangerous, or hazardous materials</li>
+          <li>Providing a reasonably safe working environment</li>
+        </ul>
+        <p>
+          BeLa Cleaning may decline or stop work when conditions present a reasonable
+          safety, health, access, or legal concern.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="cancellations" number={7} title="Cancellations and Rescheduling">
+        <p>
+          Cancellation, rescheduling, missed-access, and related fees are governed by
+          the current policies displayed or accepted during the{" "}
+          {legalConfig.bookingProviderName} booking process.
+        </p>
+        <p>Customers should review those policies before confirming an appointment.</p>
+      </LegalSection>
+
+      <LegalSection id="payment" number={8} title="Payment">
+        <p>
+          Payments and payment information associated with bookings are handled through
+          the booking and payment services presented during checkout.
+        </p>
+        <p>
+          Customers authorize applicable charges when confirming a booking under the
+          checkout terms.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="satisfaction" number={9} title="Satisfaction Concerns">
+        <p>
+          Customers should report service concerns promptly to{" "}
+          <a href={`mailto:${businessConfig.email}`}>{businessConfig.email}</a> or{" "}
+          <a href={businessConfig.phoneHref}>{businessConfig.phoneDisplay}</a> and
+          provide sufficient detail for the matter to be reviewed.
+        </p>
+        <p>
+          Any response, re-service, credit, or other resolution is subject to the
+          circumstances and BeLa Cleaning&rsquo;s then-current service policies.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="applications" number={10} title="Work With Us Applications">
+        <ul>
+          <li>Submitting an application does not create an employment relationship</li>
+          <li>It does not guarantee an interview, assignment, engagement, or position</li>
+          <li>Applicants must provide accurate information</li>
+          <li>BeLa Cleaning may contact applicants about possible opportunities</li>
+          <li>
+            BeLa Cleaning may stop considering an application at its discretion, subject
+            to applicable law
+          </li>
+          <li>
+            Worker status, onboarding requirements, payment procedures, and assignment
+            expectations will be addressed separately if the applicant advances
+          </li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection id="permitted-use" number={11} title="Permitted Website Use">
+        <p>Ordinary lawful use of the website is permitted. You agree not to engage in:</p>
+        <ul>
+          <li>Illegal activity</li>
+          <li>Fraud</li>
+          <li>Impersonation</li>
+          <li>Interference with website security</li>
+          <li>Automated scraping that burdens the service</li>
+          <li>Introduction of malicious code</li>
+          <li>Attempts to obtain unauthorized access</li>
+          <li>Misuse of application or contact forms</li>
+          <li>Submission of false or misleading information</li>
+          <li>Infringement of intellectual-property or privacy rights</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection id="intellectual-property" number={12} title="Intellectual Property">
+        <p>
+          Website text, design, branding, graphics, and original content are owned by
+          or licensed to BeLa Cleaning and protected by applicable law. You may view the
+          site for personal, noncommercial purposes.
+        </p>
+        <p>
+          BeLa Cleaning does not claim ownership over third-party photography or
+          software beyond its applicable licenses.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="third-party" number={13} title="Third-Party Services and Links">
+        <p>
+          The site may link to {legalConfig.bookingProviderName},{" "}
+          {legalConfig.formProviderName}, and other third-party providers. BeLa Cleaning
+          does not control those third parties, and their separate terms and policies
+          apply to your use of their services.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="availability" number={14} title="Website Availability and Accuracy">
+        <p>
+          BeLa Cleaning seeks to keep website information accurate and available but
+          does not promise that the website will always be uninterrupted, error-free,
+          or completely current.
+        </p>
+        <p>BeLa Cleaning may correct content or modify the website.</p>
+      </LegalSection>
+
+      <LegalSection id="disclaimers" number={15} title="Disclaimers">
+        <p>
+          General website content is informational. Actual service terms are
+          established through confirmed booking details and applicable policies
+          presented during booking.
+        </p>
+        <p>
+          Nothing in this section disclaims liability for intentional misconduct, gross
+          negligence, or any obligation that cannot legally be disclaimed.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="liability" number={16} title="Limitation of Liability">
+        <p>
+          To the fullest extent permitted by applicable law, BeLa Cleaning will not be
+          liable for indirect, incidental, special, consequential, or punitive damages
+          arising solely from use of, or inability to use, the website.
+        </p>
+        <p>Nothing in these Terms limits liability that cannot legally be limited.</p>
+        {/*
+          DEVELOPER NOTE: An "Indemnification" section is intentionally
+          omitted from this initial version. Consider attorney review before
+          adding any customer indemnification obligation.
+        */}
+      </LegalSection>
+
+      <LegalSection id="governing-law" number={17} title="Governing Law">
+        <p>
+          These Terms are governed by the laws of the State of New Jersey, without
+          regard to conflict-of-law principles, except where applicable law requires
+          otherwise.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="severability" number={18} title="Severability and No Waiver">
+        <p>
+          If a provision is found unenforceable, the remaining provisions remain in
+          effect to the extent permitted by law.
+        </p>
+        <p>
+          Failure to enforce a provision does not automatically waive the right to
+          enforce it later.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="changes" number={19} title="Changes to Terms">
+        <p>
+          These Terms may be revised periodically. The Last Updated date will change
+          when revisions are published. Changes do not retroactively alter the terms
+          that applied to an already confirmed booking.
+        </p>
+      </LegalSection>
+
+      <LegalSection id="contact" number={20} title="Contact">
+        <p className="font-medium text-charcoal">{businessConfig.businessName}</p>
+        <p>
+          Email: <a href={`mailto:${businessConfig.email}`}>{businessConfig.email}</a>
+          <br />
+          Phone: <a href={businessConfig.phoneHref}>{businessConfig.phoneDisplay}</a>
+          <br />
+          Website:{" "}
+          <a href={businessConfig.websiteUrl} target="_blank" rel="noopener noreferrer">
+            {businessConfig.websiteUrl}
+          </a>
+        </p>
+      </LegalSection>
+    </LegalLayout>
   );
 }

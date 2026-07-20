@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Check, ListChecks, Receipt, MessageCircle, HeartHandshake } from "lucide-react";
+import { Check } from "lucide-react";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
 import ResponsiveImageSection from "@/components/ResponsiveImageSection";
 import FAQAccordion from "@/components/FAQAccordion";
+import CustomerServiceBlock from "@/components/CustomerServiceBlock";
 import CTASection from "@/components/CTASection";
 import Reveal from "@/components/Reveal";
 import { businessConfig, CTA_LABEL } from "@/lib/config";
@@ -41,29 +42,6 @@ const servicesJsonLd = {
   },
 };
 
-const expectations = [
-  {
-    icon: ListChecks,
-    title: "Clear selections",
-    copy: "Choose the service and available options that match your home.",
-  },
-  {
-    icon: Receipt,
-    title: "Upfront total",
-    copy: "Review the running total before confirming your appointment.",
-  },
-  {
-    icon: MessageCircle,
-    title: "Professional communication",
-    copy: "Receive clear booking and appointment information.",
-  },
-  {
-    icon: HeartHandshake,
-    title: "Respectful service",
-    copy: "Your home is treated with care, attention, and professionalism.",
-  },
-];
-
 const preparationChecklist = [
   "Put away personal or highly valuable items",
   "Clear excessive clutter from surfaces and floors",
@@ -82,7 +60,7 @@ export default function ServicesPage() {
       />
 
       {/* A. Services Hero */}
-      <section className="bg-pure-white pt-20 pb-16 sm:pt-28 sm:pb-20">
+      <section className="pt-20 pb-16 sm:pt-28 sm:pb-20">
         <div className="mx-auto max-w-7xl px-6">
           <SectionHeading
             eyebrow="Residential Cleaning Services"
@@ -100,10 +78,7 @@ export default function ServicesPage() {
       {services.map((service, index) => {
         const imageFirst = index % 2 === 1;
         return (
-          <section
-            key={service.slug}
-            className={index % 2 === 0 ? "py-16 sm:py-20" : "py-16 sm:py-20 bg-pure-white"}
-          >
+          <section key={service.slug} className="py-16 sm:py-20 border-t border-soft-gray">
             <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
               <Reveal className={imageFirst ? "lg:order-2" : ""}>
                 <ResponsiveImageSection
@@ -141,14 +116,14 @@ export default function ServicesPage() {
       })}
 
       {/* E. Add-Ons */}
-      <section className="py-16 sm:py-20">
+      <section className="py-16 sm:py-20 border-t border-soft-gray">
         <div className="mx-auto max-w-7xl px-6">
           <SectionHeading title="Add the details your home needs." align="center" className="mx-auto" />
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {addOns.map((addOn) => (
               <div
                 key={addOn}
-                className="rounded-xl border border-soft-gray bg-pure-white px-5 py-4 text-sm font-medium text-charcoal"
+                className="border border-soft-gray px-5 py-4 text-sm font-medium text-charcoal"
               >
                 {addOn}
               </div>
@@ -161,26 +136,8 @@ export default function ServicesPage() {
         </div>
       </section>
 
-      {/* F. What to Expect */}
-      <section className="py-16 sm:py-20 bg-pure-white">
-        <div className="mx-auto max-w-7xl px-6">
-          <SectionHeading title="What to expect." align="center" className="mx-auto" />
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {expectations.map((item) => (
-              <div key={item.title} className="text-center">
-                <span className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-full bg-soft-gray text-deep-green">
-                  <item.icon size={20} aria-hidden="true" />
-                </span>
-                <h3 className="mt-4 font-heading text-lg text-charcoal">{item.title}</h3>
-                <p className="mt-2 text-sm text-warm-text leading-relaxed">{item.copy}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* G. Preparing for Your Cleaning */}
-      <section className="py-16 sm:py-20">
+      {/* F. Preparing for Your Cleaning */}
+      <section className="py-16 sm:py-20 border-t border-soft-gray">
         <div className="mx-auto max-w-3xl px-6">
           <SectionHeading
             title="A few simple preparations help us focus on cleaning."
@@ -198,8 +155,8 @@ export default function ServicesPage() {
         </div>
       </section>
 
-      {/* H. FAQ */}
-      <section className="py-16 sm:py-20 bg-pure-white">
+      {/* G. FAQ */}
+      <section className="py-16 sm:py-20 border-t border-soft-gray">
         <div className="mx-auto max-w-3xl px-6">
           <SectionHeading title="Frequently asked questions." align="center" className="mx-auto" />
           <div className="mt-10">
@@ -207,6 +164,11 @@ export default function ServicesPage() {
           </div>
         </div>
       </section>
+
+      {/* H. Customer-Service Contact Block */}
+      <div className="border-t border-soft-gray">
+        <CustomerServiceBlock />
+      </div>
 
       {/* I. Services Final CTA */}
       <CTASection

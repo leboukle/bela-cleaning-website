@@ -1,13 +1,12 @@
 import Image from "next/image";
 import type { Metadata } from "next";
-import { CalendarCheck, Receipt, ShieldCheck } from "lucide-react";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
 import TrustRow from "@/components/TrustRow";
-import BenefitCard from "@/components/BenefitCard";
 import ServiceCard from "@/components/ServiceCard";
 import ResponsiveImageSection from "@/components/ResponsiveImageSection";
 import TestimonialCard from "@/components/TestimonialCard";
+import CustomerServiceBlock from "@/components/CustomerServiceBlock";
 import CTASection from "@/components/CTASection";
 import Reveal from "@/components/Reveal";
 import { businessConfig, CTA_LABEL } from "@/lib/config";
@@ -24,19 +23,53 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-const benefits = [
+const steps = [
   {
-    icon: CalendarCheck,
+    number: "01",
+    title: "Choose Your Cleaning",
+    copy: "Select the service, home size, frequency, and available add-ons.",
+  },
+  {
+    number: "02",
+    title: "Pick Your Time",
+    copy: "Choose an available date and appointment window online.",
+  },
+  {
+    number: "03",
+    title: "Come Home to Clean",
+    copy: "Our team completes the service so you can return to a refreshed home.",
+  },
+];
+
+const expectations = [
+  {
+    title: "Clear selections",
+    copy: "Choose the service and available options that match your home.",
+  },
+  {
+    title: "Upfront total",
+    copy: "Review the running total before confirming your appointment.",
+  },
+  {
+    title: "Professional communication",
+    copy: "Receive clear booking and appointment information.",
+  },
+  {
+    title: "Respectful service",
+    copy: "Your home is treated with care, attention, and professionalism.",
+  },
+];
+
+const whyBela = [
+  {
     title: "Easy Online Booking",
     copy: "Choose the service that fits your home, see your total as you book, and select an available appointment online.",
   },
   {
-    icon: Receipt,
     title: "Clear, Transparent Pricing",
     copy: "Know what your selected cleaning costs before confirming. No contracts, hidden fees, or unnecessary quoting process.",
   },
   {
-    icon: ShieldCheck,
     title: "Local and Dependable",
     copy: "BeLa Cleaning is locally owned and focused on reliable service, clear communication, and consistent professional standards.",
   },
@@ -49,29 +82,11 @@ const professionalFeatures = [
   "Manage your appointment through the booking platform",
 ];
 
-const steps = [
-  {
-    number: "01",
-    title: "Choose Your Cleaning",
-    copy: "Select the service, home size, frequency, and any available add-ons.",
-  },
-  {
-    number: "02",
-    title: "Pick Your Time",
-    copy: "Choose an available date and appointment window online.",
-  },
-  {
-    number: "03",
-    title: "Come Home to Clean",
-    copy: "Our team completes the service so you can return to a home that feels refreshed and cared for.",
-  },
-];
-
 export default function HomePage() {
   return (
     <>
-      {/* A. Home Hero */}
-      <section className="relative flex min-h-[88vh] items-center overflow-hidden bg-charcoal">
+      {/* 1. Hero */}
+      <section className="relative flex min-h-[85vh] items-center overflow-hidden">
         <Image
           src={images.homeHero.src}
           alt={images.homeHero.alt}
@@ -80,79 +95,116 @@ export default function HomePage() {
           sizes="100vw"
           className="object-cover"
         />
-        <div
-          className="absolute inset-0 bg-gradient-to-t from-charcoal/85 via-charcoal/45 to-charcoal/20"
-          aria-hidden="true"
-        />
-        <div className="relative mx-auto w-full max-w-7xl px-6 py-32 sm:py-40">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold tracking-[0.18em] text-soft-gray uppercase mb-4">
+        <div className="relative mx-auto w-full max-w-7xl px-6 py-28 sm:py-36">
+          <div className="max-w-lg border border-soft-gray/70 bg-warm-white/90 px-8 py-10 backdrop-blur-md sm:px-10 sm:py-12">
+            <p className="text-xs font-semibold tracking-[0.18em] text-deep-green uppercase mb-4">
               Residential Cleaning for Busy Lives
             </p>
-            <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl leading-[1.08] text-pure-white text-balance">
-              Come home to beautifully handled.
+            <h1 className="font-heading text-4xl sm:text-5xl leading-[1.1] text-charcoal text-balance">
+              Professional care, made uncomplicated.
             </h1>
-            <p className="mt-6 max-w-xl text-base sm:text-lg text-soft-gray leading-relaxed">
+            <p className="mt-5 text-base sm:text-lg text-warm-text leading-relaxed">
               High-quality residential cleaning with transparent pricing, dependable
-              service, and online booking in minutes. Serving Jersey City, Hoboken,
-              Newark, and nearby communities.
+              service, and online booking in minutes.
             </p>
-            <div className="mt-8">
+            <p className="mt-2 text-sm text-warm-text">
+              Serving Jersey City, Hoboken, Newark, and nearby communities.
+            </p>
+            <div className="mt-7">
               <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>
             </div>
-            <TrustRow light className="mt-8" />
+            <TrustRow className="mt-7" />
           </div>
         </div>
       </section>
 
-      {/* B. Introduction */}
+      {/* 2. How It Works */}
       <section className="py-20 sm:py-28">
-        <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
-          <Reveal>
-            <SectionHeading
-              title="A cleaner home without the back-and-forth."
-              supporting="Your schedule is already full. BeLa Cleaning makes residential cleaning simple from the start. Choose your service, see your running total, and schedule online without waiting for a quote or spending time on the phone."
-            />
-          </Reveal>
-          <Reveal>
-            <ResponsiveImageSection image={images.introInterior} aspectClassName="aspect-[5/4]" />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* C. Why BeLa */}
-      <section className="py-20 sm:py-28 bg-pure-white">
         <div className="mx-auto max-w-7xl px-6">
           <Reveal>
             <SectionHeading
-              eyebrow="Why BeLa"
-              title="Professional care, made uncomplicated."
-              align="center"
-              className="mx-auto"
+              eyebrow="How It Works"
+              title="A cleaner home in three simple steps."
             />
           </Reveal>
-          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {benefits.map((benefit) => (
-              <Reveal key={benefit.title}>
-                <BenefitCard {...benefit} />
+          <div className="mt-14 grid gap-x-10 gap-y-12 md:grid-cols-3 md:divide-x md:divide-soft-gray">
+            {steps.map((step, index) => (
+              <Reveal key={step.number}>
+                <div className={index > 0 ? "md:pl-10" : ""}>
+                  <span className="font-heading text-6xl sm:text-7xl text-sage/70">
+                    {step.number}
+                  </span>
+                  <h3 className="mt-4 font-heading text-2xl text-charcoal">{step.title}</h3>
+                  <p className="mt-2 max-w-xs text-warm-text leading-relaxed">{step.copy}</p>
+                </div>
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* D. Services Preview */}
-      <section className="py-20 sm:py-28">
-        <div className="mx-auto max-w-7xl px-6">
+      {/* 3. What to Expect */}
+      <section className="py-20 sm:py-28 border-t border-soft-gray">
+        <div className="mx-auto max-w-5xl px-6">
           <Reveal>
             <SectionHeading
-              eyebrow="Our Services"
-              title="The right clean for the way you live."
+              title="Clear from booking through completion."
               align="center"
               className="mx-auto"
             />
           </Reveal>
-          <div className="mt-14 grid gap-6 md:grid-cols-3">
+          <div className="mt-14 grid grid-cols-1 border-t border-l border-soft-gray sm:grid-cols-2">
+            {expectations.map((item, index) => (
+              <Reveal key={item.title}>
+                <div className="h-full border-r border-b border-soft-gray p-8">
+                  <span className="font-heading text-sm text-sage">
+                    0{index + 1}
+                  </span>
+                  <h3 className="mt-2 font-heading text-xl text-charcoal">{item.title}</h3>
+                  <p className="mt-2 text-warm-text leading-relaxed">{item.copy}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Why BeLa */}
+      <section className="py-20 sm:py-28 border-t border-soft-gray">
+        <div className="mx-auto max-w-5xl px-6">
+          <Reveal>
+            <SectionHeading
+              eyebrow="Why BeLa"
+              title="Everything you need. None of the runaround."
+            />
+          </Reveal>
+          <div className="mt-14 divide-y divide-soft-gray border-t border-soft-gray">
+            {whyBela.map((item) => (
+              <Reveal key={item.title}>
+                <div className="grid gap-2 py-8 sm:grid-cols-3 sm:gap-10">
+                  <h3 className="font-heading text-xl text-charcoal sm:col-span-1">
+                    {item.title}
+                  </h3>
+                  <p className="text-warm-text leading-relaxed sm:col-span-2">{item.copy}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Services */}
+      <section className="py-20 sm:py-28 border-t border-soft-gray">
+        <div className="mx-auto max-w-7xl px-6">
+          <Reveal>
+            <SectionHeading
+              eyebrow="Our Services"
+              title="Care designed around your home."
+              align="center"
+              className="mx-auto"
+            />
+          </Reveal>
+          <div className="mt-14 grid gap-10 md:grid-cols-3">
             {services.map((service, index) => (
               <Reveal key={service.slug}>
                 <ServiceCard service={service} priority={index === 0} />
@@ -165,8 +217,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* E. Busy Professionals */}
-      <section className="py-20 sm:py-28 bg-pure-white">
+      {/* 6. Busy Professionals */}
+      <section className="py-20 sm:py-28 border-t border-soft-gray">
         <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
           <Reveal className="order-2 lg:order-1">
             <ResponsiveImageSection
@@ -194,33 +246,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* F. How It Works */}
-      <section className="py-20 sm:py-28">
-        <div className="mx-auto max-w-7xl px-6">
-          <Reveal>
-            <SectionHeading
-              eyebrow="How It Works"
-              title="From booking to beautifully clean."
-              align="center"
-              className="mx-auto"
-            />
-          </Reveal>
-          <div className="mt-14 grid gap-10 sm:grid-cols-3">
-            {steps.map((step) => (
-              <Reveal key={step.number}>
-                <div className="text-center sm:text-left">
-                  <span className="font-heading text-3xl text-sage">{step.number}</span>
-                  <h3 className="mt-3 font-heading text-xl text-charcoal">{step.title}</h3>
-                  <p className="mt-2 text-warm-text leading-relaxed">{step.copy}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* G. Service Area */}
-      <section className="py-20 sm:py-28 bg-pure-white">
+      {/* 7. Service Area */}
+      <section className="py-20 sm:py-28 border-t border-soft-gray">
         <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
           <Reveal>
             <SectionHeading
@@ -261,8 +288,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* H. Testimonials */}
-      <section className="py-20 sm:py-28">
+      {/* 8. Testimonials */}
+      <section className="py-20 sm:py-28 border-t border-soft-gray">
         <div className="mx-auto max-w-7xl px-6">
           <Reveal>
             <SectionHeading
@@ -277,7 +304,7 @@ export default function HomePage() {
             lib/testimonials.ts. Replace the entries in that file with real,
             verified testimonials before public launch.
           */}
-          <div className="mt-14 grid gap-6 md:grid-cols-3">
+          <div className="mt-14 grid gap-10 md:grid-cols-3">
             {testimonials.map((testimonial) => (
               <Reveal key={testimonial.quote}>
                 <TestimonialCard testimonial={testimonial} />
@@ -287,7 +314,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* I. Home Final CTA */}
+      {/* 9. Customer-Service Contact Block */}
+      <div className="border-t border-soft-gray">
+        <CustomerServiceBlock />
+      </div>
+
+      {/* 10. Final CTA */}
       <CTASection
         headline="Your cleaner home starts here."
         copy="Book online in minutes and leave the cleaning to BeLa."

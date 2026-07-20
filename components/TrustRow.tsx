@@ -9,21 +9,17 @@ const trustPoints = [
 
 type TrustRowProps = {
   className?: string;
-  light?: boolean;
 };
 
-export default function TrustRow({ className = "", light = false }: TrustRowProps) {
-  const textColor = light ? "text-pure-white" : "text-charcoal";
-  const iconColor = light ? "text-pure-white" : "text-deep-green";
-
+export default function TrustRow({ className = "" }: TrustRowProps) {
   return (
     <ul
       className={`flex flex-wrap items-center gap-x-6 gap-y-3 ${className}`}
       aria-label="Why book with BeLa Cleaning"
     >
       {trustPoints.map((point) => (
-        <li key={point} className={`flex items-center gap-2 text-sm ${textColor}`}>
-          <Check size={16} className={iconColor} aria-hidden="true" />
+        <li key={point} className="flex items-center gap-2 text-sm text-charcoal">
+          <Check size={16} className="text-deep-green" aria-hidden="true" />
           <span>{point}</span>
         </li>
       ))}

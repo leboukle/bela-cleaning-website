@@ -7,8 +7,8 @@ type TestimonialCardProps = {
 
 export default function TestimonialCard({ testimonial }: TestimonialCardProps) {
   return (
-    <figure className="flex h-full flex-col justify-between rounded-2xl bg-pure-white border border-soft-gray p-8">
-      <Quote size={22} className="text-sage" aria-hidden="true" />
+    <figure className="flex h-full flex-col border-t border-soft-gray pt-8">
+      <Quote size={20} className="text-sage" aria-hidden="true" />
       <blockquote className="mt-4 flex-1 text-lg text-charcoal leading-relaxed">
         {testimonial.quote}
       </blockquote>
