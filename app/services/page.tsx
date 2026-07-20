@@ -68,6 +68,11 @@ export default function ServicesPage() {
             supporting="From routine upkeep to a detailed reset, BeLa Cleaning makes it easy to select your service and book online with clear pricing."
             as="h1"
           />
+          <p className="mt-4 max-w-2xl text-sm text-warm-text leading-relaxed">
+            Choose your service and home details to see your running total through the
+            online booking process. Standard available services do not require a
+            separate quote request.
+          </p>
           <div className="mt-8">
             <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>
           </div>

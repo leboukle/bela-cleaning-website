@@ -17,7 +17,12 @@ export const faqs: FAQ[] = [
   {
     question: "How will I know the price?",
     answer:
-      "Your running total appears as you select your home details, service, frequency, and available add-ons through the online booking platform.",
+      "Your running total updates as you select your home details, service, frequency, and available add-ons through the online booking platform. For standard available services, you do not need to submit a separate quote request.",
+  },
+  {
+    question: "Do I need to request a quote before booking?",
+    answer:
+      "No separate quote request is required for the standard services and options available through the online booking platform. Select the details that apply to your home, review the running total, and confirm an available appointment online.",
   },
   {
     question: "Are there contracts?",

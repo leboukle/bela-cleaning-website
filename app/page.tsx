@@ -27,7 +27,7 @@ const steps = [
   {
     number: "01",
     title: "Choose Your Cleaning",
-    copy: "Select the service, home size, frequency, and available add-ons.",
+    copy: "Select your home size, service, frequency, and available add-ons while your running total updates as you book.",
   },
   {
     number: "02",
@@ -63,11 +63,11 @@ const expectations = [
 const whyBela = [
   {
     title: "Easy Online Booking",
-    copy: "Choose the service that fits your home, see your total as you book, and select an available appointment online.",
+    copy: "Choose the service that fits your home, see your running total as you make selections, and book an available appointment without requesting a quote.",
   },
   {
     title: "Clear, Transparent Pricing",
-    copy: "Know what your selected cleaning costs before confirming. No contracts, hidden fees, or unnecessary quoting process.",
+    copy: "See the selected service total before confirming. No quote request, unnecessary back-and-forth, long-term contract, or hidden fee.",
   },
   {
     title: "Local and Dependable",
@@ -104,10 +104,21 @@ export default function HomePage() {
               Professional care, made uncomplicated.
             </h1>
             <p className="mt-5 text-base sm:text-lg text-warm-text leading-relaxed">
-              High-quality residential cleaning with transparent pricing, dependable
-              service, and online booking in minutes.
+              High-quality residential cleaning with dependable service and online
+              booking in minutes.
             </p>
-            <p className="mt-2 text-sm text-warm-text">
+
+            <div className="mt-6 border-t border-soft-gray pt-6">
+              <p className="font-heading text-xl sm:text-2xl text-deep-green">
+                See your price as you book.
+              </p>
+              <p className="mt-2 text-sm text-warm-text leading-relaxed">
+                Select your home details and services to view your running total
+                instantly&mdash;no quote request or back-and-forth required.
+              </p>
+            </div>
+
+            <p className="mt-4 text-sm text-warm-text">
               Serving Jersey City, Hoboken, Newark, and nearby communities.
             </p>
             <div className="mt-7">
