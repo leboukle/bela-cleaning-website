@@ -92,7 +92,7 @@ export default function ServicesPage() {
                 />
               </Reveal>
               <Reveal className={imageFirst ? "lg:order-1" : ""}>
-                <h2 className="font-heading text-3xl sm:text-4xl text-charcoal">
+                <h2 className="font-heading text-4xl sm:text-5xl leading-[1.05] text-charcoal">
                   {service.name}
                 </h2>
                 <p className="mt-4 text-warm-text leading-relaxed">{service.description}</p>
@@ -120,21 +120,26 @@ export default function ServicesPage() {
         );
       })}
 
-      {/* E. Add-Ons */}
-      <section className="py-16 sm:py-20 border-t border-soft-gray">
+      {/* E. Add-Ons (dark architectural break) */}
+      <section className="bg-charcoal py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-6">
-          <SectionHeading title="Add the details your home needs." align="center" className="mx-auto" />
+          <SectionHeading
+            title="Add the details your home needs."
+            align="center"
+            className="mx-auto"
+            dark
+          />
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {addOns.map((addOn) => (
               <div
                 key={addOn}
-                className="border border-soft-gray px-5 py-4 text-sm font-medium text-charcoal"
+                className="border border-white/15 px-5 py-4 text-sm font-medium text-soft-gray"
               >
                 {addOn}
               </div>
             ))}
           </div>
-          <p className="mt-6 max-w-2xl mx-auto text-center text-sm text-warm-text">
+          <p className="mt-6 max-w-2xl mx-auto text-center text-sm text-soft-gray/70">
             Availability and pricing are shown during booking. Select only the services and
             add-ons currently available through BeLa Cleaning&rsquo;s online booking platform.
           </p>

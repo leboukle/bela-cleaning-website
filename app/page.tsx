@@ -86,7 +86,7 @@ export default function HomePage() {
   return (
     <>
       {/* 1. Hero */}
-      <section className="relative flex min-h-[85vh] items-center overflow-hidden">
+      <section className="relative flex min-h-[94vh] items-center overflow-hidden bg-charcoal">
         <Image
           src={images.homeHero.src}
           alt={images.homeHero.alt}
@@ -95,36 +95,44 @@ export default function HomePage() {
           sizes="100vw"
           className="object-cover"
         />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-charcoal/95 via-charcoal/65 to-charcoal/15"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-charcoal/80 via-transparent to-transparent"
+          aria-hidden="true"
+        />
         <div className="relative mx-auto w-full max-w-7xl px-6 py-28 sm:py-36">
-          <div className="max-w-lg border border-soft-gray/70 bg-warm-white/90 px-8 py-10 backdrop-blur-md sm:px-10 sm:py-12">
-            <p className="text-xs font-semibold tracking-[0.18em] text-deep-green uppercase mb-4">
+          <div className="max-w-xl">
+            <p className="text-xs font-semibold tracking-[0.22em] text-soft-gray uppercase mb-5">
               Residential Cleaning for Busy Lives
             </p>
-            <h1 className="font-heading text-4xl sm:text-5xl leading-[1.1] text-charcoal text-balance">
+            <h1 className="font-heading text-5xl sm:text-6xl md:text-[4.5rem] leading-[1.02] text-pure-white text-balance">
               Professional care, made uncomplicated.
             </h1>
-            <p className="mt-5 text-base sm:text-lg text-warm-text leading-relaxed">
+            <p className="mt-6 max-w-md text-base sm:text-lg text-soft-gray/90 leading-relaxed">
               High-quality residential cleaning with dependable service and online
               booking in minutes.
             </p>
 
-            <div className="mt-6 border-t border-soft-gray pt-6">
-              <p className="font-heading text-xl sm:text-2xl text-deep-green">
+            <div className="mt-8 max-w-md border-t border-pure-white/20 pt-7">
+              <p className="font-heading text-2xl sm:text-3xl text-pure-white">
                 See your price as you book.
               </p>
-              <p className="mt-2 text-sm text-warm-text leading-relaxed">
+              <p className="mt-3 text-sm sm:text-base text-soft-gray/85 leading-relaxed">
                 Select your home details and services to view your running total
                 instantly&mdash;no quote request or back-and-forth required.
               </p>
             </div>
 
-            <p className="mt-4 text-sm text-warm-text">
+            <p className="mt-5 text-sm text-soft-gray/80">
               Serving Jersey City, Hoboken, Newark, and nearby communities.
             </p>
-            <div className="mt-7">
+            <div className="mt-8">
               <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>
             </div>
-            <TrustRow className="mt-7" />
+            <TrustRow light className="mt-8" />
           </div>
         </div>
       </section>
@@ -180,23 +188,24 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. Why BeLa */}
-      <section className="py-20 sm:py-28 border-t border-soft-gray">
+      {/* 4. Why BeLa (dark architectural break) */}
+      <section className="bg-charcoal py-20 sm:py-28">
         <div className="mx-auto max-w-5xl px-6">
           <Reveal>
             <SectionHeading
               eyebrow="Why BeLa"
               title="Everything you need. None of the runaround."
+              dark
             />
           </Reveal>
-          <div className="mt-14 divide-y divide-soft-gray border-t border-soft-gray">
+          <div className="mt-14 divide-y divide-white/10 border-t border-white/10">
             {whyBela.map((item) => (
               <Reveal key={item.title}>
                 <div className="grid gap-2 py-8 sm:grid-cols-3 sm:gap-10">
-                  <h3 className="font-heading text-xl text-charcoal sm:col-span-1">
+                  <h3 className="font-heading text-xl text-pure-white sm:col-span-1">
                     {item.title}
                   </h3>
-                  <p className="text-warm-text leading-relaxed sm:col-span-2">{item.copy}</p>
+                  <p className="text-soft-gray/80 leading-relaxed sm:col-span-2">{item.copy}</p>
                 </div>
               </Reveal>
             ))}
@@ -215,12 +224,22 @@ export default function HomePage() {
               className="mx-auto"
             />
           </Reveal>
-          <div className="mt-14 grid gap-10 md:grid-cols-3">
-            {services.map((service, index) => (
-              <Reveal key={service.slug}>
-                <ServiceCard service={service} priority={index === 0} />
-              </Reveal>
-            ))}
+          <div className="mt-14 grid gap-8 lg:grid-cols-12">
+            <Reveal className="lg:col-span-7">
+              <ServiceCard
+                service={services[0]}
+                priority
+                aspectClassName="aspect-[4/3] lg:aspect-[16/13]"
+                titleClassName="text-2xl"
+              />
+            </Reveal>
+            <div className="flex flex-col gap-8 lg:col-span-5">
+              {services.slice(1).map((service) => (
+                <Reveal key={service.slug}>
+                  <ServiceCard service={service} aspectClassName="aspect-[16/10]" />
+                </Reveal>
+              ))}
+            </div>
           </div>
           <div className="mt-12 flex justify-center">
             <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>
@@ -228,32 +247,51 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. Busy Professionals */}
-      <section className="py-20 sm:py-28 border-t border-soft-gray">
-        <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
-          <Reveal className="order-2 lg:order-1">
-            <ResponsiveImageSection
-              image={images.busyProfessionals}
-              aspectClassName="aspect-[5/4]"
-            />
-          </Reveal>
-          <Reveal className="order-1 lg:order-2">
-            <SectionHeading
-              title="Your time belongs somewhere else."
-              supporting="Whether you are commuting into Manhattan, working from home, managing a family, or simply protecting your weekend, BeLa Cleaning helps keep your home handled without adding another task to your schedule."
-            />
-            <ul className="mt-6 space-y-3">
-              {professionalFeatures.map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-charcoal">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-deep-green" aria-hidden="true" />
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-8">
-              <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>
+      {/* 6. Busy Professionals (full-bleed dark architectural break) */}
+      <section className="relative overflow-hidden">
+        <div className="relative min-h-[70vh] flex items-center">
+          <Image
+            src={images.busyProfessionals.src}
+            alt={images.busyProfessionals.alt}
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div
+            className="absolute inset-0 bg-gradient-to-l from-charcoal/95 via-charcoal/60 to-charcoal/10"
+            aria-hidden="true"
+          />
+          <div className="relative mx-auto w-full max-w-7xl px-6 py-20 sm:py-28">
+            <div className="ml-auto max-w-lg text-right">
+              <Reveal>
+                <h2 className="font-heading text-4xl sm:text-5xl md:text-6xl leading-[1.05] text-pure-white text-balance">
+                  Your time belongs somewhere else.
+                </h2>
+                <p className="mt-5 text-base sm:text-lg text-soft-gray/80 leading-relaxed">
+                  Whether you are commuting into Manhattan, working from home, managing a
+                  family, or simply protecting your weekend, BeLa Cleaning helps keep your
+                  home handled without adding another task to your schedule.
+                </p>
+                <ul className="mt-6 space-y-3">
+                  {professionalFeatures.map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-center justify-end gap-2 text-soft-gray/90"
+                    >
+                      <span>{feature}</span>
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-sage"
+                        aria-hidden="true"
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-8 flex justify-end">
+                  <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>
+                </div>
+              </Reveal>
             </div>
-          </Reveal>
+          </div>
         </div>
       </section>
 

@@ -1,12 +1,14 @@
-// Centralized image references for the first draft of the site.
+// Centralized image references for the site.
 //
 // DEVELOPER NOTE: These are tasteful, license-free placeholder photographs
-// served from Unsplash's CDN, chosen to match the brand's photography
-// direction (bright natural light, modern Jersey City/Hoboken-style
-// interiors, no people, no cleaning products, no logos). Before public
-// launch, replace `src` with final, licensed BeLa Cleaning photography.
-// Keeping every image reference in this single file means a photo can be
-// swapped everywhere it is used by editing one line here.
+// served from Unsplash's CDN, curated to read as premium residential
+// architecture and interior photography (real estate / architectural
+// photographers, verified against Unsplash's metadata to avoid AI-rendered
+// "3D concept" images) — bright, restrained, no people, no branded
+// products, no loud decorative color. Before public launch, replace `src`
+// with final, licensed BeLa Cleaning photography. Keeping every image
+// reference in this single file means a photo can be swapped everywhere it
+// is used by editing one line here.
 
 export type SiteImage = {
   src: string;
@@ -18,45 +20,48 @@ function unsplash(id: string, width = 1600) {
 }
 
 export const images = {
-  // Quiet, airy hero image: sheer drapery, a large residential window, and
-  // bright daylight, with open negative space for the hero text panel.
+  // Cinematic architectural hero: a sculptural, monolithic open-plan
+  // kitchen and living space — used full-bleed behind a dark scrim so the
+  // headline reads directly over the photograph.
   homeHero: {
-    src: unsplash("photo-1760243790660-a7958d7843ee", 2000),
-    alt: "Soft sunlight streaming through sheer curtains and blinds in a calm, minimal interior.",
+    src: unsplash("photo-1747538454766-9f4f99a2de8f", 2200),
+    alt: "A sculptural, architectural open-plan kitchen and living space with clean monolithic lines and large windows.",
   } satisfies SiteImage,
 
   introInterior: {
-    src: unsplash("photo-1484154218962-a197022b5858", 1600),
-    alt: "Clean, sunlit modern kitchen with white countertops and minimal clutter.",
+    src: unsplash("photo-1682888813913-e13f18692019", 1800),
+    alt: "A large kitchen with a marble island and white cabinetry.",
   } satisfies SiteImage,
 
   serviceStandard: {
-    src: unsplash("photo-1556911220-bff31c812dba", 1400),
-    alt: "Tidy kitchen with light countertops and organized surfaces.",
+    src: unsplash("photo-1771888703722-ee7ad9143a67", 1600),
+    alt: "A modern kitchen with light wood cabinetry and a large island.",
   } satisfies SiteImage,
 
   serviceDeep: {
-    src: unsplash("photo-1584622650111-993a426fbf0a", 1400),
-    alt: "Bright, spotless bathroom with white tile and neatly folded towels.",
+    src: unsplash("photo-1756079664354-34944e001f6d", 1600),
+    alt: "A modern bathroom with a marble vanity and double sinks.",
   } satisfies SiteImage,
 
   serviceMoveInOut: {
-    src: unsplash("photo-1560185127-6ed189bf02f4", 1400),
-    alt: "Empty, sunlit apartment room with hardwood floors ready for move-in.",
+    src: unsplash("photo-1781249144283-454f5fb2c348", 1600),
+    alt: "A modern white hallway with an arched doorway and dark flooring.",
   } satisfies SiteImage,
 
+  // Full-bleed living room used with a dark scrim overlay for the
+  // homepage's mid-page architectural break.
   busyProfessionals: {
-    src: unsplash("photo-1493809842364-78817add7ffb", 1600),
-    alt: "Calm, bright bedroom with fresh white linens and natural light.",
+    src: unsplash("photo-1776186243326-1d467b258232", 2000),
+    alt: "A refined living room with a curved sofa, fireplace, and large windows.",
   } satisfies SiteImage,
 
   serviceArea: {
-    src: unsplash("photo-1567016432779-094069958ea5", 1600),
-    alt: "Bright, modern living space typical of Jersey City and Hoboken apartments.",
+    src: unsplash("photo-1762529716272-b316f61502e7", 1800),
+    alt: "A spacious, neutral-toned living room with large windows and natural light.",
   } satisfies SiteImage,
 
   workWithUsHero: {
-    src: unsplash("photo-1493663284031-b7e3aefcae8e", 1800),
-    alt: "Refined, bright living room in a modern apartment with large windows.",
+    src: unsplash("photo-1750639258774-9a714379a093", 1800),
+    alt: "An elegant living room with neutral tones and restrained decor.",
   } satisfies SiteImage,
 } as const;

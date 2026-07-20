@@ -10,7 +10,7 @@ export default function CTASection({ headline, copy }: CTASectionProps) {
   return (
     <section className="bg-deep-green">
       <div className="mx-auto max-w-5xl px-6 py-20 sm:py-24 text-center">
-        <h2 className="font-heading text-3xl sm:text-4xl text-pure-white text-balance">
+        <h2 className="font-heading text-4xl sm:text-5xl leading-[1.05] text-pure-white text-balance">
           {headline}
         </h2>
         {copy && (
