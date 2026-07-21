@@ -36,7 +36,7 @@ export default function PrivacyPage() {
           BeLa Cleaning respects your privacy. This Privacy Policy explains how we
           collect, use, disclose, and protect information when you visit
           belacleaning.com, contact us, use links to book cleaning services, or submit
-          an application through the Work With Us page.
+          an application through the Join the BeLa Cleaning Team page.
         </p>
         <p>By using the website, you acknowledge the practices described in this policy.</p>
       </LegalSection>
@@ -122,7 +122,7 @@ export default function PrivacyPage() {
 
       <LegalSection id="formspree" number={4} title={legalConfig.formProviderName}>
         <p>
-          The Work With Us application is transmitted through{" "}
+          The Join the BeLa Cleaning Team application is transmitted through{" "}
           {legalConfig.formProviderName} or another form-processing provider configured
           by BeLa Cleaning.
         </p>

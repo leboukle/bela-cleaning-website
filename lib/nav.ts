@@ -10,5 +10,5 @@ export type NavItem = {
 export const primaryNav: NavItem[] = [
   { label: "Home", href: "/" },
   { label: "Services", href: "/services" },
-  { label: "Work With Us", href: "/work-with-us" },
+  { label: "Join the BeLa Cleaning Team", href: "/join-our-team" },
 ];

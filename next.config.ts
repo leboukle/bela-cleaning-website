@@ -10,6 +10,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/work-with-us",
+        destination: "/join-our-team",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

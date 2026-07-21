@@ -7,10 +7,15 @@ import Reveal from "@/components/Reveal";
 import { images } from "@/lib/images";
 
 export const metadata: Metadata = {
-  title: { absolute: "Work With Us | BeLa Cleaning" },
+  title: { absolute: "Join the BeLa Cleaning Team | BeLa Cleaning" },
   description:
-    "Apply to join BeLa Cleaning as a residential cleaning professional serving Jersey City, Hoboken, Newark, and nearby communities.",
-  alternates: { canonical: "/work-with-us" },
+    "Apply to join the BeLa Cleaning team as a residential cleaning professional serving Jersey City, Hoboken, Newark, and nearby communities.",
+  alternates: { canonical: "/join-our-team" },
+  openGraph: {
+    title: "Join the BeLa Cleaning Team | BeLa Cleaning",
+    description:
+      "Apply to join the BeLa Cleaning team as a residential cleaning professional serving Jersey City, Hoboken, Newark, and nearby communities.",
+  },
 };
 
 const values = [
@@ -23,7 +28,7 @@ const values = [
   "Pride in consistent work",
 ];
 
-export default function WorkWithUsPage() {
+export default function JoinOurTeamPage() {
   return (
     <>
       {/* Hero */}
@@ -31,14 +36,19 @@ export default function WorkWithUsPage() {
         <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
             <p className="text-xs font-semibold tracking-[0.2em] text-deep-green uppercase mb-4">
-              Work With BeLa
+              Join Our Team
             </p>
             <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl leading-[1.05] text-charcoal text-balance">
-              Bring your care and professionalism to BeLa Cleaning.
+              Interested in joining the BeLa Cleaning Team?
             </h1>
             <p className="mt-6 text-base sm:text-lg text-warm-text leading-relaxed">
-              We are interested in hearing from dependable cleaning professionals who take
-              pride in their work, communicate clearly, and treat every home with respect.
+              We&rsquo;re always interested in hearing from dependable residential
+              cleaning professionals who take pride in their work, communicate
+              clearly, and treat every home with care and respect.
+            </p>
+            <p className="mt-4 text-base sm:text-lg text-warm-text leading-relaxed">
+              This page is for cleaners interested in potential cleaning
+              opportunities with BeLa Cleaning.
             </p>
           </div>
           <ResponsiveImageSection

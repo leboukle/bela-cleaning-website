@@ -21,7 +21,7 @@ const toc: LegalTOCItem[] = [
   { id: "cancellations", title: "Cancellations and Rescheduling" },
   { id: "payment", title: "Payment" },
   { id: "satisfaction", title: "Satisfaction Concerns" },
-  { id: "applications", title: "Work With Us Applications" },
+  { id: "applications", title: "Join the BeLa Cleaning Team Applications" },
   { id: "permitted-use", title: "Permitted Website Use" },
   { id: "intellectual-property", title: "Intellectual Property" },
   { id: "third-party", title: "Third-Party Services and Links" },
@@ -185,7 +185,7 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
-      <LegalSection id="applications" number={10} title="Work With Us Applications">
+      <LegalSection id="applications" number={10} title="Join the BeLa Cleaning Team Applications">
         <ul>
           <li>Submitting an application does not create an employment relationship</li>
           <li>It does not guarantee an interview, assignment, engagement, or position</li>

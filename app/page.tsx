@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { Metadata } from "next";
+import { Check } from "lucide-react";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
 import TrustRow from "@/components/TrustRow";
@@ -82,6 +83,13 @@ const professionalFeatures = [
   "Manage your appointment through the booking platform",
 ];
 
+const heroBenefits = [
+  "Transparent Pricing",
+  "No Contracts",
+  "No Hidden Fees",
+  "Online Booking 24/7",
+];
+
 export default function HomePage() {
   return (
     <>
@@ -108,14 +116,23 @@ export default function HomePage() {
             <p className="text-xs font-semibold tracking-[0.22em] text-soft-gray uppercase mb-5">
               Residential Cleaning for Busy Lives
             </p>
-            <h1 className="font-heading text-5xl sm:text-6xl lg:text-[4.5rem] leading-[1.02] text-pure-white text-balance">
-              <span className="block">Transparent Pricing.</span>
-              <span className="block">No Contracts.</span>
-              <span className="block">No Hidden Fees.</span>
+            <h1 className="font-heading text-2xl sm:text-4xl md:text-5xl lg:text-6xl leading-tight text-pure-white">
+              {heroBenefits.map((benefit, index) => (
+                <span
+                  key={benefit}
+                  className={`flex items-center gap-3 sm:gap-4 whitespace-nowrap ${
+                    index > 0 ? "mt-2 sm:mt-3" : ""
+                  }`}
+                >
+                  <Check
+                    className="h-6 w-6 sm:h-8 sm:w-8 lg:h-10 lg:w-10 shrink-0"
+                    aria-hidden="true"
+                    strokeWidth={2.5}
+                  />
+                  <span>{benefit}</span>
+                </span>
+              ))}
             </h1>
-            <p className="mt-8 text-xl sm:text-2xl font-semibold text-pure-white">
-              Online booking available 24/7.
-            </p>
 
             <div className="mt-8 max-w-md">
               <p className="text-base sm:text-lg text-soft-gray/90 leading-relaxed">
