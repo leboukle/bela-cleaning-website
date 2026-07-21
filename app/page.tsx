@@ -104,25 +104,37 @@ export default function HomePage() {
           aria-hidden="true"
         />
         <div className="relative mx-auto w-full max-w-7xl px-6 py-28 sm:py-36">
-          <div className="max-w-xl">
+          <div className="max-w-2xl">
             <p className="text-xs font-semibold tracking-[0.22em] text-soft-gray uppercase mb-5">
               Residential Cleaning for Busy Lives
             </p>
-            <h1 className="font-heading text-5xl sm:text-6xl md:text-[4.5rem] leading-[1.02] text-pure-white text-balance">
-              Professional care, made uncomplicated.
+            <h1 className="font-heading text-5xl sm:text-6xl lg:text-[4.5rem] leading-[1.02] text-pure-white text-balance">
+              <span className="block">Transparent Pricing.</span>
+              <span className="block">No Contracts.</span>
+              <span className="block">No Hidden Fees.</span>
             </h1>
-            <p className="mt-6 max-w-md text-base sm:text-lg text-soft-gray/90 leading-relaxed">
-              High-quality residential cleaning with dependable service and online
-              booking in minutes.
+            <p className="mt-8 text-xl sm:text-2xl font-semibold text-pure-white">
+              Online booking available 24/7.
             </p>
 
-            <div className="mt-8 max-w-md border-t border-pure-white/20 pt-7">
-              <p className="font-heading text-2xl sm:text-3xl text-pure-white">
-                See your price as you book.
+            <div className="mt-8 max-w-md">
+              <p className="text-base sm:text-lg text-soft-gray/90 leading-relaxed">
+                High-quality residential cleaning with dependable service for busy
+                homeowners and professionals.
               </p>
-              <p className="mt-3 text-sm sm:text-base text-soft-gray/85 leading-relaxed">
-                Select your home details and services to view your running total
-                instantly&mdash;no quote request or back-and-forth required.
+
+              <div className="mt-6 border-t border-pure-white/20 pt-6">
+                <p className="font-heading text-xl sm:text-2xl text-pure-white">
+                  See your price as you book.
+                </p>
+                <p className="mt-3 text-sm sm:text-base text-soft-gray/85 leading-relaxed">
+                  Select your home details and services to view your running total
+                  instantly. Pricing updates based on the options you choose.
+                </p>
+              </div>
+
+              <p className="mt-4 text-sm text-soft-gray/80">
+                Instant pricing for standard bookings.
               </p>
             </div>
 
