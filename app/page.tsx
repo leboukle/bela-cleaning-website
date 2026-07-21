@@ -188,6 +188,11 @@ export default function HomePage() {
               </Reveal>
             ))}
           </div>
+          <div className="mt-12 flex justify-center">
+            <PrimaryButton href={businessConfig.bookingUrl} className="w-full sm:w-auto">
+              {CTA_LABEL}
+            </PrimaryButton>
+          </div>
         </div>
       </section>
 
@@ -214,6 +219,11 @@ export default function HomePage() {
               </Reveal>
             ))}
           </div>
+          <div className="mt-12 flex justify-center">
+            <PrimaryButton href={businessConfig.bookingUrl} className="w-full sm:w-auto">
+              {CTA_LABEL}
+            </PrimaryButton>
+          </div>
         </div>
       </section>
 
@@ -238,6 +248,11 @@ export default function HomePage() {
                 </div>
               </Reveal>
             ))}
+          </div>
+          <div className="mt-12">
+            <PrimaryButton href={businessConfig.bookingUrl} className="w-full sm:w-auto">
+              {CTA_LABEL}
+            </PrimaryButton>
           </div>
         </div>
       </section>
@@ -359,6 +374,11 @@ export default function HomePage() {
               </a>
               .
             </p>
+            <div className="mt-8">
+              <PrimaryButton href={businessConfig.bookingUrl} className="w-full sm:w-auto">
+                {CTA_LABEL}
+              </PrimaryButton>
+            </div>
           </Reveal>
           <Reveal>
             <ResponsiveImageSection image={images.serviceArea} aspectClassName="aspect-[5/4]" />
@@ -393,6 +413,12 @@ export default function HomePage() {
       </section>
 
       {/* 9. Customer-Service Contact Block */}
+      {/*
+        DEVELOPER NOTE: No additional Book Cleaning button is added directly
+        beneath this block. The Final CTA section immediately follows with
+        no other content between them, so inserting one here would place
+        two booking buttons within the same mobile viewport.
+      */}
       <div className="border-t border-soft-gray">
         <CustomerServiceBlock />
       </div>
