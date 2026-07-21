@@ -19,21 +19,32 @@ const inter = Inter({
   display: "swap",
 });
 
+const defaultTitle = "BeLa Cleaning | Residential House Cleaning in Jersey City";
+const defaultDescription =
+  "Book residential house cleaning online in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, and easy online booking with BeLa Cleaning.";
+
+// DEVELOPER NOTE: This root layout provides sitewide metadata defaults
+// (used only as a fallback if a page doesn't set its own) plus the
+// sitewide LocalBusiness/Organization/WebSite structured data. Individual
+// pages set their own unique title, description, canonical URL, Open
+// Graph, and Twitter Card metadata via lib/seo.ts's buildPageMetadata() —
+// see app/page.tsx, app/services/page.tsx, etc.
 export const metadata: Metadata = {
   metadataBase: new URL(businessConfig.websiteUrl),
   title: {
-    default: "BeLa Cleaning | Residential Cleaning in Jersey City, Hoboken & Newark",
+    default: defaultTitle,
     template: `%s | ${businessConfig.businessName}`,
   },
-  description:
-    "Book dependable residential cleaning online with transparent pricing and no contracts. BeLa Cleaning serves Jersey City, Hoboken, Newark, and nearby communities.",
+  description: defaultDescription,
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     type: "website",
-    url: businessConfig.websiteUrl,
+    url: "/",
     siteName: businessConfig.businessName,
-    title: "BeLa Cleaning | Residential Cleaning in Jersey City, Hoboken & Newark",
-    description:
-      "Book dependable residential cleaning online with transparent pricing and no contracts. Serving Jersey City, Hoboken, Newark, and nearby communities.",
+    title: defaultTitle,
+    description: defaultDescription,
     images: [
       {
         url: images.homeHero.src,
@@ -41,28 +52,71 @@ export const metadata: Metadata = {
       },
     ],
   },
-  alternates: {
-    canonical: "/",
+  twitter: {
+    card: "summary_large_image",
+    title: defaultTitle,
+    description: defaultDescription,
+    images: [images.homeHero.src],
   },
   icons: {
     icon: "/favicon.svg",
   },
 };
 
-const localBusinessJsonLd = {
+// Sitewide JSON-LD structured data as a single @graph: the Organization
+// behind the site, the WebSite itself, and the LocalBusiness (also labeled
+// CleaningService) that customers and search engines care about most.
+// Page-specific structured data (e.g. the Service catalog on /services)
+// lives in that page's own file and is additive, not duplicative.
+const organizationId = `${businessConfig.websiteUrl}/#organization`;
+const websiteId = `${businessConfig.websiteUrl}/#website`;
+const localBusinessId = `${businessConfig.websiteUrl}/#localbusiness`;
+
+const structuredData = {
   "@context": "https://schema.org",
-  "@type": "LocalBusiness",
-  name: businessConfig.businessName,
-  url: businessConfig.websiteUrl,
-  email: businessConfig.email,
-  telephone: "+1-551-225-0276",
-  areaServed: ["Jersey City", "Hoboken", "Newark"],
-  openingHoursSpecification: {
-    "@type": "OpeningHoursSpecification",
-    dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-    opens: "08:00",
-    closes: "17:00",
-  },
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": organizationId,
+      name: businessConfig.businessName,
+      url: businessConfig.websiteUrl,
+      email: businessConfig.email,
+      telephone: "+1-551-225-0276",
+    },
+    {
+      "@type": "WebSite",
+      "@id": websiteId,
+      url: businessConfig.websiteUrl,
+      name: businessConfig.businessName,
+      publisher: { "@id": organizationId },
+    },
+    {
+      "@type": ["LocalBusiness", "CleaningService"],
+      "@id": localBusinessId,
+      name: businessConfig.businessName,
+      url: businessConfig.websiteUrl,
+      email: businessConfig.email,
+      telephone: "+1-551-225-0276",
+      image: images.homeHero.src,
+      areaServed: [
+        { "@type": "City", name: "Jersey City" },
+        { "@type": "City", name: "Hoboken" },
+        { "@type": "City", name: "Newark" },
+        "Nearby communities",
+      ],
+      openingHoursSpecification: {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        opens: "08:00",
+        closes: "17:00",
+      },
+      makesOffer: {
+        "@type": "Offer",
+        url: businessConfig.bookingUrl,
+        name: "Residential Cleaning Booking",
+      },
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -75,7 +129,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans antialiased">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
         <noscript>
           <style>{`.reveal { opacity: 1 !important; }`}</style>

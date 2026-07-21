@@ -1,22 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { buildPageMetadata } from "@/lib/seo";
 import SectionHeading from "@/components/SectionHeading";
 import ResponsiveImageSection from "@/components/ResponsiveImageSection";
 import CleanerApplicationForm from "@/components/CleanerApplicationForm";
 import Reveal from "@/components/Reveal";
 import { images } from "@/lib/images";
 
-export const metadata: Metadata = {
-  title: { absolute: "Join the BeLa Cleaning Team | BeLa Cleaning" },
+export const metadata: Metadata = buildPageMetadata({
+  title: "Join the BeLa Cleaning Team",
   description:
-    "Apply to join the BeLa Cleaning team as a residential cleaning professional serving Jersey City, Hoboken, Newark, and nearby communities.",
-  alternates: { canonical: "/join-our-team" },
-  openGraph: {
-    title: "Join the BeLa Cleaning Team | BeLa Cleaning",
-    description:
-      "Apply to join the BeLa Cleaning team as a residential cleaning professional serving Jersey City, Hoboken, Newark, and nearby communities.",
-  },
-};
+    "Join the BeLa Cleaning team as a dependable residential cleaning professional serving Jersey City, Hoboken, and Newark. Apply online today to get started.",
+  path: "/join-our-team",
+  image: images.workWithUsHero,
+});
 
 const values = [
   "Dependability",

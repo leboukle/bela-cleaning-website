@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Check } from "lucide-react";
+import { buildPageMetadata } from "@/lib/seo";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
 import ResponsiveImageSection from "@/components/ResponsiveImageSection";
@@ -8,15 +9,17 @@ import CustomerServiceBlock from "@/components/CustomerServiceBlock";
 import CTASection from "@/components/CTASection";
 import Reveal from "@/components/Reveal";
 import { businessConfig, CTA_LABEL } from "@/lib/config";
+import { images } from "@/lib/images";
 import { services, addOns } from "@/lib/services";
 import { faqs } from "@/lib/faqs";
 
-export const metadata: Metadata = {
-  title: { absolute: "Residential Cleaning Services | BeLa Cleaning" },
+export const metadata: Metadata = buildPageMetadata({
+  title: "Residential Cleaning Services | BeLa Cleaning",
   description:
-    "Explore standard, deep, and move-in or move-out residential cleaning services from BeLa Cleaning.",
-  alternates: { canonical: "/services" },
-};
+    "Explore standard, deep, and move-in/move-out cleaning services in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, book online today.",
+  path: "/services",
+  image: images.serviceStandard,
+});
 
 const servicesJsonLd = {
   "@context": "https://schema.org",

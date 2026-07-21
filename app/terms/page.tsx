@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
+import { buildPageMetadata } from "@/lib/seo";
 import LegalLayout, { type LegalTOCItem } from "@/components/LegalLayout";
 import LegalSection from "@/components/LegalSection";
 import { businessConfig } from "@/lib/config";
 import { legalConfig, termsLastUpdatedDisplay } from "@/lib/legal";
 
-export const metadata: Metadata = {
-  title: { absolute: "Terms of Service | BeLa Cleaning" },
+export const metadata: Metadata = buildPageMetadata({
+  title: "Terms of Service | BeLa Cleaning",
   description:
-    "Review the terms governing use of the BeLa Cleaning website, booking links, and cleaner application.",
-  alternates: { canonical: "/terms" },
-};
+    "Review BeLa Cleaning's Terms of Service, covering online booking through BookingKoala, service policies, and website use in Jersey City and beyond.",
+  path: "/terms",
+});
 
 const toc: LegalTOCItem[] = [
   { id: "agreement", title: "Agreement to Terms" },

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import { Check } from "lucide-react";
+import { buildPageMetadata } from "@/lib/seo";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
 import TrustRow from "@/components/TrustRow";
@@ -15,14 +16,13 @@ import { images } from "@/lib/images";
 import { services } from "@/lib/services";
 import { testimonials } from "@/lib/testimonials";
 
-export const metadata: Metadata = {
-  title: {
-    absolute: "BeLa Cleaning | Residential Cleaning in Jersey City, Hoboken & Newark",
-  },
+export const metadata: Metadata = buildPageMetadata({
+  title: "BeLa Cleaning | Residential House Cleaning in Jersey City",
   description:
-    "Book dependable residential cleaning online with transparent pricing and no contracts. BeLa Cleaning serves Jersey City, Hoboken, Newark, and nearby communities.",
-  alternates: { canonical: "/" },
-};
+    "Book residential house cleaning online in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, and easy online booking with BeLa Cleaning.",
+  path: "/",
+  image: images.homeHero,
+});
 
 const steps = [
   {

@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
+import { buildPageMetadata } from "@/lib/seo";
 import LegalLayout, { type LegalTOCItem } from "@/components/LegalLayout";
 import LegalSection from "@/components/LegalSection";
 import { businessConfig } from "@/lib/config";
 import { legalConfig, privacyLastUpdatedDisplay } from "@/lib/legal";
 
-export const metadata: Metadata = {
-  title: { absolute: "Privacy Policy | BeLa Cleaning" },
+export const metadata: Metadata = buildPageMetadata({
+  title: "Privacy Policy | BeLa Cleaning",
   description:
-    "Learn how BeLa Cleaning collects, uses, and protects information submitted through its website, booking links, and cleaner application.",
-  alternates: { canonical: "/privacy" },
-};
+    "Read BeLa Cleaning's Privacy Policy to learn how we collect, use, and protect information from our website, online booking, and cleaner applications.",
+  path: "/privacy",
+});
 
 const toc: LegalTOCItem[] = [
   { id: "introduction", title: "Introduction" },
