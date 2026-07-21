@@ -14,7 +14,7 @@ type PageSeoInput = {
   description: string;
   /** Site-relative path, e.g. "/services". Use "/" for the homepage. */
   path: string;
-  /** Image used for Open Graph / Twitter previews. Defaults to the homepage hero. */
+  /** Image used for Open Graph / Twitter previews. Defaults to the branded OG card. */
   image?: SiteImage;
 };
 
@@ -22,7 +22,7 @@ export function buildPageMetadata({
   title,
   description,
   path,
-  image = images.homeHero,
+  image = images.ogImage,
 }: PageSeoInput): Metadata {
   return {
     title: { absolute: title },

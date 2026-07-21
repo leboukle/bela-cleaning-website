@@ -60,4 +60,13 @@ export const images = {
     src: unsplash("photo-1750639258774-9a714379a093", 1800),
     alt: "An elegant, realistic living room with neutral tones and restrained decor.",
   } satisfies SiteImage,
+
+  // Static, brand-designed Open Graph / Twitter Card image (1200x630),
+  // generated with next/og's ImageResponse (deep-green background, the
+  // DM Serif Display wordmark, and the core trust messaging). Regenerate
+  // with a similar script if the copy, colors, or wordmark ever change.
+  ogImage: {
+    src: "/og-image.png",
+    alt: "BeLa Cleaning — residential cleaning for busy lives. Transparent pricing, no contracts, online booking 24/7. Serving Jersey City, Hoboken, and Newark.",
+  } satisfies SiteImage,
 } as const;

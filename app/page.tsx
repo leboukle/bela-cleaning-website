@@ -21,7 +21,6 @@ export const metadata: Metadata = buildPageMetadata({
   description:
     "Book residential house cleaning online in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, and easy online booking with BeLa Cleaning.",
   path: "/",
-  image: images.homeHero,
 });
 
 const steps = [

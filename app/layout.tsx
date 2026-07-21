@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Serif_Display, Inter } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
@@ -47,8 +47,8 @@ export const metadata: Metadata = {
     description: defaultDescription,
     images: [
       {
-        url: images.homeHero.src,
-        alt: images.homeHero.alt,
+        url: images.ogImage.src,
+        alt: images.ogImage.alt,
       },
     ],
   },
@@ -56,11 +56,20 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: defaultTitle,
     description: defaultDescription,
-    images: [images.homeHero.src],
+    images: [images.ogImage.src],
   },
   icons: {
-    icon: "/favicon.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
+  manifest: "/site.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#263C32",
 };
 
 // Sitewide JSON-LD structured data as a single @graph: the Organization

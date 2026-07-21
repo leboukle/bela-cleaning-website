@@ -9,7 +9,6 @@ import CustomerServiceBlock from "@/components/CustomerServiceBlock";
 import CTASection from "@/components/CTASection";
 import Reveal from "@/components/Reveal";
 import { businessConfig, CTA_LABEL } from "@/lib/config";
-import { images } from "@/lib/images";
 import { services, addOns } from "@/lib/services";
 import { faqs } from "@/lib/faqs";
 
@@ -18,7 +17,6 @@ export const metadata: Metadata = buildPageMetadata({
   description:
     "Explore standard, deep, and move-in/move-out cleaning services in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, book online today.",
   path: "/services",
-  image: images.serviceStandard,
 });
 
 const servicesJsonLd = {
@@ -45,6 +43,19 @@ const servicesJsonLd = {
   },
 };
 
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: faq.answer,
+    },
+  })),
+};
+
 const preparationChecklist = [
   "Put away personal or highly valuable items",
   "Clear excessive clutter from surfaces and floors",
@@ -60,6 +71,10 @@ export default function ServicesPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(servicesJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
 
       {/* A. Services Hero */}
