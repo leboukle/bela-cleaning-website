@@ -17,9 +17,9 @@ import { services } from "@/lib/services";
 import { testimonials } from "@/lib/testimonials";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "BeLa Cleaning | Residential House Cleaning in Jersey City",
+  title: "BeLa Cleaning | House Cleaning in Jersey City & Hoboken",
   description:
-    "Book residential house cleaning online in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, and easy online booking with BeLa Cleaning.",
+    "Book residential house cleaning online in Jersey City, Hoboken, Newark, and surrounding areas. Transparent pricing, no contracts, easy online booking.",
   path: "/",
 });
 

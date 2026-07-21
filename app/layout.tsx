@@ -19,9 +19,9 @@ const inter = Inter({
   display: "swap",
 });
 
-const defaultTitle = "BeLa Cleaning | Residential House Cleaning in Jersey City";
+const defaultTitle = "BeLa Cleaning | House Cleaning in Jersey City & Hoboken";
 const defaultDescription =
-  "Book residential house cleaning online in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, and easy online booking with BeLa Cleaning.";
+  "Book residential house cleaning online in Jersey City, Hoboken, Newark, and surrounding areas. Transparent pricing, no contracts, easy online booking.";
 
 // DEVELOPER NOTE: This root layout provides sitewide metadata defaults
 // (used only as a fallback if a page doesn't set its own) plus the

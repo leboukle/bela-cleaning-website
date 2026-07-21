@@ -15,7 +15,7 @@ import { faqs } from "@/lib/faqs";
 export const metadata: Metadata = buildPageMetadata({
   title: "Residential Cleaning Services | BeLa Cleaning",
   description:
-    "Explore standard, deep, and move-in/move-out cleaning services in Jersey City, Hoboken, and Newark. Transparent pricing, no contracts, book online today.",
+    "Explore standard, deep, and move-in/move-out cleaning services in Jersey City, Hoboken, Newark, and surrounding areas. Transparent pricing, no contracts.",
   path: "/services",
 });
 

@@ -10,7 +10,7 @@ import { images } from "@/lib/images";
 export const metadata: Metadata = buildPageMetadata({
   title: "Join the BeLa Cleaning Team",
   description:
-    "Join the BeLa Cleaning team as a dependable residential cleaning professional serving Jersey City, Hoboken, and Newark. Apply online today to get started.",
+    "Join the BeLa Cleaning team as a dependable residential cleaning professional serving Jersey City, Hoboken, Newark, and surrounding areas. Apply online today.",
   path: "/join-our-team",
 });
 
