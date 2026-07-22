@@ -45,6 +45,47 @@ body {
   opacity: 0;
 }
 
+/* Micro-interaction keyframes for the /booking-preview prototype. Global
+   scope like `fade-in` above, but named distinctly so they don't collide.
+   Referenced via arbitrary `animate-[name_duration_ease]` utilities rather
+   than --animate-* theme tokens since they're used in only one feature. */
+@keyframes booking-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes booking-value-pop {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes booking-check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Visible keyboard focus states everywhere */
 :focus-visible {
   outline: 2px solid var(--color-deep-green);
