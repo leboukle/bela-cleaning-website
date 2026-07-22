@@ -168,12 +168,59 @@ export const STEP_STAGE: Partial<Record<StepId, string>> = {
   "cleaning-type": "Service",
   extras: "Extras",
   frequency: "Frequency",
-  schedule: "Schedule",
-  details: "Details",
+  location: "Location",
+  "schedule-date": "Schedule",
+  "arrival-window": "Schedule",
+  "customer-name": "Details",
+  "customer-email": "Details",
+  "customer-phone": "Details",
+  "service-address": "Details",
+  access: "Details",
+  "special-instructions": "Details",
   review: "Review",
 };
 
-export const PROGRESS_STAGES = ["Property", "Service", "Extras", "Frequency", "Schedule", "Details", "Review"] as const;
+export const PROGRESS_STAGES = [
+  "Property",
+  "Service",
+  "Extras",
+  "Frequency",
+  "Location",
+  "Schedule",
+  "Details",
+  "Review",
+] as const;
+
+// Groups of consecutive StepIds shown as one "Edit" action on the Review
+// screen. `endStep` is the step whose successful completion (advance())
+// should jump straight back to Review instead of continuing linearly —
+// see BookingFlow's `advance()` for how this is consumed.
+export type EditGroup = {
+  id: string;
+  label: string;
+  startStep: StepId;
+  endStep: StepId;
+};
+
+export const EDIT_GROUPS: EditGroup[] = [
+  { id: "property-service", label: "Property and service", startStep: "property-type", endStep: "cleaning-type" },
+  { id: "extras", label: "Extras", startStep: "extras", endStep: "extras" },
+  { id: "frequency", label: "Frequency", startStep: "frequency", endStep: "frequency" },
+  { id: "location", label: "Location", startStep: "location", endStep: "location" },
+  { id: "schedule", label: "Schedule", startStep: "schedule-date", endStep: "arrival-window" },
+  { id: "contact-address", label: "Contact and address", startStep: "customer-name", endStep: "service-address" },
+  { id: "instructions", label: "Instructions", startStep: "access", endStep: "special-instructions" },
+];
+
+export const EDIT_GROUP_END_STEPS: ReadonlySet<StepId> = new Set(EDIT_GROUPS.map((g) => g.endStep));
+
+export const US_STATES = [
+  "New Jersey",
+  "New York",
+  "Pennsylvania",
+  "Connecticut",
+  "Delaware",
+] as const;
 
 export function getBedroomOption(id: BedroomId): BedroomOption {
   const option = BEDROOM_OPTIONS.find((o) => o.id === id);

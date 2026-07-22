@@ -10,6 +10,8 @@ import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
 } from "./config";
+import { formatReadableDate, getArrivalWindowOption } from "./schedule";
+import { getCityForZip } from "./serviceArea";
 import type { BookingState } from "./types";
 
 export type SummaryLine = {
@@ -70,6 +72,23 @@ export function getSummaryLines(state: BookingState): SummaryLine[] {
   if (state.frequency) {
     const option = FREQUENCY_OPTIONS.find((o) => o.id === state.frequency);
     if (option) lines.push({ label: "Frequency", value: option.label });
+  }
+
+  // Milestone 2A additions. Deliberately limited to date / arrival window /
+  // city-or-ZIP — the sticky summary should never surface name, email,
+  // phone, full address, or special instructions.
+  const city = getCityForZip(state.zipCode);
+  if (city || state.zipCode) {
+    lines.push({ label: "Service area", value: city ? `${city}, NJ ${state.zipCode}` : state.zipCode });
+  }
+
+  if (state.appointmentDate) {
+    lines.push({ label: "Appointment date", value: formatReadableDate(state.appointmentDate) });
+  }
+
+  if (state.arrivalWindow) {
+    const option = getArrivalWindowOption(state.arrivalWindow);
+    lines.push({ label: "Arrival window", value: `${option.label} (${option.timeRangeLabel})` });
   }
 
   return lines;

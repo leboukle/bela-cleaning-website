@@ -29,12 +29,22 @@ export type CleaningTypeId = "standard" | "move-in" | "deep" | "move-out";
 
 export type FrequencyId = "one-time" | "weekly" | "biweekly" | "monthly";
 
+export type ArrivalWindowId = "morning" | "midday" | "early-afternoon" | "afternoon";
+
+export type AccessId = "home" | "not-home";
+
 // The linear question sequence. Note: "cleaning-type" is asked before
 // "extras" here so the visible progress stages (Property / Service /
-// Extras / Frequency / Schedule / Details / Review) advance in one
-// direction only — see STEP_STAGE in config.ts and the milestone report
-// for why this differs from the extras-before-cleaning-type order the
-// questions were listed in.
+// Extras / Frequency / Location / Schedule / Details / Review) advance in
+// one direction only — see STEP_STAGE in config.ts and the Milestone 1
+// report for why this differs from the extras-before-cleaning-type order
+// the questions were originally listed in.
+//
+// Milestone 2A extends the flow past "frequency" with fine-grained steps
+// grouped under four new coarse stages (Location, Schedule, Details x6).
+// Each stage groups multiple StepIds — see EDIT_GROUPS in config.ts, which
+// the Review step's "Edit" links and BookingFlow's edit-return logic key
+// off of.
 export const STEP_ORDER = [
   "intro",
   "property-type",
@@ -44,8 +54,15 @@ export const STEP_ORDER = [
   "cleaning-type",
   "extras",
   "frequency",
-  "schedule",
-  "details",
+  "location",
+  "schedule-date",
+  "arrival-window",
+  "customer-name",
+  "customer-email",
+  "customer-phone",
+  "service-address",
+  "access",
+  "special-instructions",
   "review",
 ] as const;
 
@@ -76,6 +93,45 @@ export type BookingState = {
   cleaningType: CleaningTypeId | null;
   extras: ExtrasState;
   frequency: FrequencyId | null;
+
+  // --- Milestone 2A additions below ---
+
+  // Service-area / location step
+  zipCode: string;
+  zipCodeChecked: boolean;
+  zipCodeSupported: boolean;
+  outOfAreaMessage: string;
+
+  // Schedule
+  appointmentDate: string | null; // ISO yyyy-mm-dd, always interpreted as a local calendar date
+  arrivalWindow: ArrivalWindowId | null;
+
+  // Customer info — client-side prototype state only, never submitted.
+  // See CustomerNameStep/CustomerEmailStep/CustomerPhoneStep for the
+  // "server-side validation required later" note.
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+
+  // Service address — zip prefilled from the location step, independently
+  // editable and revalidated against the service area.
+  addressStreet: string;
+  addressUnit: string;
+  addressCity: string;
+  addressState: string;
+  addressZip: string;
+
+  someoneHome: AccessId | null;
+  specialInstructions: string;
+
+  agreedToPolicy: boolean;
+  paymentPreviewShown: boolean;
+
+  // Set by the Review step's "Edit" links so the relevant group's last
+  // step can jump straight back to Review instead of continuing linearly
+  // through the rest of the flow. See BookingFlow's `advance()`.
+  returnToStepId: StepId | null;
 };
 
 export const initialExtrasState: ExtrasState = {
@@ -99,4 +155,31 @@ export const initialBookingState: BookingState = {
   cleaningType: null,
   extras: initialExtrasState,
   frequency: null,
+
+  zipCode: "",
+  zipCodeChecked: false,
+  zipCodeSupported: false,
+  outOfAreaMessage: "",
+
+  appointmentDate: null,
+  arrivalWindow: null,
+
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+
+  addressStreet: "",
+  addressUnit: "",
+  addressCity: "",
+  addressState: "New Jersey",
+  addressZip: "",
+
+  someoneHome: null,
+  specialInstructions: "",
+
+  agreedToPolicy: false,
+  paymentPreviewShown: false,
+
+  returnToStepId: null,
 };

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BATHROOM_OPTIONS,
   BEDROOM_OPTIONS,
+  EDIT_GROUP_END_STEPS,
   SQUARE_FOOTAGE_OPTIONS,
   STEP_STAGE,
 } from "@/lib/booking/config";
@@ -11,6 +12,8 @@ import { calculateEstimate } from "@/lib/booking/calculate";
 import {
   initialBookingState,
   STEP_ORDER,
+  type AccessId,
+  type ArrivalWindowId,
   type BathroomId,
   type BedroomId,
   type CleaningTypeId,
@@ -18,6 +21,7 @@ import {
   type FrequencyId,
   type PropertyTypeId,
   type SquareFootageId,
+  type StepId,
 } from "@/lib/booking/types";
 import ProgressIndicator from "@/components/booking/ProgressIndicator";
 import BookingSummary from "@/components/booking/BookingSummary";
@@ -32,7 +36,16 @@ import BathroomsStep from "@/components/booking/steps/BathroomsStep";
 import CleaningTypeStep from "@/components/booking/steps/CleaningTypeStep";
 import ExtrasStep from "@/components/booking/steps/ExtrasStep";
 import FrequencyStep from "@/components/booking/steps/FrequencyStep";
-import PlaceholderStep from "@/components/booking/steps/PlaceholderStep";
+import LocationStep from "@/components/booking/steps/LocationStep";
+import ScheduleDateStep from "@/components/booking/steps/ScheduleDateStep";
+import ArrivalWindowStep from "@/components/booking/steps/ArrivalWindowStep";
+import CustomerNameStep from "@/components/booking/steps/CustomerNameStep";
+import CustomerEmailStep from "@/components/booking/steps/CustomerEmailStep";
+import CustomerPhoneStep from "@/components/booking/steps/CustomerPhoneStep";
+import ServiceAddressStep from "@/components/booking/steps/ServiceAddressStep";
+import AccessStep from "@/components/booking/steps/AccessStep";
+import SpecialInstructionsStep from "@/components/booking/steps/SpecialInstructionsStep";
+import ReviewStep from "@/components/booking/steps/ReviewStep";
 
 const CUSTOM_ESTIMATE_MESSAGES: Record<"square-footage" | "bedrooms" | "bathrooms", string> = {
   "square-footage":
@@ -53,8 +66,37 @@ export default function BookingFlow() {
   const estimate = useMemo(() => calculateEstimate(state), [state]);
 
   const goBack = () => setState((s) => ({ ...s, stepIndex: Math.max(s.stepIndex - 1, 0) }));
+
+  // Normally advances one step. But if the customer got here via a Review
+  // "Edit" link (`returnToStepId` is set) and the step they're leaving is
+  // the last step of that edit group (EDIT_GROUP_END_STEPS, see
+  // config.ts), jump straight back to Review instead of continuing
+  // linearly — see EDIT_GROUPS in config.ts for the group boundaries.
+  // Known simplification: if the customer navigates Back past the start
+  // of the group they're editing, `returnToStepId` stays set and they'll
+  // still land back on Review once they reach any group's end step —
+  // acceptable for this prototype since it never leaves them stuck, it
+  // just means an unusual back-then-forward path can skip re-confirming
+  // an intermediate group.
   const advance = () =>
-    setState((s) => ({ ...s, stepIndex: Math.min(s.stepIndex + 1, STEP_ORDER.length - 1) }));
+    setState((s) => {
+      const leavingStepId = STEP_ORDER[s.stepIndex];
+      if (s.returnToStepId && EDIT_GROUP_END_STEPS.has(leavingStepId)) {
+        return { ...s, stepIndex: STEP_ORDER.indexOf(s.returnToStepId), returnToStepId: null };
+      }
+      return { ...s, stepIndex: Math.min(s.stepIndex + 1, STEP_ORDER.length - 1) };
+    });
+
+  // Also clears `paymentPreviewShown` — if the customer edits something
+  // after seeing the "coming in a later milestone" message, they should
+  // be able to reach and press the final button again on their way back.
+  const editSection = (stepId: StepId) =>
+    setState((s) => ({
+      ...s,
+      stepIndex: STEP_ORDER.indexOf(stepId),
+      returnToStepId: "review",
+      paymentPreviewShown: false,
+    }));
 
   const selectPropertyType = (id: PropertyTypeId) => {
     setState((s) => ({ ...s, propertyType: id, propertyTypeOther: id === "other" ? s.propertyTypeOther : "" }));
@@ -97,6 +139,79 @@ export default function BookingFlow() {
 
   const setCustomEstimateNotes = (text: string) => setState((s) => ({ ...s, customEstimateNotes: text }));
   const clearCustomEstimateTrigger = () => setState((s) => ({ ...s, customEstimateTrigger: null }));
+
+  // --- Milestone 2A: Location ---
+  const setZipCode = (zip: string) => setState((s) => ({ ...s, zipCode: zip }));
+  const setOutOfAreaMessage = (text: string) => setState((s) => ({ ...s, outOfAreaMessage: text }));
+
+  // --- Schedule ---
+  const selectAppointmentDate = (dateKey: string) => {
+    setState((s) => ({ ...s, appointmentDate: dateKey }));
+    advance();
+  };
+  const selectArrivalWindow = (id: ArrivalWindowId) => {
+    setState((s) => ({ ...s, arrivalWindow: id }));
+    advance();
+  };
+
+  // --- Customer info (client-side prototype state only) ---
+  // Fields hold the raw typed value while the customer is still in the
+  // field (trimming on every keystroke would strip a space they just
+  // typed before they can type the next word). Leading/trailing
+  // whitespace is trimmed when they confirm the field via Continue —
+  // see the continueFrom* handlers below — so every downstream consumer
+  // (Review, validation) always sees trimmed values.
+  const setFirstName = (value: string) => setState((s) => ({ ...s, firstName: value }));
+  const setLastName = (value: string) => setState((s) => ({ ...s, lastName: value }));
+  const setEmail = (value: string) => setState((s) => ({ ...s, email: value }));
+  const setPhone = (value: string) => setState((s) => ({ ...s, phone: value }));
+
+  const continueFromName = () => {
+    setState((s) => ({ ...s, firstName: s.firstName.trim(), lastName: s.lastName.trim() }));
+    advance();
+  };
+  const continueFromEmail = () => {
+    setState((s) => ({ ...s, email: s.email.trim() }));
+    advance();
+  };
+  // Seeds the service-address ZIP from the location step's ZIP the first
+  // time the customer reaches it (without overwriting one they've already
+  // typed there themselves after going back and forth), then advances.
+  // This is the only forward transition into "service-address", so
+  // hooking it here covers every path — including returning via an
+  // edited "Contact and address" section, which re-enters at
+  // "customer-name" and flows through here the same way.
+  const continueFromPhone = () => {
+    setState((s) => ({ ...s, phone: s.phone.trim(), addressZip: s.addressZip || s.zipCode }));
+    advance();
+  };
+
+  // --- Service address ---
+  const setAddressStreet = (value: string) => setState((s) => ({ ...s, addressStreet: value }));
+  const setAddressUnit = (value: string) => setState((s) => ({ ...s, addressUnit: value }));
+  const setAddressCity = (value: string) => setState((s) => ({ ...s, addressCity: value }));
+  const setAddressState = (value: string) => setState((s) => ({ ...s, addressState: value }));
+  const setAddressZip = (value: string) => setState((s) => ({ ...s, addressZip: value }));
+  const continueFromAddress = () => {
+    setState((s) => ({
+      ...s,
+      addressStreet: s.addressStreet.trim(),
+      addressUnit: s.addressUnit.trim(),
+      addressCity: s.addressCity.trim(),
+    }));
+    advance();
+  };
+
+  // --- Access & instructions ---
+  const selectSomeoneHome = (id: AccessId) => {
+    setState((s) => ({ ...s, someoneHome: id }));
+    advance();
+  };
+  const setSpecialInstructions = (value: string) => setState((s) => ({ ...s, specialInstructions: value }));
+
+  // --- Review & policy ---
+  const setAgreedToPolicy = (agreed: boolean) => setState((s) => ({ ...s, agreedToPolicy: agreed }));
+  const submitPaymentPreview = () => setState((s) => ({ ...s, paymentPreviewShown: true }));
 
   const stage = STEP_STAGE[currentStepId];
 
@@ -147,31 +262,76 @@ export default function BookingFlow() {
         );
       case "frequency":
         return <FrequencyStep value={state.frequency} onSelect={selectFrequency} onBack={goBack} />;
-      case "schedule":
+      case "location":
         return (
-          <PlaceholderStep
-            question="Pick a time that works for you"
-            description="In a future milestone, you'll choose an available date and time here based on your location and the crew's schedule."
-            continueLabel="Continue to your details"
+          <LocationStep
+            zipCode={state.zipCode}
+            onZipChange={setZipCode}
+            outOfAreaMessage={state.outOfAreaMessage}
+            onOutOfAreaMessageChange={setOutOfAreaMessage}
             onContinue={advance}
             onBack={goBack}
           />
         );
-      case "details":
+      case "schedule-date":
         return (
-          <PlaceholderStep
-            question="A few details about you"
-            description="In a future milestone, you'll share your name, address, and any access or pet notes for the cleaning crew here."
-            continueLabel="Continue to review"
+          <ScheduleDateStep appointmentDate={state.appointmentDate} onSelect={selectAppointmentDate} onBack={goBack} />
+        );
+      case "arrival-window":
+        return <ArrivalWindowStep value={state.arrivalWindow} onSelect={selectArrivalWindow} onBack={goBack} />;
+      case "customer-name":
+        return (
+          <CustomerNameStep
+            firstName={state.firstName}
+            lastName={state.lastName}
+            onFirstNameChange={setFirstName}
+            onLastNameChange={setLastName}
+            onContinue={continueFromName}
+            onBack={goBack}
+          />
+        );
+      case "customer-email":
+        return (
+          <CustomerEmailStep email={state.email} onChange={setEmail} onContinue={continueFromEmail} onBack={goBack} />
+        );
+      case "customer-phone":
+        return <CustomerPhoneStep phone={state.phone} onChange={setPhone} onContinue={continueFromPhone} onBack={goBack} />;
+      case "service-address":
+        return (
+          <ServiceAddressStep
+            street={state.addressStreet}
+            unit={state.addressUnit}
+            city={state.addressCity}
+            state={state.addressState}
+            zip={state.addressZip}
+            onStreetChange={setAddressStreet}
+            onUnitChange={setAddressUnit}
+            onCityChange={setAddressCity}
+            onStateChange={setAddressState}
+            onZipChange={setAddressZip}
+            onContinue={continueFromAddress}
+            onBack={goBack}
+          />
+        );
+      case "access":
+        return <AccessStep value={state.someoneHome} onSelect={selectSomeoneHome} onBack={goBack} />;
+      case "special-instructions":
+        return (
+          <SpecialInstructionsStep
+            value={state.specialInstructions}
+            onChange={setSpecialInstructions}
             onContinue={advance}
             onBack={goBack}
           />
         );
       case "review":
         return (
-          <PlaceholderStep
-            question="Review your booking"
-            description="In a future milestone, you'll review everything and securely enter payment here to confirm your appointment. This preview stops before any payment step — nothing has been booked or charged."
+          <ReviewStep
+            state={state}
+            estimate={estimate}
+            onEdit={editSection}
+            onAgreedChange={setAgreedToPolicy}
+            onSubmitPreview={submitPaymentPreview}
             onBack={goBack}
           />
         );
