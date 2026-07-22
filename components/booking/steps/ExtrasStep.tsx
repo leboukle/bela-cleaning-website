@@ -15,7 +15,12 @@ type ExtrasStepProps = {
 };
 
 // Multi-select step: any combination of flat-fee extras and per-unit
-// quantities, or "No extras" which clears and disables everything else.
+// quantities, or "No extras" as a mutually-exclusive shortcut. "No extras"
+// is a reversible toggle, not a locked state — selecting any regular extra
+// while it's active clears it automatically (see toggleFlat/setQty below),
+// and clicking "No extras" a second time unselects it. Cards are never
+// `disabled`: a disabled SelectionCard can't be clicked, which would make
+// this recovery path unreachable.
 // Nothing here auto-advances — the customer confirms with Continue.
 export default function ExtrasStep({ extras, onChange, onContinue, onBack }: ExtrasStepProps) {
   const toggleFlat = (key: "kitchenCabinets" | "refrigerator" | "oven") => {
@@ -30,7 +35,11 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
     onChange({ ...extras, blindsQty: qty, noExtras: false });
   };
 
-  const selectNoExtras = () => {
+  const toggleNoExtras = () => {
+    if (extras.noExtras) {
+      onChange({ ...extras, noExtras: false });
+      return;
+    }
     onChange({
       kitchenCabinets: false,
       refrigerator: false,
@@ -41,6 +50,14 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
     });
   };
 
+  const hasSelection =
+    extras.noExtras ||
+    extras.kitchenCabinets ||
+    extras.refrigerator ||
+    extras.oven ||
+    extras.interiorWindowsQty > 0 ||
+    extras.blindsQty > 0;
+
   return (
     <StepShell question="Would you like to add any extras?" note="Select as many as you'd like." onBack={onBack}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -50,7 +67,6 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
           durationLabel={`+${formatDuration(EXTRAS_CONFIG.kitchenCabinets.durationMinutes)}`}
           selected={extras.kitchenCabinets}
           onSelect={() => toggleFlat("kitchenCabinets")}
-          disabled={extras.noExtras}
           role="toggle"
         />
         <SelectionCard
@@ -59,7 +75,6 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
           durationLabel={`+${formatDuration(EXTRAS_CONFIG.refrigerator.durationMinutes)}`}
           selected={extras.refrigerator}
           onSelect={() => toggleFlat("refrigerator")}
-          disabled={extras.noExtras}
           role="toggle"
         />
         <SelectionCard
@@ -68,7 +83,6 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
           durationLabel={`+${formatDuration(EXTRAS_CONFIG.oven.durationMinutes)}`}
           selected={extras.oven}
           onSelect={() => toggleFlat("oven")}
-          disabled={extras.noExtras}
           role="toggle"
         />
 
@@ -78,7 +92,6 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
           durationLabel={`+${formatDuration(EXTRAS_CONFIG.interiorWindows.durationPerUnitMinutes)}/window`}
           selected={extras.interiorWindowsQty > 0}
           onSelect={() => setInteriorWindowsQty(extras.interiorWindowsQty > 0 ? 0 : 1)}
-          disabled={extras.noExtras}
           role="toggle"
         >
           {extras.interiorWindowsQty > 0 && (
@@ -98,7 +111,6 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
           priceLabel={`+${formatCurrency(EXTRAS_CONFIG.blinds.pricePerUnit)}/blind`}
           selected={extras.blindsQty > 0}
           onSelect={() => setBlindsQty(extras.blindsQty > 0 ? 0 : 1)}
-          disabled={extras.noExtras}
           role="toggle"
         >
           {extras.blindsQty > 0 && (
@@ -108,13 +120,14 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
           )}
         </SelectionCard>
 
-        <SelectionCard label="No extras" selected={extras.noExtras} onSelect={selectNoExtras} role="toggle" />
+        <SelectionCard label="No extras" selected={extras.noExtras} onSelect={toggleNoExtras} role="toggle" />
       </div>
 
       <button
         type="button"
         onClick={onContinue}
-        className="mt-6 inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-7 py-3.5 text-sm font-medium tracking-wide text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#2A211C] hover:shadow-lg active:translate-y-0 active:scale-[0.97]"
+        disabled={!hasSelection}
+        className="mt-6 inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-7 py-3.5 text-sm font-medium tracking-wide text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#2A211C] hover:shadow-lg active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
       >
         Continue
       </button>
