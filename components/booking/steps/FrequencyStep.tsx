@@ -14,11 +14,11 @@ type FrequencyStepProps = {
 export default function FrequencyStep({ value, onSelect, onBack }: FrequencyStepProps) {
   return (
     <StepShell
-      question="How often would you like this service?"
-      note="Recurring discounts apply to your bedroom base price."
+      question="How often should we come by?"
+      note="Recurring visits come with a discount on your bedroom base price."
       onBack={onBack}
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {FREQUENCY_OPTIONS.map((option) => (
           <SelectionCard
             key={option.id}

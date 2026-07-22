@@ -14,8 +14,8 @@ type CleaningTypeStepProps = {
 
 export default function CleaningTypeStep({ value, onSelect, onBack }: CleaningTypeStepProps) {
   return (
-    <StepShell question="What kind of cleaning do you need?" onBack={onBack}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <StepShell question="What kind of clean are you looking for?" onBack={onBack}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {CLEANING_TYPE_OPTIONS.map((option) => (
           <SelectionCard
             key={option.id}

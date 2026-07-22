@@ -14,8 +14,8 @@ type BedroomsStepProps = {
 
 export default function BedroomsStep({ value, onSelect, onBack }: BedroomsStepProps) {
   return (
-    <StepShell question="How many bedrooms?" onBack={onBack}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <StepShell question="How many bedrooms should we plan for?" onBack={onBack}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {BEDROOM_OPTIONS.map((option) => (
           <SelectionCard
             key={option.id}

@@ -59,8 +59,12 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
     extras.blindsQty > 0;
 
   return (
-    <StepShell question="Would you like to add any extras?" note="Select as many as you'd like." onBack={onBack}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <StepShell
+      question="Would you like us to take care of anything extra?"
+      note="Pick as many as you like — you can always change your mind."
+      onBack={onBack}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <SelectionCard
           label={EXTRAS_CONFIG.kitchenCabinets.label}
           priceLabel={`+${formatCurrency(EXTRAS_CONFIG.kitchenCabinets.price)}`}
@@ -127,7 +131,7 @@ export default function ExtrasStep({ extras, onChange, onContinue, onBack }: Ext
         type="button"
         onClick={onContinue}
         disabled={!hasSelection}
-        className="mt-6 inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-7 py-3.5 text-sm font-medium tracking-wide text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#2A211C] hover:shadow-lg active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+        className="mt-7 inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-8 py-3.5 text-sm font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_28px_-10px_rgba(59,47,39,0.35)] active:translate-y-0 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
       >
         Continue
       </button>

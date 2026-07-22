@@ -22,7 +22,7 @@ export default function PlaceholderStep({
 }: PlaceholderStepProps) {
   return (
     <StepShell question={question} onBack={onBack}>
-      <div className="rounded-xl border-2 border-dashed border-[#D9CCB8] bg-[#FBF7EF] p-6 sm:p-8">
+      <div className="rounded-2xl border border-dashed border-[#D9CCB8] bg-[#FBF7EF] p-7 sm:p-9">
         <span className="inline-block rounded-full bg-[#EFE7DA] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#8A7A6B]">
           Coming in a later milestone
         </span>
@@ -31,7 +31,7 @@ export default function PlaceholderStep({
           <button
             type="button"
             onClick={onContinue}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-7 py-3.5 text-sm font-medium tracking-wide text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#2A211C] hover:shadow-lg active:translate-y-0 active:scale-[0.97]"
+            className="mt-7 inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-8 py-3.5 text-sm font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_28px_-10px_rgba(59,47,39,0.35)] active:translate-y-0 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
           >
             {continueLabel}
           </button>

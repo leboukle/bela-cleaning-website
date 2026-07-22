@@ -20,8 +20,8 @@ export const metadata: Metadata = {
 
 export default function BookingPreviewPage() {
   return (
-    <div className="bg-[#FBF7EF]">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+    <div className="min-h-screen bg-[#FBF7EF]">
+      <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-14 lg:px-10 lg:py-16">
         <BookingFlow />
       </div>
     </div>

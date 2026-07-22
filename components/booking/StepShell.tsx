@@ -20,7 +20,7 @@ export default function StepShell({ question, note, onBack, children }: StepShel
         <button
           type="button"
           onClick={onBack}
-          className="group mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-[#8A7A6B] transition-colors duration-150 hover:text-[#3B2F27]"
+          className="group mb-5 inline-flex items-center gap-1.5 rounded-full text-sm font-medium text-[#8A7A6B] transition-colors duration-150 hover:text-[#3B2F27] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
         >
           <ArrowLeft
             size={16}
@@ -30,9 +30,11 @@ export default function StepShell({ question, note, onBack, children }: StepShel
           Back
         </button>
       )}
-      <h1 className="font-heading text-2xl sm:text-3xl text-[#3B2F27] text-balance">{question}</h1>
-      {note && <p className="mt-2 text-sm text-[#8A7A6B] leading-relaxed">{note}</p>}
-      <div className="mt-6">{children}</div>
+      <h1 className="font-heading text-[1.75rem] leading-[1.15] text-[#3B2F27] text-balance sm:text-4xl">
+        {question}
+      </h1>
+      {note && <p className="mt-2.5 text-[15px] text-[#8A7A6B] leading-relaxed">{note}</p>}
+      <div className="mt-7">{children}</div>
     </div>
   );
 }

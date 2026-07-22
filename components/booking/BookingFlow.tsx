@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BATHROOM_OPTIONS,
   BEDROOM_OPTIONS,
@@ -23,6 +23,7 @@ import ProgressIndicator from "@/components/booking/ProgressIndicator";
 import BookingSummary from "@/components/booking/BookingSummary";
 import MobileSummaryBar from "@/components/booking/MobileSummaryBar";
 import CustomEstimateNotice from "@/components/booking/CustomEstimateNotice";
+import StepTransition from "@/components/booking/StepTransition";
 import IntroStep from "@/components/booking/steps/IntroStep";
 import PropertyTypeStep from "@/components/booking/steps/PropertyTypeStep";
 import SquareFootageStep from "@/components/booking/steps/SquareFootageStep";
@@ -35,9 +36,11 @@ import PlaceholderStep from "@/components/booking/steps/PlaceholderStep";
 
 const CUSTOM_ESTIMATE_MESSAGES: Record<"square-footage" | "bedrooms" | "bathrooms", string> = {
   "square-footage":
-    "Properties over 4,000 sq. ft. need a custom estimate rather than an instant price.",
-  bedrooms: "Homes with more than 5 bedrooms need a custom estimate rather than an instant price.",
-  bathrooms: "Homes with more than 4 bathrooms need a custom estimate rather than an instant price.",
+    "Your home is a bit larger than we can price instantly — let's put together a custom estimate for you.",
+  bedrooms:
+    "With that many bedrooms, we'd rather put together a custom estimate than guess at a price.",
+  bathrooms:
+    "With that many bathrooms, we'd rather put together a custom estimate than guess at a price.",
 };
 
 // Orchestrates the linear question flow: owns BookingState, advances or
@@ -97,6 +100,13 @@ export default function BookingFlow() {
 
   const stage = STEP_STAGE[currentStepId];
 
+  // Keep the customer oriented at the top of each new question, especially
+  // on mobile where the sticky summary bar makes a mid-scroll jump-cut
+  // disorienting. Respects prefers-reduced-motion via the global CSS rule.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [currentStepId, state.customEstimateTrigger]);
+
   const renderStep = () => {
     if (state.customEstimateTrigger) {
       return (
@@ -140,8 +150,8 @@ export default function BookingFlow() {
       case "schedule":
         return (
           <PlaceholderStep
-            question="Choose your appointment"
-            description="In a future milestone, you'll pick an available date and time here based on your location and the crew's schedule."
+            question="Pick a time that works for you"
+            description="In a future milestone, you'll choose an available date and time here based on your location and the crew's schedule."
             continueLabel="Continue to your details"
             onContinue={advance}
             onBack={goBack}
@@ -150,8 +160,8 @@ export default function BookingFlow() {
       case "details":
         return (
           <PlaceholderStep
-            question="Your contact and service details"
-            description="In a future milestone, you'll enter your name, address, and any access or pet notes for the cleaning crew here."
+            question="A few details about you"
+            description="In a future milestone, you'll share your name, address, and any access or pet notes for the cleaning crew here."
             continueLabel="Continue to review"
             onContinue={advance}
             onBack={goBack}
@@ -160,8 +170,8 @@ export default function BookingFlow() {
       case "review":
         return (
           <PlaceholderStep
-            question="Review and payment"
-            description="In a future milestone, you'll review your full booking and securely enter payment here to confirm your appointment. This preview stops before any payment step — nothing has been booked or charged."
+            question="Review your booking"
+            description="In a future milestone, you'll review everything and securely enter payment here to confirm your appointment. This preview stops before any payment step — nothing has been booked or charged."
             onBack={goBack}
           />
         );
@@ -173,12 +183,11 @@ export default function BookingFlow() {
   return (
     <div>
       {currentStepId !== "intro" && <ProgressIndicator currentStage={stage} />}
-      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px]">
-        <div
-          key={`${currentStepId}-${state.customEstimateTrigger ?? "answering"}`}
-          className="animate-[booking-step-in_0.35s_cubic-bezier(0.16,1,0.3,1)_both] pb-28 lg:pb-0"
-        >
-          {renderStep()}
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1fr_360px] lg:gap-14">
+        <div className="pb-32 lg:pb-0">
+          <StepTransition transitionKey={`${currentStepId}-${state.customEstimateTrigger ?? "answering"}`}>
+            {renderStep()}
+          </StepTransition>
         </div>
         {currentStepId !== "intro" && <BookingSummary state={state} estimate={estimate} />}
       </div>
