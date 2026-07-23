@@ -25,7 +25,11 @@ export default function PropertyTypeStep({
   onBack,
 }: PropertyTypeStepProps) {
   return (
-    <StepShell question="What kind of home are we cleaning?" onBack={onBack}>
+    <StepShell
+      question="First, tell us about your property."
+      note="This helps us tailor your cleaning plan — and price it accurately from the start."
+      onBack={onBack}
+    >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {PROPERTY_TYPE_OPTIONS.map((option) => (
           <SelectionCard

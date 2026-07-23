@@ -15,7 +15,7 @@ export default function ArrivalWindowStep({ value, onSelect, onBack }: ArrivalWi
   return (
     <StepShell
       question="What arrival window works best?"
-      note="This is your preferred arrival window, not a guaranteed exact arrival time."
+      note="Your cleaner will arrive within this window, and we'll text you when they're on the way."
       onBack={onBack}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

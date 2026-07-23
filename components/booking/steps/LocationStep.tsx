@@ -37,7 +37,7 @@ export default function LocationStep({
   return (
     <StepShell
       question="Where would you like us to clean?"
-      note="We'll use your ZIP code to confirm that the property is within our current service area."
+      note="Just your ZIP code for now — we'll confirm the property is within our current service area."
       onBack={onBack}
     >
       <div className="max-w-xs">
@@ -73,7 +73,7 @@ export default function LocationStep({
               <Check size={14} strokeWidth={3} aria-hidden="true" />
             </span>
             <div>
-              <p className="font-heading text-lg text-[#3B2F27]">Great news—we serve your area.</p>
+              <p className="font-heading text-lg text-[#3B2F27]">Great news — we serve your area.</p>
               {getCityForZip(trimmedZip) && (
                 <p className="mt-1 text-sm text-[#6B5B4C]">{getCityForZip(trimmedZip)}, NJ</p>
               )}
@@ -92,8 +92,11 @@ export default function LocationStep({
       {formatValid && !supported && (
         <div className="mt-6 max-w-md animate-[booking-step-in_0.3s_ease-out] rounded-2xl border border-[#E7DECE] bg-white p-6 shadow-[0_4px_24px_-8px_rgba(59,47,39,0.12)] sm:p-7">
           <p className="font-heading text-xl leading-snug text-[#3B2F27]">
-            This property is currently outside our instant-booking area. Send BeLa Cleaning a message
-            and we&rsquo;ll let you know whether we can accommodate the request.
+            This address falls just outside our instant-booking area — but that doesn&rsquo;t mean we
+            can&rsquo;t help.
+          </p>
+          <p className="mt-2 text-sm text-[#6B5B4C]">
+            Send us a quick note below and our team will follow up personally to see what we can do.
           </p>
 
           <div className="mt-5">

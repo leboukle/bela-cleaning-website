@@ -18,7 +18,11 @@ export default function CustomerEmailStep({ email, onChange, onContinue, onBack 
   const valid = isValidEmail(email);
 
   return (
-    <StepShell question="What's the best email for your confirmation?" onBack={onBack}>
+    <StepShell
+      question="What's the best email for your confirmation?"
+      note="We'll send your booking confirmation and appointment reminders here — nothing else."
+      onBack={onBack}
+    >
       <div className="max-w-sm">
         <label htmlFor="customer-email" className="text-sm font-medium text-[#3B2F27]">
           Email address

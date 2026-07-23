@@ -18,7 +18,11 @@ export default function CustomerPhoneStep({ phone, onChange, onContinue, onBack 
   const valid = isValidUsPhone(phone);
 
   return (
-    <StepShell question="What's the best mobile number for appointment updates?" onBack={onBack}>
+    <StepShell
+      question="What's the best mobile number for appointment updates?"
+      note="We'll text you before your cleaner arrives, and use this number only for appointment updates."
+      onBack={onBack}
+    >
       <div className="max-w-sm">
         <label htmlFor="customer-phone" className="text-sm font-medium text-[#3B2F27]">
           Mobile phone number

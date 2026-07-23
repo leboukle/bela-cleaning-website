@@ -12,7 +12,11 @@ type AccessStepProps = {
 
 export default function AccessStep({ value, onSelect, onBack }: AccessStepProps) {
   return (
-    <StepShell question="Will someone be home during the cleaning?" onBack={onBack}>
+    <StepShell
+      question="Will someone be home during the cleaning?"
+      note="Either works well — this just helps us plan for access."
+      onBack={onBack}
+    >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <SelectionCard
           label="Yes, someone will be home"

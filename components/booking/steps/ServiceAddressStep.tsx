@@ -52,7 +52,7 @@ export default function ServiceAddressStep({
   };
 
   return (
-    <StepShell question="Where should the crew go?" note="This is the address we'll clean." onBack={onBack}>
+    <StepShell question="Where should the crew go?" note="This is where we'll be cleaning." onBack={onBack}>
       <div className="max-w-md space-y-5">
         <div>
           <label htmlFor="address-street" className="text-sm font-medium text-[#3B2F27]">

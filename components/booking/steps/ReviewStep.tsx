@@ -56,9 +56,8 @@ function ReviewLine({ label, value }: { label: string; value: string }) {
 
 export default function ReviewStep({ state, estimate, onEdit, onAgreedChange, onSubmitPreview, onBack }: ReviewStepProps) {
   const lines = getSummaryLines(state);
-  const propertyServiceLines = lines.filter((l) =>
-    ["Property type", "Square footage", "Bedrooms", "Bathrooms", "Cleaning type"].includes(l.label),
-  );
+  const propertyLines = lines.filter((l) => ["Property type", "Square footage"].includes(l.label));
+  const cleaningLines = lines.filter((l) => ["Bedrooms", "Bathrooms", "Cleaning type"].includes(l.label));
   const extrasLine = lines.find((l) => l.label === "Extras");
   const frequencyOption = state.frequency ? getFrequencyOption(state.frequency) : null;
 
@@ -99,9 +98,19 @@ export default function ReviewStep({ state, estimate, onEdit, onAgreedChange, on
 
   return (
     <StepShell question="Review your cleaning" onBack={onBack}>
+      <p className="mb-6 text-[15px] text-[#8A7A6B]">
+        Here&rsquo;s everything we&rsquo;ve put together for your visit. Take a look, and change anything
+        you&rsquo;d like before continuing.
+      </p>
       <div className="space-y-5">
-        <ReviewSection title="Property and service" onEdit={() => onEdit("property-type")}>
-          {propertyServiceLines.map((line) => (
+        <ReviewSection title="Property" onEdit={() => onEdit("property-type")}>
+          {propertyLines.map((line) => (
+            <ReviewLine key={line.label} label={line.label} value={line.value} />
+          ))}
+        </ReviewSection>
+
+        <ReviewSection title="Cleaning" onEdit={() => onEdit("bedrooms")}>
+          {cleaningLines.map((line) => (
             <ReviewLine key={line.label} label={line.label} value={line.value} />
           ))}
         </ReviewSection>
@@ -117,11 +126,8 @@ export default function ReviewStep({ state, estimate, onEdit, onAgreedChange, on
           )}
         </ReviewSection>
 
-        <ReviewSection title="Location" onEdit={() => onEdit("location")}>
+        <ReviewSection title="Appointment" onEdit={() => onEdit("location")}>
           <ReviewLine label="Service area" value={city ? `${city}, NJ ${state.zipCode}` : state.zipCode || "—"} />
-        </ReviewSection>
-
-        <ReviewSection title="Schedule" onEdit={() => onEdit("schedule-date")}>
           <ReviewLine
             label="Appointment date"
             value={state.appointmentDate ? formatReadableDate(state.appointmentDate) : "—"}
@@ -132,43 +138,46 @@ export default function ReviewStep({ state, estimate, onEdit, onAgreedChange, on
           />
         </ReviewSection>
 
-        <ReviewSection title="Contact and address" onEdit={() => onEdit("customer-name")}>
+        <ReviewSection title="Contact" onEdit={() => onEdit("customer-name")}>
           <ReviewLine label="Name" value={`${state.firstName} ${state.lastName}`.trim() || "—"} />
           <ReviewLine label="Email" value={state.email || "—"} />
           <ReviewLine label="Mobile number" value={state.phone ? formatUsPhone(state.phone) : "—"} />
           <ReviewLine label="Service address" value={addressParts.length > 0 ? addressParts.join(", ") : "—"} />
         </ReviewSection>
 
-        <ReviewSection title="Instructions" onEdit={() => onEdit("access")}>
+        <ReviewSection title="Special Instructions" onEdit={() => onEdit("access")}>
           <ReviewLine
             label="Someone home?"
             value={state.someoneHome === "home" ? "Yes, someone will be home" : state.someoneHome === "not-home" ? "No, no one will be home" : "—"}
           />
           {state.specialInstructions.trim() && (
             <div>
-              <dt className="text-xs text-[#A9998A]">Special instructions</dt>
+              <dt className="text-xs text-[#A9998A]">Notes for your cleaner</dt>
               <dd className="mt-1 text-sm font-medium text-[#3B2F27]">{state.specialInstructions}</dd>
             </div>
           )}
         </ReviewSection>
 
         <div className="rounded-2xl border border-[#E7DECE] bg-white p-7 shadow-[0_4px_24px_-8px_rgba(59,47,39,0.12)]">
-          <p className="font-heading text-4xl text-[#3B2F27]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A9998A]">Estimated total</p>
+          <p className="mt-2 font-heading text-5xl leading-none text-[#3B2F27]">
             {estimate ? formatCurrency(estimate.totalPrice) : "Custom estimate"}
           </p>
-          <p className="mt-1 text-xs uppercase tracking-wide text-[#B9AC9B]">Estimated total</p>
-          <p className="mt-3 text-sm text-[#6B5B4C]">
-            {estimate ? formatDuration(estimate.totalDurationMinutes) : "Duration to be determined"}
+          <p className="mt-4 text-sm text-[#6B5B4C]">
+            {estimate ? `Estimated duration: ${formatDuration(estimate.totalDurationMinutes)}` : "Duration to be determined"}
           </p>
         </div>
 
         <div className="rounded-2xl border border-[#E7DECE] bg-[#FBF7EF] p-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-[#8A7A6B]">Before you book</p>
           <ul className="mt-3 space-y-2 text-sm text-[#6B5B4C]">
-            <li>Payment will be processed after the cleaning according to BeLa Cleaning&rsquo;s payment policy.</li>
-            <li>Free changes or cancellations are permitted up to 24 hours before the appointment.</li>
-            <li>Appointment reminders will be sent before the scheduled cleaning.</li>
-            <li>Payment will be handled securely when the Stripe milestone is completed.</li>
+            <li>Every visit is completed by a professional, background-checked member of our team.</li>
+            <li>Transparent pricing, no hidden fees — the total above is exactly what you&rsquo;ll pay.</li>
+            <li>We&rsquo;ll confirm your appointment and send a reminder before we arrive.</li>
+            <li>
+              Plans change — reschedule or cancel free of charge up to 24 hours before your visit. Payment is
+              collected securely after your cleaning.
+            </li>
           </ul>
         </div>
 
@@ -201,11 +210,10 @@ export default function ReviewStep({ state, estimate, onEdit, onAgreedChange, on
                 <Check size={14} strokeWidth={3} aria-hidden="true" />
               </span>
               <div>
-                <p className="font-heading text-lg text-[#3B2F27]">
-                  Payment setup is coming in the next development milestone.
-                </p>
+                <p className="font-heading text-lg text-[#3B2F27]">You&rsquo;re all set for now.</p>
                 <p className="mt-1 text-sm text-[#6B5B4C]">
-                  Preview only — nothing has been booked or charged, and no information has been saved or sent.
+                  Secure online payment is coming soon. This is a preview only — nothing has been booked or
+                  charged, and no information has been saved or sent.
                 </p>
               </div>
             </div>

@@ -13,7 +13,7 @@ type SquareFootageStepProps = {
 
 export default function SquareFootageStep({ value, onSelect, onBack }: SquareFootageStepProps) {
   return (
-    <StepShell question="About how much space are we working with?" onBack={onBack}>
+    <StepShell question="How much space should we plan for?" note="A rough estimate is perfectly fine." onBack={onBack}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {SQUARE_FOOTAGE_OPTIONS.map((option) => (
           <SelectionCard

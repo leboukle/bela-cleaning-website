@@ -61,11 +61,11 @@ export default function MobileSummaryBar({ state, estimate }: MobileSummaryBarPr
             Estimated total
           </span>
           <span className="flex items-baseline gap-2.5">
-            <span className={`font-heading text-2xl text-[#3B2F27] ${totalPulse}`}>
+            <span className={`font-heading text-[1.75rem] leading-none text-[#3B2F27] ${totalPulse}`}>
               {estimate ? formatCurrency(estimate.totalPrice) : "Custom estimate"}
             </span>
-            <span className={`flex items-center gap-1 text-xs font-medium text-[#8A7A6B] ${durationPulse}`}>
-              <Clock size={12} className="shrink-0" aria-hidden="true" />
+            <span className={`flex items-center gap-1 text-[13px] font-medium text-[#8A7A6B] ${durationPulse}`}>
+              <Clock size={13} className="shrink-0" aria-hidden="true" />
               {estimate ? formatDuration(estimate.totalDurationMinutes) : "—"}
             </span>
           </span>

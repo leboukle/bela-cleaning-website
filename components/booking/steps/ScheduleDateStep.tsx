@@ -21,7 +21,7 @@ export default function ScheduleDateStep({ appointmentDate, onSelect, onBack }: 
   return (
     <StepShell
       question="When would you like us to visit?"
-      note="You can book any day of the week, starting one week from today. Browse up to six months ahead."
+      note="We're here seven days a week. Appointments open up starting one week out, and you can browse as far as six months ahead."
       onBack={onBack}
     >
       <Calendar selectedDateKey={appointmentDate} onSelect={onSelect} unavailableDateKeys={unavailableDateKeys} />

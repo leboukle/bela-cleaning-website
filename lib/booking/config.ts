@@ -160,17 +160,22 @@ export const EXTRAS_CONFIG = {
 
 // Maps each step in the linear flow to the progress-indicator stage it
 // belongs to. "intro" has no stage (the progress bar isn't shown yet).
+//
+// Milestone 2.75: consolidated from 8 stages to 7 (Location + Schedule
+// merged into "Appointment", "Service" renamed "Cleaning") so the
+// progress indicator reads as shorter and matches the Review screen's
+// itinerary-style section names one-to-one — see EDIT_GROUPS below.
 export const STEP_STAGE: Partial<Record<StepId, string>> = {
   "property-type": "Property",
   "square-footage": "Property",
-  bedrooms: "Service",
-  bathrooms: "Service",
-  "cleaning-type": "Service",
+  bedrooms: "Cleaning",
+  bathrooms: "Cleaning",
+  "cleaning-type": "Cleaning",
   extras: "Extras",
   frequency: "Frequency",
-  location: "Location",
-  "schedule-date": "Schedule",
-  "arrival-window": "Schedule",
+  location: "Appointment",
+  "schedule-date": "Appointment",
+  "arrival-window": "Appointment",
   "customer-name": "Details",
   "customer-email": "Details",
   "customer-phone": "Details",
@@ -180,21 +185,15 @@ export const STEP_STAGE: Partial<Record<StepId, string>> = {
   review: "Review",
 };
 
-export const PROGRESS_STAGES = [
-  "Property",
-  "Service",
-  "Extras",
-  "Frequency",
-  "Location",
-  "Schedule",
-  "Details",
-  "Review",
-] as const;
+export const PROGRESS_STAGES = ["Property", "Cleaning", "Extras", "Frequency", "Appointment", "Details", "Review"] as const;
 
 // Groups of consecutive StepIds shown as one "Edit" action on the Review
 // screen. `endStep` is the step whose successful completion (advance())
 // should jump straight back to Review instead of continuing linearly —
-// see BookingFlow's `advance()` for how this is consumed.
+// see BookingFlow's `advance()` for how this is consumed. Section
+// boundaries and labels mirror the Review screen's itinerary-style
+// grouping exactly (Property / Cleaning / Extras / Frequency /
+// Appointment / Contact / Special Instructions).
 export type EditGroup = {
   id: string;
   label: string;
@@ -203,13 +202,13 @@ export type EditGroup = {
 };
 
 export const EDIT_GROUPS: EditGroup[] = [
-  { id: "property-service", label: "Property and service", startStep: "property-type", endStep: "cleaning-type" },
+  { id: "property", label: "Property", startStep: "property-type", endStep: "square-footage" },
+  { id: "cleaning", label: "Cleaning", startStep: "bedrooms", endStep: "cleaning-type" },
   { id: "extras", label: "Extras", startStep: "extras", endStep: "extras" },
   { id: "frequency", label: "Frequency", startStep: "frequency", endStep: "frequency" },
-  { id: "location", label: "Location", startStep: "location", endStep: "location" },
-  { id: "schedule", label: "Schedule", startStep: "schedule-date", endStep: "arrival-window" },
-  { id: "contact-address", label: "Contact and address", startStep: "customer-name", endStep: "service-address" },
-  { id: "instructions", label: "Instructions", startStep: "access", endStep: "special-instructions" },
+  { id: "appointment", label: "Appointment", startStep: "location", endStep: "arrival-window" },
+  { id: "contact", label: "Contact", startStep: "customer-name", endStep: "service-address" },
+  { id: "special-instructions", label: "Special Instructions", startStep: "access", endStep: "special-instructions" },
 ];
 
 export const EDIT_GROUP_END_STEPS: ReadonlySet<StepId> = new Set(EDIT_GROUPS.map((g) => g.endStep));
