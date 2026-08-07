@@ -62,23 +62,6 @@ export function getMaxSelectableDate(today: Date = new Date()): Date {
   return max;
 }
 
-// DEV-ONLY MOCK DATA — this stands in for a later milestone's real
-// availability/capacity lookup (e.g. "two bookings per day" once a
-// database exists). It exists solely so the calendar's disabled-date
-// styling and logic can be exercised before there is anything real to
-// disable. Remove this function (and its one call site in
-// ScheduleDateStep) once real availability data is wired up; nothing else
-// in the calendar depends on dates being mocked versus real — it only
-// consumes a plain `unavailableDateKeys: string[]`.
-export function getMockUnavailableDateKeys(today: Date = new Date()): string[] {
-  const min = getMinSelectableDate(today);
-  const thirdSelectableDay = new Date(min);
-  thirdSelectableDay.setDate(thirdSelectableDay.getDate() + 2);
-  const tenthSelectableDay = new Date(min);
-  tenthSelectableDay.setDate(tenthSelectableDay.getDate() + 9);
-  return [toDateKey(thirdSelectableDay), toDateKey(tenthSelectableDay)];
-}
-
 export function isDateSelectable(
   date: Date,
   options: { today?: Date; unavailableDateKeys?: string[] } = {},

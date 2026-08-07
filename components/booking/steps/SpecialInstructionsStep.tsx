@@ -1,8 +1,7 @@
 "use client";
 
 import StepShell from "@/components/booking/StepShell";
-
-const MAX_LENGTH = 500;
+import { SPECIAL_INSTRUCTIONS_MAX_LENGTH as MAX_LENGTH } from "@/lib/booking/limits";
 
 type SpecialInstructionsStepProps = {
   value: string;

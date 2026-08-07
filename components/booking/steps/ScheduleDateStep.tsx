@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import Calendar from "@/components/booking/Calendar";
 import StepShell from "@/components/booking/StepShell";
-import { formatReadableDate, getMockUnavailableDateKeys } from "@/lib/booking/schedule";
+import { formatReadableDate } from "@/lib/booking/schedule";
 
 type ScheduleDateStepProps = {
   appointmentDate: string | null;
@@ -12,11 +12,32 @@ type ScheduleDateStepProps = {
 };
 
 export default function ScheduleDateStep({ appointmentDate, onSelect, onBack }: ScheduleDateStepProps) {
-  // DEV-ONLY MOCK DATA: stands in for real per-day capacity, which needs a
-  // database (a later milestone). See getMockUnavailableDateKeys' own
-  // comment in lib/booking/schedule.ts for what to remove once that
-  // exists — nothing here needs to change beyond that call site.
-  const unavailableDateKeys = useMemo(() => getMockUnavailableDateKeys(), []);
+  const [unavailableDateKeys, setUnavailableDateKeys] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState(false);
+
+  // One request covers the whole bookable window (the endpoint runs a
+  // constant number of Sheets reads regardless of range size — see
+  // getUnavailableDateKeysInWindow), so there's no need to re-fetch as the
+  // customer flips between months.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/booking/availability")
+      .then((res) => res.json())
+      .then((body) => {
+        if (cancelled) return;
+        if (body.ok) {
+          setUnavailableDateKeys(Array.isArray(body.unavailableDateKeys) ? body.unavailableDateKeys : []);
+        } else {
+          setLoadError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <StepShell
@@ -25,6 +46,12 @@ export default function ScheduleDateStep({ appointmentDate, onSelect, onBack }: 
       onBack={onBack}
     >
       <Calendar selectedDateKey={appointmentDate} onSelect={onSelect} unavailableDateKeys={unavailableDateKeys} />
+      {loadError && (
+        <p className="mt-4 text-sm text-[#B14A2E]">
+          We couldn&rsquo;t load live availability — some fully-booked dates may still appear selectable. We&rsquo;ll
+          confirm your date is available when you submit.
+        </p>
+      )}
       {appointmentDate && (
         <p className="mt-4 text-sm font-medium text-[#6B5B4C]">
           Selected: <span className="text-[#3B2F27]">{formatReadableDate(appointmentDate)}</span>

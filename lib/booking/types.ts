@@ -126,7 +126,6 @@ export type BookingState = {
   specialInstructions: string;
 
   agreedToPolicy: boolean;
-  paymentPreviewShown: boolean;
 
   // Set by the Review step's "Edit" links so the relevant group's last
   // step can jump straight back to Review instead of continuing linearly
@@ -179,7 +178,6 @@ export const initialBookingState: BookingState = {
   specialInstructions: "",
 
   agreedToPolicy: false,
-  paymentPreviewShown: false,
 
   returnToStepId: null,
 };

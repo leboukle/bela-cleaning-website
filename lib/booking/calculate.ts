@@ -10,6 +10,19 @@ import {
 } from "./config";
 import type { BookingState, ExtrasState } from "./types";
 
+// The subset of BookingState this engine actually reads. Narrowed (rather
+// than requiring a full BookingState) so the exact same approved function
+// can be called both by the client — which naturally has a full
+// BookingState — and by the server-side booking pipeline, which only ever
+// has the validated pricing-relevant fields and has no reason to
+// construct unrelated UI-only ones (stepIndex, propertyType, etc.) just
+// to satisfy the type. A full BookingState still structurally satisfies
+// this type, so no existing call site needed to change.
+export type PricingInput = Pick<
+  BookingState,
+  "customEstimateTrigger" | "bedrooms" | "bathrooms" | "cleaningType" | "extras" | "frequency"
+>;
+
 export type EstimateBreakdown = {
   bedroomBasePrice: number;
   discountedBedroomBasePrice: number;
@@ -78,7 +91,7 @@ function calculateExtrasDuration(extras: ExtrasState): number {
  * The frequency discount applies ONLY to the bedroom base price — never to
  * the bathroom addition, extras, or cleaning-type addition.
  */
-export function calculateEstimate(state: BookingState): EstimateBreakdown | null {
+export function calculateEstimate(state: PricingInput): EstimateBreakdown | null {
   if (state.customEstimateTrigger) return null;
 
   const bedroomOption = state.bedrooms ? BEDROOM_OPTIONS.find((o) => o.id === state.bedrooms) : null;

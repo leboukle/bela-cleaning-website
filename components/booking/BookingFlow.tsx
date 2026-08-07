@@ -23,6 +23,7 @@ import {
   type SquareFootageId,
   type StepId,
 } from "@/lib/booking/types";
+import type { BookingSubmissionUiState } from "@/lib/booking/submissionState";
 import ProgressIndicator from "@/components/booking/ProgressIndicator";
 import BookingSummary from "@/components/booking/BookingSummary";
 import MobileSummaryBar from "@/components/booking/MobileSummaryBar";
@@ -62,6 +63,19 @@ const CUSTOM_ESTIMATE_MESSAGES: Record<"square-footage" | "bedrooms" | "bathroom
 export default function BookingFlow() {
   const [state, setState] = useState(initialBookingState);
 
+  // Stable for the lifetime of this booking session (not reset by
+  // editing an earlier answer) so that repeat clicks or a page-level
+  // retry of the same logical attempt reuse one idempotency token — see
+  // lib/booking/server/idempotency.ts and the repository's
+  // findRecentBookingByIdempotencyToken for how the server uses this.
+  // A fresh session (page reload) always gets a fresh token.
+  const [idempotencyToken] = useState(() => crypto.randomUUID());
+  // Honeypot field: legitimate customers never see or fill this in (see
+  // its hidden input in ReviewStep). A non-empty value marks the
+  // submission as spam server-side.
+  const [honeypot, setHoneypot] = useState("");
+  const [submission, setSubmission] = useState<BookingSubmissionUiState>({ status: "idle" });
+
   const currentStepId = STEP_ORDER[state.stepIndex];
   const estimate = useMemo(() => calculateEstimate(state), [state]);
 
@@ -87,16 +101,18 @@ export default function BookingFlow() {
       return { ...s, stepIndex: Math.min(s.stepIndex + 1, STEP_ORDER.length - 1) };
     });
 
-  // Also clears `paymentPreviewShown` — if the customer edits something
-  // after seeing the "coming in a later milestone" message, they should
-  // be able to reach and press the final button again on their way back.
-  const editSection = (stepId: StepId) =>
+  // Also resets any prior submission result — if the customer edits
+  // something after a failed or completed submission attempt, they should
+  // see a clean Review screen and be able to submit again on their way
+  // back rather than a stale success/error message.
+  const editSection = (stepId: StepId) => {
+    setSubmission({ status: "idle" });
     setState((s) => ({
       ...s,
       stepIndex: STEP_ORDER.indexOf(stepId),
       returnToStepId: "review",
-      paymentPreviewShown: false,
     }));
+  };
 
   const selectPropertyType = (id: PropertyTypeId) => {
     setState((s) => ({ ...s, propertyType: id, propertyTypeOther: id === "other" ? s.propertyTypeOther : "" }));
@@ -211,7 +227,95 @@ export default function BookingFlow() {
 
   // --- Review & policy ---
   const setAgreedToPolicy = (agreed: boolean) => setState((s) => ({ ...s, agreedToPolicy: agreed }));
-  const submitPaymentPreview = () => setState((s) => ({ ...s, paymentPreviewShown: true }));
+
+  // Sends the booking to /api/booking. Every server outcome (success,
+  // validation issue, date no longer available, transient server error) is
+  // a typed JSON body — see bookingService.ts and app/api/booking/route.ts
+  // — mapped here onto BookingSubmissionUiState for ReviewStep to render.
+  // Customer-entered data is never cleared on failure so they can retry
+  // without retyping anything.
+  const submitBooking = async () => {
+    if (submission.status === "submitting") return;
+    setSubmission({ status: "submitting" });
+
+    const payload = {
+      idempotencyToken,
+      honeypot,
+      propertyType: state.propertyType,
+      propertyTypeOther: state.propertyTypeOther,
+      squareFootage: state.squareFootage,
+      bedrooms: state.bedrooms,
+      bathrooms: state.bathrooms,
+      cleaningType: state.cleaningType,
+      extras: state.extras,
+      frequency: state.frequency,
+      zipCode: state.zipCode,
+      serviceDate: state.appointmentDate,
+      arrivalWindow: state.arrivalWindow,
+      firstName: state.firstName,
+      lastName: state.lastName,
+      email: state.email,
+      phone: state.phone,
+      addressStreet: state.addressStreet,
+      addressUnit: state.addressUnit,
+      addressCity: state.addressCity,
+      addressState: state.addressState,
+      addressZip: state.addressZip,
+      someoneHome: state.someoneHome,
+      specialInstructions: state.specialInstructions,
+      agreedToPolicy: state.agreedToPolicy,
+      clientTotalPrice: estimate?.totalPrice ?? null,
+      clientDurationMinutes: estimate?.totalDurationMinutes ?? null,
+    };
+
+    let response: Response;
+    try {
+      response = await fetch("/api/booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      setSubmission({
+        status: "error",
+        message: "We couldn't reach the server. Please check your connection and try again.",
+      });
+      return;
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await response.json();
+    } catch {
+      setSubmission({ status: "error", message: "Something went wrong on our end. Please try again." });
+      return;
+    }
+
+    if (body.ok === true) {
+      setSubmission({
+        status: "success",
+        bookingId: String(body.bookingId),
+        serviceDate: String(body.serviceDate),
+        arrivalWindow: String(body.arrivalWindow),
+        totalPrice: Number(body.totalPrice),
+        estimatedDurationMinutes: Number(body.estimatedDurationMinutes),
+      });
+      return;
+    }
+
+    if (body.code === "date-unavailable") {
+      setSubmission({ status: "date-unavailable", message: String(body.message) });
+      return;
+    }
+
+    const message =
+      typeof body.message === "string"
+        ? body.message
+        : "We couldn't complete your booking. Please review your answers and try again.";
+    setSubmission({ status: "error", message });
+  };
+
+  const pickNewDate = () => editSection("schedule-date");
 
   const stage = STEP_STAGE[currentStepId];
 
@@ -331,7 +435,11 @@ export default function BookingFlow() {
             estimate={estimate}
             onEdit={editSection}
             onAgreedChange={setAgreedToPolicy}
-            onSubmitPreview={submitPaymentPreview}
+            submission={submission}
+            onSubmit={submitBooking}
+            onPickNewDate={pickNewDate}
+            honeypot={honeypot}
+            onHoneypotChange={setHoneypot}
             onBack={goBack}
           />
         );
