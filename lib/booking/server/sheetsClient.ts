@@ -41,10 +41,18 @@ async function sheetsFetch(path: string, init?: RequestInit): Promise<unknown> {
   });
 
   if (!res.ok) {
-    // Sanitized log: status + which range/endpoint was involved, never the
-    // response body (which could echo request details) and never the
-    // access token. See docs/booking-backend.md's security section.
-    console.error(`[sheetsClient] Google Sheets API error: status=${res.status} path=${path.split("?")[0]}`);
+    // Sanitized log: status + which range/endpoint was involved, plus
+    // Google's own short diagnostic message/status (never the full
+    // response body, which could echo request values, and never the
+    // access token). See docs/booking-backend.md's security section.
+    let googleMessage = "";
+    try {
+      const errorBody = (await res.clone().json()) as { error?: { message?: string; status?: string } };
+      googleMessage = errorBody.error ? ` google_status=${errorBody.error.status} google_message=${errorBody.error.message}` : "";
+    } catch {
+      // Response wasn't JSON — nothing more to safely extract.
+    }
+    console.error(`[sheetsClient] Google Sheets API error: status=${res.status} path=${path.split("?")[0]}${googleMessage}`);
     throw new SheetsApiError("Google Sheets API request failed.", res.status);
   }
 
