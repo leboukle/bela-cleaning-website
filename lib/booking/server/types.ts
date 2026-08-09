@@ -146,4 +146,10 @@ export type BookingRecord = {
   completedAt: string;
   internalNotes: string;
   schemaVersion: number;
+  // Milestone 4: blank at append time ("" — outcome not known yet), filled
+  // in moments later once the notification attempts resolve. See
+  // notificationStatus.ts and docs/notifications.md §7.
+  customerConfirmationStatus: string;
+  internalNotificationStatus: string;
+  notificationAttemptAt: string;
 };

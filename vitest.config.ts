@@ -1,10 +1,13 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
-// Server-side/unit tests only (booking validation, pricing, availability,
-// auth token exchange, etc.) — no React/DOM rendering needed, so no jsdom
-// environment is configured. Mirrors the "@/..." path alias from
-// tsconfig.json so test files can import app code the same way it does.
+// Mostly server-side/unit tests (booking validation, pricing, availability,
+// auth token exchange, etc.) — the default environment is plain Node, no
+// jsdom. A handful of .test.tsx files render React components and opt into
+// jsdom per-file via a `// @vitest-environment jsdom` comment at the top of
+// the file, rather than paying the jsdom cost for every test. Mirrors the
+// "@/..." path alias from tsconfig.json so test files can import app code
+// the same way it does.
 export default defineConfig({
   resolve: {
     alias: {
@@ -20,7 +23,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["**/*.test.ts"],
+    include: ["**/*.test.ts", "**/*.test.tsx"],
     exclude: ["node_modules/**", ".next/**"],
   },
 });

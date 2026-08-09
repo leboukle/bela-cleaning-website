@@ -86,7 +86,7 @@ unavailable date get booked.
 
 Spreadsheet: **"BeLa Cleaning Bookings"** (ID via `GOOGLE_SHEETS_SPREADSHEET_ID`).
 
-### Bookings tab — 41 columns, exact order
+### Bookings tab — 44 columns, exact order
 
 Defined once in [`lib/booking/server/bookingsSheetSchema.ts`](../lib/booking/server/bookingsSheetSchema.ts)
 as `BOOKINGS_COLUMNS`. Every module that reads or writes this sheet derives
@@ -104,10 +104,15 @@ Base Cleaning Price, Bathroom Price, Cleaning Type Price, Extras Price,
 Subtotal, Frequency Discount, Total Price, Estimated Duration Minutes,
 Special Instructions, Policy Accepted, Submission Source,
 Stripe Checkout Session ID, Stripe Payment Intent ID, Paid At,
-Cancelled At, Completed At, Internal Notes, Schema Version
+Cancelled At, Completed At, Internal Notes, Schema Version,
+Customer Confirmation Status, Internal Notification Status,
+Notification Attempt At
 ```
 
-The Stripe/Paid/Cancelled/Completed columns are written as empty strings
+The last 3 columns were added in Milestone 4 — see
+[`docs/notifications.md`](./notifications.md) §7 for the full detail
+(write sequencing, failure isolation, live-sheet header note). The
+Stripe/Paid/Cancelled/Completed columns are written as empty strings
 this milestone — reserved for the future payment-integration milestone so
 the column contract doesn't need to change again then.
 

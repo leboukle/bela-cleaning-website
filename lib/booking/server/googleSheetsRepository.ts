@@ -1,9 +1,10 @@
 // SERVER-ONLY. The Google Sheets implementation of BookingRepository.
 import "server-only";
-import { appendRow, batchGetRanges, getRange } from "./sheetsClient";
+import { appendRow, batchGetRanges, getRange, updateRange } from "./sheetsClient";
 import { BOOKINGS_COLUMNS, BOOKINGS_FULL_RANGE, BOOKINGS_SHEET_NAME, columnLetter } from "./bookingsSheetSchema";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type { BookingRecord } from "./types";
+import type { NotificationStatusUpdate } from "./notificationStatus";
 
 // How many of the most recent Bookings rows to scan when looking for a
 // duplicate idempotency token. Google Sheets has no index/query
@@ -62,6 +63,9 @@ function recordToRow(record: BookingRecord): Array<string | number | boolean> {
     "Completed At": record.completedAt,
     "Internal Notes": record.internalNotes,
     "Schema Version": record.schemaVersion,
+    "Customer Confirmation Status": record.customerConfirmationStatus,
+    "Internal Notification Status": record.internalNotificationStatus,
+    "Notification Attempt At": record.notificationAttemptAt,
   };
 
   return BOOKINGS_COLUMNS.map((column) => {
@@ -81,6 +85,24 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
   async bookingIdExists(bookingId: string): Promise<boolean> {
     const rows = await getRange(columnRange("Booking ID"));
     return rows.some((row) => row[0] === bookingId);
+  }
+
+  async updateNotificationStatus(bookingId: string, update: NotificationStatusUpdate): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) {
+      throw new Error("Booking ID not found when updating notification status.");
+    }
+    // +2: +1 because idRows is 0-indexed starting at the first data row,
+    // +1 more because the sheet's row 1 is the header row.
+    const sheetRow = rowIndex + 2;
+    const startCol = columnLetter("Customer Confirmation Status");
+    const endCol = columnLetter("Notification Attempt At");
+    await updateRange(`${BOOKINGS_SHEET_NAME}!${startCol}${sheetRow}:${endCol}${sheetRow}`, [
+      update.customerConfirmationStatus,
+      update.internalNotificationStatus,
+      update.notificationAttemptAt,
+    ]);
   }
 
   async findRecentBookingByIdempotencyToken(token: string): Promise<IdempotentBookingResult | null> {

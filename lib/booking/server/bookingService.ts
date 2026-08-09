@@ -14,6 +14,8 @@ import { generateBookingId } from "./bookingId";
 import { serializeExtras } from "./extras";
 import { sanitizeForSheets } from "./sanitize";
 import { withIdempotencyFastPath } from "./idempotency";
+import type { NotificationService, NotificationResult } from "./notificationService";
+import { NOTIFICATION_STATUS } from "./notificationStatus";
 import { BOOKING_STATUS, PAYMENT_STATUS, SUBMISSION_SOURCE } from "./bookingsSheetSchema";
 import {
   PROPERTY_TYPE_OPTIONS,
@@ -26,6 +28,16 @@ import {
 import { getArrivalWindowOption } from "@/lib/booking/schedule";
 import type { BookingRepository } from "./repository";
 import type { BookingRecord, BookingSubmissionInput, ValidatedBooking, ValidationIssue } from "./types";
+
+// The subset of NotificationService this orchestrator actually calls.
+// Narrowed the same way calculate.ts's PricingInput narrows BookingState —
+// lets tests pass a plain object double instead of a real NotificationService
+// instance (which carries a private field, making it otherwise impossible
+// to satisfy structurally).
+export type NotificationSender = Pick<
+  NotificationService,
+  "sendCustomerBookingReceived" | "sendInternalNewBookingNotification"
+>;
 
 export type BookingSubmissionSuccess = {
   ok: true;
@@ -48,6 +60,65 @@ const MAX_BOOKING_ID_ATTEMPTS = 5;
 
 function logServerError(step: string, error: unknown): void {
   console.error(`[bookingService] ${step} failed:`, error instanceof Error ? error.message : "unknown error");
+}
+
+// Sends both notification emails for a freshly-persisted booking. Never
+// throws — a notification failure must never affect the booking result
+// that's already been written and is about to be returned as a success
+// (STEP 9 of the milestone spec). Logs only a bookingId + ok/failed
+// status, never the recipient address, subject, or body — see
+// docs/notifications.md's privacy section.
+function describeNotificationOutcome(result: PromiseSettledResult<NotificationResult>): { ok: boolean; reason: string } {
+  if (result.status === "rejected") {
+    return { ok: false, reason: result.reason instanceof Error ? result.reason.message : "unknown error" };
+  }
+  if (result.value.ok) {
+    return { ok: true, reason: "" };
+  }
+  return { ok: false, reason: result.value.error };
+}
+
+async function sendBookingNotifications(
+  notificationService: NotificationSender,
+  repository: BookingRepository,
+  record: BookingRecord,
+): Promise<void> {
+  const [customerResult, internalResult] = await Promise.allSettled([
+    notificationService.sendCustomerBookingReceived(record),
+    notificationService.sendInternalNewBookingNotification(record),
+  ]);
+
+  const customerOutcome = describeNotificationOutcome(customerResult);
+  if (customerOutcome.ok) {
+    console.log(`[bookingService] customer confirmation email sent: bookingId=${record.bookingId}`);
+  } else {
+    console.error(
+      `[bookingService] customer confirmation email failed: bookingId=${record.bookingId} reason=${customerOutcome.reason}`,
+    );
+  }
+
+  const internalOutcome = describeNotificationOutcome(internalResult);
+  if (internalOutcome.ok) {
+    console.log(`[bookingService] internal notification email sent: bookingId=${record.bookingId}`);
+  } else {
+    console.error(
+      `[bookingService] internal notification email failed: bookingId=${record.bookingId} reason=${internalOutcome.reason}`,
+    );
+  }
+
+  // Records the outcome for operational visibility (Milestone 4,
+  // docs/notifications.md §7). Best-effort like everything else past the
+  // append: a failure here is logged and swallowed, never surfaced to the
+  // customer and never allowed to make a stored booking look unsuccessful.
+  try {
+    await repository.updateNotificationStatus(record.bookingId, {
+      customerConfirmationStatus: customerOutcome.ok ? NOTIFICATION_STATUS.SENT : NOTIFICATION_STATUS.FAILED,
+      internalNotificationStatus: internalOutcome.ok ? NOTIFICATION_STATUS.SENT : NOTIFICATION_STATUS.FAILED,
+      notificationAttemptAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    logServerError("updateNotificationStatus", error);
+  }
 }
 
 function buildBookingRecord(
@@ -107,6 +178,9 @@ function buildBookingRecord(
     completedAt: "",
     internalNotes: `idempotency_token:${booking.idempotencyToken}`,
     schemaVersion,
+    customerConfirmationStatus: "",
+    internalNotificationStatus: "",
+    notificationAttemptAt: "",
   };
 }
 
@@ -118,6 +192,7 @@ function buildBookingRecord(
 export async function submitBooking(
   input: BookingSubmissionInput,
   repository: BookingRepository,
+  notificationService: NotificationSender,
 ): Promise<BookingSubmissionResult> {
   let settings;
   try {
@@ -219,6 +294,12 @@ export async function submitBooking(
       logServerError("appendBooking", error);
       return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
     }
+
+    // The booking is now durably persisted — everything past this point is
+    // best-effort. A notification failure is logged but never changes the
+    // success result below (STEP 9): the booking must never appear to
+    // "disappear" just because an email didn't go out.
+    await sendBookingNotifications(notificationService, repository, record);
 
     return {
       ok: true,

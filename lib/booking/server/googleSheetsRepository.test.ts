@@ -4,9 +4,10 @@ vi.mock("./sheetsClient", () => ({
   appendRow: vi.fn(),
   getRange: vi.fn(),
   batchGetRanges: vi.fn(),
+  updateRange: vi.fn(),
 }));
 
-import { appendRow, getRange, batchGetRanges } from "./sheetsClient";
+import { appendRow, getRange, batchGetRanges, updateRange } from "./sheetsClient";
 import { GoogleSheetsBookingRepository } from "./googleSheetsRepository";
 import { BOOKINGS_COLUMNS, BOOKINGS_FULL_RANGE } from "./bookingsSheetSchema";
 import type { BookingRecord } from "./types";
@@ -14,11 +15,13 @@ import type { BookingRecord } from "./types";
 const mockedAppendRow = vi.mocked(appendRow);
 const mockedGetRange = vi.mocked(getRange);
 const mockedBatchGetRanges = vi.mocked(batchGetRanges);
+const mockedUpdateRange = vi.mocked(updateRange);
 
 beforeEach(() => {
   mockedAppendRow.mockReset();
   mockedGetRange.mockReset();
   mockedBatchGetRanges.mockReset();
+  mockedUpdateRange.mockReset();
 });
 
 function sampleRecord(overrides: Partial<BookingRecord> = {}): BookingRecord {
@@ -64,6 +67,9 @@ function sampleRecord(overrides: Partial<BookingRecord> = {}): BookingRecord {
     completedAt: "",
     internalNotes: "idempotency_token:abc123",
     schemaVersion: 1,
+    customerConfirmationStatus: "",
+    internalNotificationStatus: "",
+    notificationAttemptAt: "",
     ...overrides,
   };
 }
@@ -124,5 +130,33 @@ describe("GoogleSheetsBookingRepository", () => {
     ]);
     const repo = new GoogleSheetsBookingRepository();
     expect(await repo.findRecentBookingByIdempotencyToken("missing-token")).toBeNull();
+  });
+
+  it("updateNotificationStatus writes the 3 status columns to the correct row", async () => {
+    mockedGetRange.mockResolvedValue([["BELA-OLD"], ["BELA-TARGET"], ["BELA-OTHER"]]);
+    const repo = new GoogleSheetsBookingRepository();
+    await repo.updateNotificationStatus("BELA-TARGET", {
+      customerConfirmationStatus: "Sent",
+      internalNotificationStatus: "Failed",
+      notificationAttemptAt: "2026-09-01T12:00:00.000Z",
+    });
+    expect(mockedUpdateRange).toHaveBeenCalledTimes(1);
+    const [range, row] = mockedUpdateRange.mock.calls[0];
+    // "BELA-TARGET" is the 2nd data row (index 1) -> sheet row 3 (header + 1-index).
+    expect(range).toBe("Bookings!AP3:AR3");
+    expect(row).toEqual(["Sent", "Failed", "2026-09-01T12:00:00.000Z"]);
+  });
+
+  it("updateNotificationStatus throws if the booking ID can't be found", async () => {
+    mockedGetRange.mockResolvedValue([["BELA-OLD"]]);
+    const repo = new GoogleSheetsBookingRepository();
+    await expect(
+      repo.updateNotificationStatus("BELA-MISSING", {
+        customerConfirmationStatus: "Sent",
+        internalNotificationStatus: "Sent",
+        notificationAttemptAt: "2026-09-01T12:00:00.000Z",
+      }),
+    ).rejects.toThrow();
+    expect(mockedUpdateRange).not.toHaveBeenCalled();
   });
 });

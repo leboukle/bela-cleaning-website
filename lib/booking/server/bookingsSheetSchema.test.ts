@@ -8,9 +8,24 @@ import {
 } from "./bookingsSheetSchema";
 
 describe("bookingsSheetSchema", () => {
-  it("has exactly 41 columns with no duplicates", () => {
-    expect(BOOKINGS_COLUMNS.length).toBe(41);
-    expect(new Set(BOOKINGS_COLUMNS).size).toBe(41);
+  it("has exactly 44 columns with no duplicates (41 Milestone 3 + 3 Milestone 4 notification-status columns)", () => {
+    expect(BOOKINGS_COLUMNS.length).toBe(44);
+    expect(new Set(BOOKINGS_COLUMNS).size).toBe(44);
+  });
+
+  it("places the 3 notification-status columns at the end, after Schema Version", () => {
+    expect(BOOKINGS_COLUMNS.slice(-4)).toEqual([
+      "Schema Version",
+      "Customer Confirmation Status",
+      "Internal Notification Status",
+      "Notification Attempt At",
+    ]);
+  });
+
+  it("maps the new notification-status columns to AP, AQ, AR", () => {
+    expect(columnLetter("Customer Confirmation Status")).toBe("AP");
+    expect(columnLetter("Internal Notification Status")).toBe("AQ");
+    expect(columnLetter("Notification Attempt At")).toBe("AR");
   });
 
   it("maps the first column to A", () => {

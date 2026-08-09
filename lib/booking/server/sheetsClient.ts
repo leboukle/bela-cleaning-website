@@ -88,3 +88,15 @@ export async function appendRow(range: string, row: SheetValue[]): Promise<void>
     },
   );
 }
+
+/**
+ * Overwrites a single existing row range in place (used to fill in the
+ * notification-status columns after a booking has already been appended —
+ * never used to touch the original booking data columns).
+ */
+export async function updateRange(range: string, row: SheetValue[]): Promise<void> {
+  await sheetsFetch(`/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
+    method: "PUT",
+    body: JSON.stringify({ range, values: [row] }),
+  });
+}

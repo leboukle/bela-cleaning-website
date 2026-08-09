@@ -448,18 +448,27 @@ export default function BookingFlow() {
     }
   };
 
+  // Once a booking has actually been accepted, the wizard chrome (progress
+  // bar, running-estimate sidebar/mobile bar) no longer applies — those all
+  // describe an in-progress selection, and the sidebar's estimate in
+  // particular would show a value computed from live `state`, not the
+  // authoritative one the server actually priced and stored. The
+  // confirmation becomes the whole screen instead of sharing it with stale
+  // wizard chrome.
+  const isConfirmed = submission.status === "success";
+
   return (
     <div>
-      {currentStepId !== "intro" && <ProgressIndicator currentStage={stage} />}
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1fr_360px] lg:gap-14">
-        <div className="pb-32 lg:pb-0">
+      {currentStepId !== "intro" && !isConfirmed && <ProgressIndicator currentStage={stage} />}
+      <div className={isConfirmed ? "mx-auto max-w-2xl" : "grid grid-cols-1 gap-12 lg:grid-cols-[1fr_360px] lg:gap-14"}>
+        <div className={isConfirmed ? "" : "pb-32 lg:pb-0"}>
           <StepTransition transitionKey={`${currentStepId}-${state.customEstimateTrigger ?? "answering"}`}>
             {renderStep()}
           </StepTransition>
         </div>
-        {currentStepId !== "intro" && <BookingSummary state={state} estimate={estimate} />}
+        {currentStepId !== "intro" && !isConfirmed && <BookingSummary state={state} estimate={estimate} />}
       </div>
-      {currentStepId !== "intro" && <MobileSummaryBar state={state} estimate={estimate} />}
+      {currentStepId !== "intro" && !isConfirmed && <MobileSummaryBar state={state} estimate={estimate} />}
     </div>
   );
 }

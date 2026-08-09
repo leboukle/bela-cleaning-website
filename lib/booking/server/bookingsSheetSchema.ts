@@ -53,6 +53,17 @@ export const BOOKINGS_COLUMNS = [
   "Completed At",
   "Internal Notes",
   "Schema Version",
+  // Milestone 4 addition, approved before implementation per the project's
+  // standing rule against silently changing the live column contract — see
+  // docs/notifications.md §7. Appended at the end rather than interleaved
+  // among the Milestone 3 columns so every existing column keeps its exact
+  // position. Both status cells start blank at appendBooking() time (the
+  // outcome isn't known yet) and are filled in moments later by
+  // GoogleSheetsBookingRepository.updateNotificationStatus() once the two
+  // send attempts resolve.
+  "Customer Confirmation Status",
+  "Internal Notification Status",
+  "Notification Attempt At",
 ] as const;
 
 export type BookingColumn = (typeof BOOKINGS_COLUMNS)[number];

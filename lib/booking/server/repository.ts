@@ -6,6 +6,7 @@
 // UI or the validation/pricing/availability logic at all.
 import "server-only";
 import type { BookingRecord } from "./types";
+import type { NotificationStatusUpdate } from "./notificationStatus";
 
 export type IdempotentBookingResult = {
   bookingId: string;
@@ -30,4 +31,13 @@ export interface BookingRepository {
    * without appending a duplicate row.
    */
   findRecentBookingByIdempotencyToken(token: string): Promise<IdempotentBookingResult | null>;
+
+  /**
+   * Fills in the notification-status columns for an already-appended
+   * booking, once the customer/internal send attempts resolve. Best-effort
+   * from the caller's perspective — bookingService.ts always wraps this in
+   * its own try/catch, since a status-write failure must never affect the
+   * booking's own success result (Milestone 4, docs/notifications.md §7).
+   */
+  updateNotificationStatus(bookingId: string, update: NotificationStatusUpdate): Promise<void>;
 }

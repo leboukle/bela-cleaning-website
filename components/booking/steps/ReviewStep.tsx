@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Check, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getFrequencyOption } from "@/lib/booking/config";
@@ -12,6 +12,7 @@ import { formatUsPhone, isNonEmpty, isValidEmail, isValidUsPhone } from "@/lib/b
 import type { BookingState, StepId } from "@/lib/booking/types";
 import type { BookingSubmissionUiState } from "@/lib/booking/submissionState";
 import StepShell from "@/components/booking/StepShell";
+import BookingConfirmation from "@/components/booking/BookingConfirmation";
 
 type ReviewStepProps = {
   state: BookingState;
@@ -71,6 +72,10 @@ export default function ReviewStep({
   onHoneypotChange,
   onBack,
 }: ReviewStepProps) {
+  if (submission.status === "success") {
+    return <BookingConfirmation state={state} submission={submission} />;
+  }
+
   const lines = getSummaryLines(state);
   const propertyLines = lines.filter((l) => ["Property type", "Square footage"].includes(l.label));
   const cleaningLines = lines.filter((l) => ["Bedrooms", "Bathrooms", "Cleaning type"].includes(l.label));
@@ -236,62 +241,36 @@ export default function ReviewStep({
           />
         </div>
 
-        {submission.status === "success" ? (
-          <div className="rounded-2xl border border-[#C9BCA6] bg-[#F1E9DC] p-6">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#3B2F27] text-white">
-                <Check size={14} strokeWidth={3} aria-hidden="true" />
-              </span>
-              <div>
-                <p className="font-heading text-lg text-[#3B2F27]">Your booking request has been received.</p>
-                <p className="mt-1 text-sm text-[#6B5B4C]">
-                  Booking ID <span className="font-medium text-[#3B2F27]">{submission.bookingId}</span> for{" "}
-                  {formatReadableDate(submission.serviceDate)}, {submission.arrivalWindow}. Estimated total{" "}
-                  {formatCurrency(submission.totalPrice)} ({formatDuration(submission.estimatedDurationMinutes)}).
-                </p>
-                <p className="mt-2 text-sm text-[#6B5B4C]">
-                  Your status is <span className="font-medium text-[#3B2F27]">Pending Payment</span> — nothing has
-                  been charged. We&rsquo;ll be in touch to confirm details and arrange payment.
-                </p>
-              </div>
+        {submission.status === "date-unavailable" && (
+          <div className="flex items-start gap-3 rounded-2xl border border-[#D9A05B] bg-[#FBF0DE] p-5">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#9C6B23]" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-[#3B2F27]">{submission.message}</p>
+              <button
+                type="button"
+                onClick={onPickNewDate}
+                className="mt-2 rounded text-sm font-medium text-[#3B2F27] underline underline-offset-2 hover:text-[#6B5B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
+              >
+                Choose a different date
+              </button>
             </div>
           </div>
-        ) : (
-          <>
-            {submission.status === "date-unavailable" && (
-              <div className="flex items-start gap-3 rounded-2xl border border-[#D9A05B] bg-[#FBF0DE] p-5">
-                <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#9C6B23]" aria-hidden="true" />
-                <div>
-                  <p className="text-sm font-medium text-[#3B2F27]">{submission.message}</p>
-                  <button
-                    type="button"
-                    onClick={onPickNewDate}
-                    className="mt-2 rounded text-sm font-medium text-[#3B2F27] underline underline-offset-2 hover:text-[#6B5B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
-                  >
-                    Choose a different date
-                  </button>
-                </div>
-              </div>
-            )}
-            {submission.status === "error" && (
-              <div className="flex items-start gap-3 rounded-2xl border border-[#C97B63] bg-[#FBEAE4] p-5">
-                <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#B14A2E]" aria-hidden="true" />
-                <p className="text-sm font-medium text-[#3B2F27]">{submission.message}</p>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={onSubmit}
-              disabled={!isComplete || submission.status === "submitting"}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#3B2F27] px-8 py-4 text-base font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_32px_-12px_rgba(59,47,39,0.4)] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:w-auto"
-            >
-              {submission.status === "submitting" && (
-                <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-              )}
-              {submission.status === "submitting" ? "Submitting…" : "Submit Booking Request"}
-            </button>
-          </>
         )}
+        {submission.status === "error" && (
+          <div className="flex items-start gap-3 rounded-2xl border border-[#C97B63] bg-[#FBEAE4] p-5">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#B14A2E]" aria-hidden="true" />
+            <p className="text-sm font-medium text-[#3B2F27]">{submission.message}</p>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!isComplete || submission.status === "submitting"}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#3B2F27] px-8 py-4 text-base font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_32px_-12px_rgba(59,47,39,0.4)] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:w-auto"
+        >
+          {submission.status === "submitting" && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
+          {submission.status === "submitting" ? "Submitting…" : "Submit Booking Request"}
+        </button>
       </div>
     </StepShell>
   );
