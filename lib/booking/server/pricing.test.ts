@@ -36,6 +36,7 @@ function sampleBooking(overrides: Partial<ValidatedBooking> = {}): ValidatedBook
     specialInstructions: "",
     agreedToPolicy: true,
     idempotencyToken: "token",
+    setupIntentId: "seti_test123",
     ...overrides,
   };
 }

@@ -17,6 +17,8 @@ import { withIdempotencyFastPath } from "./idempotency";
 import type { NotificationService, NotificationResult } from "./notificationService";
 import { NOTIFICATION_STATUS } from "./notificationStatus";
 import { BOOKING_STATUS, PAYMENT_STATUS, SUBMISSION_SOURCE } from "./bookingsSheetSchema";
+import { verifySucceededSetupIntent, type ConfirmedSetupIntent } from "./stripe/setupIntent";
+import { calculateScheduledChargeAt } from "./scheduledCharge";
 import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
@@ -51,6 +53,7 @@ export type BookingSubmissionSuccess = {
 export type BookingSubmissionFailure =
   | { ok: false; code: "validation"; issues: ValidationIssue[] }
   | { ok: false; code: "date-unavailable"; message: string }
+  | { ok: false; code: "payment-setup-invalid"; message: string }
   | { ok: false; code: "server-error"; message: string };
 
 export type BookingSubmissionResult = BookingSubmissionSuccess | BookingSubmissionFailure;
@@ -127,6 +130,8 @@ function buildBookingRecord(
   pricing: ReturnType<typeof calculateAuthoritativePricing>,
   schemaVersion: number,
   now: Date,
+  setupIntent: ConfirmedSetupIntent,
+  scheduledChargeAt: Date,
 ): BookingRecord {
   const propertyTypeLabel = PROPERTY_TYPE_OPTIONS.find((o) => o.id === booking.propertyType)?.label ?? booking.propertyType;
   const squareFootageLabel = SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === booking.squareFootage)?.label ?? booking.squareFootage;
@@ -136,7 +141,7 @@ function buildBookingRecord(
     bookingId,
     submittedAt: now.toISOString(),
     bookingStatus: BOOKING_STATUS.PENDING_PAYMENT,
-    paymentStatus: PAYMENT_STATUS.UNPAID,
+    paymentStatus: PAYMENT_STATUS.SCHEDULED,
     firstName: sanitizeForSheets(booking.firstName),
     lastName: sanitizeForSheets(booking.lastName),
     email: sanitizeForSheets(booking.email),
@@ -181,6 +186,18 @@ function buildBookingRecord(
     customerConfirmationStatus: "",
     internalNotificationStatus: "",
     notificationAttemptAt: "",
+    stripeCustomerId: setupIntent.customerId,
+    stripePaymentMethodId: setupIntent.paymentMethodId,
+    stripeSetupIntentId: booking.setupIntentId,
+    scheduledChargeAt: scheduledChargeAt.toISOString(),
+    originalBookingTotal: pricing.totalPrice,
+    chargeAmount: pricing.totalPrice,
+    paymentAttemptCount: 0,
+    lastPaymentAttemptAt: "",
+    nextPaymentAttemptAt: "",
+    paymentFailureCode: "",
+    manualAmountOverride: false,
+    manualAmountOverrideAt: "",
   };
 }
 
@@ -251,6 +268,30 @@ export async function submitBooking(
       return { ok: false, code: "server-error", message };
     }
 
+    // Re-verifies against Stripe directly — the browser's claim that setup
+    // succeeded (via the client_secret it holds) is never trusted. Confirms
+    // the SetupIntent actually reached "succeeded" and has a usable
+    // Customer + PaymentMethod attached, which is everything the later
+    // off-session charge needs.
+    let confirmedSetupIntent;
+    try {
+      confirmedSetupIntent = await verifySucceededSetupIntent(booking.setupIntentId);
+    } catch (error) {
+      logServerError("verifySucceededSetupIntent", error);
+      return {
+        ok: false,
+        code: "payment-setup-invalid",
+        message: "We couldn't confirm your payment method. Please re-enter your card details and try again.",
+      };
+    }
+
+    const scheduledChargeAt = calculateScheduledChargeAt(
+      booking.serviceDate,
+      booking.arrivalWindow,
+      pricing.estimatedDurationMinutes,
+      settings.timezone,
+    );
+
     let bookingId = generateBookingId();
     try {
       let attempts = 0;
@@ -287,7 +328,15 @@ export async function submitBooking(
       };
     }
 
-    const record = buildBookingRecord(booking, bookingId, pricing, settings.schemaVersion, new Date());
+    const record = buildBookingRecord(
+      booking,
+      bookingId,
+      pricing,
+      settings.schemaVersion,
+      new Date(),
+      confirmedSetupIntent,
+      scheduledChargeAt,
+    );
     try {
       await repository.appendBooking(record);
     } catch (error) {

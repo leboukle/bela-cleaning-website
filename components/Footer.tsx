@@ -27,14 +27,9 @@ export default function Footer() {
               </li>
             ))}
             <li>
-              <a
-                href={businessConfig.bookingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-pure-white transition-colors"
-              >
+              <Link href={businessConfig.bookingUrl} className="hover:text-pure-white transition-colors">
                 {CTA_LABEL}
-              </a>
+              </Link>
             </li>
           </ul>
         </nav>

@@ -14,4 +14,5 @@ export type BookingSubmissionUiState =
       estimatedDurationMinutes: number;
     }
   | { status: "error"; message: string }
-  | { status: "date-unavailable"; message: string };
+  | { status: "date-unavailable"; message: string }
+  | { status: "payment-setup-invalid"; message: string };

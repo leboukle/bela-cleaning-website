@@ -15,7 +15,7 @@ export const metadata: Metadata = buildPageMetadata({
 const toc: LegalTOCItem[] = [
   { id: "introduction", title: "Introduction" },
   { id: "information-we-collect", title: "Information We Collect" },
-  { id: "bookingkoala", title: legalConfig.bookingProviderName },
+  { id: "online-booking-payments", title: "Online Booking and Payment Processing" },
   { id: "formspree", title: legalConfig.formProviderName },
   { id: "how-we-use-information", title: "How We Use Information" },
   { id: "disclosure", title: "How Information May Be Disclosed" },
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
         <p>
           BeLa Cleaning respects your privacy. This Privacy Policy explains how we
           collect, use, disclose, and protect information when you visit
-          belacleaning.com, contact us, use links to book cleaning services, or submit
+          belacleaning.com, contact us, book cleaning services online, or submit
           an application through the Join the BeLa Cleaning Team page.
         </p>
         <p>By using the website, you acknowledge the practices described in this policy.</p>
@@ -95,27 +95,23 @@ export default function PrivacyPage() {
         */}
       </LegalSection>
 
-      <LegalSection id="bookingkoala" number={3} title={legalConfig.bookingProviderName}>
+      <LegalSection id="online-booking-payments" number={3} title="Online Booking and Payment Processing">
         <p>
-          When customers select Book Cleaning, they are directed to{" "}
-          {legalConfig.bookingProviderName}, a third-party booking platform.
+          When customers select Book Cleaning, booking information (such as service
+          details, appointment date, and the information listed above) is collected
+          directly by BeLa Cleaning through its own online booking system.
         </p>
         <p>
-          Information entered into {legalConfig.bookingProviderName} is collected and
-          processed under {legalConfig.bookingProviderName}&rsquo;s own privacy policy and
-          terms, in addition to any information made available to BeLa Cleaning for
-          scheduling, customer service, payment administration, and delivery of the
-          requested service.
+          Payment method information is collected and stored exclusively by{" "}
+          {legalConfig.paymentProcessorName}, our payment processor. BeLa Cleaning does
+          not receive, process, or store full card numbers, CVC codes, or other
+          sensitive payment card details — that information is handled entirely by{" "}
+          {legalConfig.paymentProcessorName} under its own privacy policy.
         </p>
         <ul>
           <li>
-            <a href={legalConfig.bookingPrivacyUrl} target="_blank" rel="noopener noreferrer">
-              {legalConfig.bookingProviderName} Privacy Policy
-            </a>
-          </li>
-          <li>
-            <a href={legalConfig.bookingTermsUrl} target="_blank" rel="noopener noreferrer">
-              {legalConfig.bookingProviderName} Terms of Use
+            <a href={legalConfig.paymentProcessorPrivacyUrl} target="_blank" rel="noopener noreferrer">
+              {legalConfig.paymentProcessorName} Privacy Policy
             </a>
           </li>
         </ul>
@@ -175,7 +171,8 @@ export default function PrivacyPage() {
         <ul>
           <li>To vendors and service providers performing work on its behalf</li>
           <li>
-            To {legalConfig.bookingProviderName} for booking and service administration
+            To {legalConfig.paymentProcessorName}, to process and securely store payment
+            information
           </li>
           <li>
             To {legalConfig.formProviderName} or a replacement application-form

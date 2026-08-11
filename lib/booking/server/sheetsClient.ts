@@ -100,3 +100,22 @@ export async function updateRange(range: string, row: SheetValue[]): Promise<voi
     body: JSON.stringify({ range, values: [row] }),
   });
 }
+
+/**
+ * Overwrites several non-contiguous single-row ranges in one HTTP call —
+ * used by the payment-processing endpoint, whose Milestone 5 columns
+ * (Payment Status; Stripe Payment Intent ID/Paid At; Payment Attempt Count
+ * through Payment Failure Code) aren't adjacent to each other. One request
+ * instead of several sequential ones narrows (does not eliminate) the
+ * window in which a crash mid-write could leave those fields inconsistent
+ * with each other.
+ */
+export async function batchUpdateRanges(updates: Array<{ range: string; row: SheetValue[] }>): Promise<void> {
+  await sheetsFetch(`/values:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      valueInputOption: "RAW",
+      data: updates.map(({ range, row }) => ({ range, values: [row] })),
+    }),
+  });
+}

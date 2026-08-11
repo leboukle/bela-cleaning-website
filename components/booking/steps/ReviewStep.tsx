@@ -22,6 +22,7 @@ type ReviewStepProps = {
   submission: BookingSubmissionUiState;
   onSubmit: () => void;
   onPickNewDate: () => void;
+  onRedoPayment: () => void;
   honeypot: string;
   onHoneypotChange: (value: string) => void;
   onBack: () => void;
@@ -68,6 +69,7 @@ export default function ReviewStep({
   submission,
   onSubmit,
   onPickNewDate,
+  onRedoPayment,
   honeypot,
   onHoneypotChange,
   onBack,
@@ -114,7 +116,8 @@ export default function ReviewStep({
       isNonEmpty(state.addressState) &&
       addressZipValid &&
       state.someoneHome &&
-      state.agreedToPolicy,
+      state.agreedToPolicy &&
+      state.setupIntentId,
   );
 
   return (
@@ -196,8 +199,11 @@ export default function ReviewStep({
             <li>Transparent pricing, no hidden fees — the total above is exactly what you&rsquo;ll pay.</li>
             <li>We&rsquo;ll confirm your appointment and send a reminder before we arrive.</li>
             <li>
-              Plans change — reschedule or cancel free of charge up to 24 hours before your visit. Payment is
-              collected securely after your cleaning.
+              Plans change — reschedule or cancel free of charge up to 24 hours before your visit.
+            </li>
+            <li>
+              Your payment method is saved and ready — you won&rsquo;t be charged until 1 hour after your cleaning
+              ends.
             </li>
           </ul>
         </div>
@@ -252,6 +258,21 @@ export default function ReviewStep({
                 className="mt-2 rounded text-sm font-medium text-[#3B2F27] underline underline-offset-2 hover:text-[#6B5B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
               >
                 Choose a different date
+              </button>
+            </div>
+          </div>
+        )}
+        {submission.status === "payment-setup-invalid" && (
+          <div className="flex items-start gap-3 rounded-2xl border border-[#D9A05B] bg-[#FBF0DE] p-5">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#9C6B23]" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-[#3B2F27]">{submission.message}</p>
+              <button
+                type="button"
+                onClick={onRedoPayment}
+                className="mt-2 rounded text-sm font-medium text-[#3B2F27] underline underline-offset-2 hover:text-[#6B5B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
+              >
+                Update payment method
               </button>
             </div>
           </div>

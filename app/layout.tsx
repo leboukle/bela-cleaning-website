@@ -121,7 +121,7 @@ const structuredData = {
       },
       makesOffer: {
         "@type": "Offer",
-        url: businessConfig.bookingUrl,
+        url: `${businessConfig.websiteUrl}${businessConfig.bookingUrl}`,
         name: "Residential Cleaning Booking",
       },
     },

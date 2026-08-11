@@ -7,17 +7,25 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // itself is genuinely tested, not just mocked end to end.
 vi.mock("./settings", () => ({ getBookingSettings: vi.fn() }));
 vi.mock("./availability", () => ({ checkDateAvailability: vi.fn() }));
+// Stripe verification is mocked the same way settings/availability are —
+// this suite exercises bookingService's own sequencing, not real Stripe
+// I/O (which stripeConfig.ts would refuse to perform anyway without a real
+// STRIPE_SECRET_KEY in the test environment).
+vi.mock("./stripe/setupIntent", () => ({ verifySucceededSetupIntent: vi.fn() }));
 
 import { getBookingSettings } from "./settings";
 import { checkDateAvailability, type AvailabilityResult } from "./availability";
+import { verifySucceededSetupIntent } from "./stripe/setupIntent";
 import { submitBooking, type NotificationSender } from "./bookingService";
 import { resetIdempotencyFastPathForTests } from "./idempotency";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
-import type { BookingRecord, BookingSubmissionInput } from "./types";
+import type { BookingPaymentState, BookingRecord, BookingSubmissionInput, PaymentAttemptUpdate } from "./types";
 import type { NotificationStatusUpdate } from "./notificationStatus";
 
 const mockedGetSettings = vi.mocked(getBookingSettings);
 const mockedCheckAvailability = vi.mocked(checkDateAvailability);
+const mockedVerifySetupIntent = vi.mocked(verifySucceededSetupIntent);
+const VALID_SETUP_INTENT = { customerId: "cus_test123", paymentMethodId: "pm_test123" };
 
 const SETTINGS = { minimumLeadDays: 7, defaultDailyCapacity: 2, timezone: "America/New_York", schemaVersion: 1 };
 const AVAILABLE: AvailabilityResult = { available: true, reason: null, maxCapacity: 2, currentCount: 0 };
@@ -60,6 +68,41 @@ class InMemoryBookingRepository implements BookingRepository {
       record.internalNotificationStatus = update.internalNotificationStatus;
       record.notificationAttemptAt = update.notificationAttemptAt;
     }
+  }
+
+  async getBookingPaymentState(bookingId: string): Promise<BookingPaymentState | null> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (!record) return null;
+    return {
+      bookingId: record.bookingId,
+      bookingStatus: record.bookingStatus,
+      paymentStatus: record.paymentStatus,
+      serviceDate: record.serviceDate,
+      stripeCustomerId: record.stripeCustomerId,
+      stripePaymentMethodId: record.stripePaymentMethodId,
+      scheduledChargeAt: record.scheduledChargeAt,
+      originalBookingTotal: record.originalBookingTotal,
+      chargeAmount: record.chargeAmount,
+      paymentAttemptCount: record.paymentAttemptCount,
+      nextPaymentAttemptAt: record.nextPaymentAttemptAt,
+      manualAmountOverride: record.manualAmountOverride,
+    };
+  }
+
+  async updatePaymentAttempt(bookingId: string, update: PaymentAttemptUpdate): Promise<void> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (!record) throw new Error("Booking ID not found when updating payment attempt.");
+    record.paymentStatus = update.paymentStatus;
+    record.stripePaymentIntentId = update.stripePaymentIntentId;
+    record.paidAt = update.paidAt;
+    record.paymentAttemptCount = update.paymentAttemptCount;
+    record.lastPaymentAttemptAt = update.lastPaymentAttemptAt;
+    record.nextPaymentAttemptAt = update.nextPaymentAttemptAt;
+    record.paymentFailureCode = update.paymentFailureCode;
+  }
+
+  async getFullBookingRecord(bookingId: string): Promise<BookingRecord | null> {
+    return this.appended.find((r) => r.bookingId === bookingId) ?? null;
   }
 }
 
@@ -123,6 +166,7 @@ function validInput(overrides: Partial<BookingSubmissionInput> = {}): BookingSub
     someoneHome: "home",
     specialInstructions: "",
     agreedToPolicy: true,
+    setupIntentId: "seti_test123",
     ...overrides,
   };
 }
@@ -173,6 +217,18 @@ function sampleRecordWithToken(token: string): BookingRecord {
     customerConfirmationStatus: "",
     internalNotificationStatus: "",
     notificationAttemptAt: "",
+    stripeCustomerId: "cus_preexist",
+    stripePaymentMethodId: "pm_preexist",
+    stripeSetupIntentId: "seti_preexist",
+    scheduledChargeAt: "2026-09-22T18:00:00.000Z",
+    originalBookingTotal: 150,
+    chargeAmount: 150,
+    paymentAttemptCount: 0,
+    lastPaymentAttemptAt: "",
+    nextPaymentAttemptAt: "",
+    paymentFailureCode: "",
+    manualAmountOverride: false,
+    manualAmountOverrideAt: "",
   };
 }
 
@@ -180,6 +236,7 @@ beforeEach(() => {
   resetIdempotencyFastPathForTests();
   mockedGetSettings.mockReset().mockResolvedValue(SETTINGS);
   mockedCheckAvailability.mockReset().mockResolvedValue(AVAILABLE);
+  mockedVerifySetupIntent.mockReset().mockResolvedValue(VALID_SETUP_INTENT);
 });
 
 describe("submitBooking", () => {
@@ -191,7 +248,7 @@ describe("submitBooking", () => {
     expect(repo.appended.length).toBe(1);
     const record = repo.appended[0];
     expect(record.bookingStatus).toBe("Pending Payment");
-    expect(record.paymentStatus).toBe("Unpaid");
+    expect(record.paymentStatus).toBe("Scheduled");
     expect(record.internalNotes).toBe("idempotency_token:happy-token");
     if (result.ok) {
       expect(result.bookingId).toBe(record.bookingId);

@@ -50,6 +50,7 @@ function validInput(overrides: Partial<BookingSubmissionInput> = {}): BookingSub
     someoneHome: "home",
     specialInstructions: "",
     agreedToPolicy: true,
+    setupIntentId: "seti_test123",
     ...overrides,
   };
 }

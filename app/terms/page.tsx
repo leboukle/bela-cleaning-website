@@ -8,7 +8,7 @@ import { legalConfig, termsLastUpdatedDisplay } from "@/lib/legal";
 export const metadata: Metadata = buildPageMetadata({
   title: "Terms of Service | BeLa Cleaning",
   description:
-    "Review BeLa Cleaning's Terms of Service, covering online booking through BookingKoala, service policies, and website use in Jersey City and beyond.",
+    "Review BeLa Cleaning's Terms of Service, covering online booking and payment, service policies, and website use in Jersey City and beyond.",
   path: "/terms",
 });
 
@@ -45,9 +45,10 @@ export default function TermsPage() {
           agree, do not use the website.
         </p>
         <p>
-          Cleaning appointments booked through {legalConfig.bookingProviderName} may
-          also be subject to booking terms, policies, service selections, cancellation
-          provisions, and payment information displayed during the booking process.
+          Cleaning appointments booked through BeLa Cleaning&rsquo;s online booking
+          system are also subject to the service selections, scheduling, cancellation
+          provisions, and payment terms displayed and confirmed during the booking
+          process.
         </p>
       </LegalSection>
 
@@ -64,7 +65,8 @@ export default function TermsPage() {
 
       <LegalSection id="online-booking" number={3} title="Online Booking">
         <p>
-          Book Cleaning links direct customers to {legalConfig.bookingProviderName}.
+          Book Cleaning directs customers to BeLa Cleaning&rsquo;s own online booking
+          experience.
         </p>
         <p>Customers are responsible for:</p>
         <ul>
@@ -73,23 +75,7 @@ export default function TermsPage() {
           <li>Selecting applicable add-ons</li>
           <li>Providing accurate access instructions</li>
           <li>Reviewing the displayed price before confirming</li>
-          <li>Reviewing the booking terms and policies presented during checkout</li>
-        </ul>
-        <p>
-          {legalConfig.bookingProviderName} is a third-party platform with its own
-          terms and privacy policy.
-        </p>
-        <ul>
-          <li>
-            <a href={legalConfig.bookingPrivacyUrl} target="_blank" rel="noopener noreferrer">
-              {legalConfig.bookingProviderName} Privacy Policy
-            </a>
-          </li>
-          <li>
-            <a href={legalConfig.bookingTermsUrl} target="_blank" rel="noopener noreferrer">
-              {legalConfig.bookingProviderName} Terms of Use
-            </a>
-          </li>
+          <li>Reviewing the policies presented during booking, including the payment terms in Section 8</li>
         </ul>
       </LegalSection>
 
@@ -155,21 +141,35 @@ export default function TermsPage() {
 
       <LegalSection id="cancellations" number={7} title="Cancellations and Rescheduling">
         <p>
-          Cancellation, rescheduling, missed-access, and related fees are governed by
-          the current policies displayed or accepted during the{" "}
-          {legalConfig.bookingProviderName} booking process.
+          Appointments may be rescheduled or cancelled free of charge up to 24 hours
+          before the scheduled appointment. To reschedule or cancel, contact BeLa
+          Cleaning at{" "}
+          <a href={`mailto:${businessConfig.email}`}>{businessConfig.email}</a> or{" "}
+          <a href={businessConfig.phoneHref}>{businessConfig.phoneDisplay}</a>.
         </p>
-        <p>Customers should review those policies before confirming an appointment.</p>
+        <p>
+          Cancellations made less than 24 hours before the scheduled appointment may be
+          subject to a fee at BeLa Cleaning&rsquo;s discretion.
+        </p>
       </LegalSection>
 
       <LegalSection id="payment" number={8} title="Payment">
         <p>
-          Payments and payment information associated with bookings are handled through
-          the booking and payment services presented during checkout.
+          When you complete a booking, BeLa Cleaning uses {legalConfig.paymentProcessorName},
+          a third-party payment processor, to securely collect and save your payment
+          method. Your payment method is not charged at the time of booking.
         </p>
         <p>
-          Customers authorize applicable charges when confirming a booking under the
-          checkout terms.
+          The estimated total displayed during booking will be charged automatically to
+          the saved payment method starting one hour after your cleaning&rsquo;s
+          scheduled end time, without further action from you. BeLa Cleaning does not
+          receive, process, or store your full card number, CVC, or other card details
+          — {legalConfig.paymentProcessorName} handles this exclusively.
+        </p>
+        <p>
+          By confirming a booking, you authorize this future charge in the amount
+          displayed, subject to any adjustment BeLa Cleaning communicates to you before
+          the charge occurs.
         </p>
       </LegalSection>
 
@@ -233,10 +233,10 @@ export default function TermsPage() {
 
       <LegalSection id="third-party" number={13} title="Third-Party Services and Links">
         <p>
-          The site may link to {legalConfig.bookingProviderName},{" "}
-          {legalConfig.formProviderName}, and other third-party providers. BeLa Cleaning
-          does not control those third parties, and their separate terms and policies
-          apply to your use of their services.
+          The site uses {legalConfig.paymentProcessorName} to process payments, may link
+          to {legalConfig.formProviderName}, and may link to other third-party
+          providers. BeLa Cleaning does not control those third parties, and their
+          separate terms and policies apply to your use of their services.
         </p>
       </LegalSection>
 

@@ -1,7 +1,7 @@
 # Booking Backend Architecture
 
 This document covers the Google-Sheets-backed booking submission system built
-on top of the `/booking-preview` client-side flow. It exists so a future
+on top of the `/booking` client-side flow. It exists so a future
 maintainer (human or AI) can understand the design without re-reading every
 source file. It contains **no secret values** — only environment variable
 *names*, sheet/tab names, and the data contract.
@@ -58,7 +58,7 @@ client-side code (no `NEXT_PUBLIC_` prefix) or logged.
 ## 2. Request flow
 
 ```
-Customer fills out /booking-preview (client-only React state)
+Customer fills out /booking (client-only React state)
   → Review step → POST /api/booking
       → rate limit check (best-effort, per-instance)
       → parse + size-bound the JSON body
@@ -306,8 +306,9 @@ else in the booking domain needs to change.
   business's sign-off, since it's a live spreadsheet other tooling may
   already reference.
 - The approved pricing formula in `lib/booking/calculate.ts`.
-- The production BookingKoala link (`lib/config.ts`'s
-  `businessConfig.bookingUrl`) — entirely unrelated to this system.
+- `lib/config.ts`'s `businessConfig.bookingUrl` — as of Milestone 5's launch
+  cleanup this points at BeLa's own `/booking` route, replacing the earlier
+  BookingKoala link; still unrelated to this Sheets-persistence system.
 - Introducing a service-account JSON key, `GOOGLE_PRIVATE_KEY`,
   `GOOGLE_APPLICATION_CREDENTIALS`, or any `NEXT_PUBLIC_GOOGLE_*` variable —
   the keyless design in §1 is deliberate.

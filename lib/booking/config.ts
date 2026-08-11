@@ -1,6 +1,6 @@
 // Centralized, typed pricing and duration configuration for the booking
-// prototype. Every dollar figure and time estimate referenced anywhere in
-// the /booking-preview flow should come from this file — no values should
+// flow. Every dollar figure and time estimate referenced anywhere in
+// the /booking flow should come from this file — no values should
 // be hard-coded in components. This keeps the milestone's business rules
 // auditable in one place and makes it straightforward to swap in
 // database-backed pricing later without touching the UI layer.
@@ -182,10 +182,11 @@ export const STEP_STAGE: Partial<Record<StepId, string>> = {
   "service-address": "Details",
   access: "Details",
   "special-instructions": "Details",
+  payment: "Payment",
   review: "Review",
 };
 
-export const PROGRESS_STAGES = ["Property", "Cleaning", "Extras", "Frequency", "Appointment", "Details", "Review"] as const;
+export const PROGRESS_STAGES = ["Property", "Cleaning", "Extras", "Frequency", "Appointment", "Details", "Payment", "Review"] as const;
 
 // Groups of consecutive StepIds shown as one "Edit" action on the Review
 // screen. `endStep` is the step whose successful completion (advance())

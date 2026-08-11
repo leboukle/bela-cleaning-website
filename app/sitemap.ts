@@ -12,6 +12,7 @@ const SITE_CONTENT_UPDATED = "2026-07-20";
 export default function sitemap(): MetadataRoute.Sitemap {
   const routes: Array<{ path: string; priority: number; lastModified: string }> = [
     { path: "", priority: 1, lastModified: SITE_CONTENT_UPDATED },
+    { path: "/booking", priority: 0.9, lastModified: SITE_CONTENT_UPDATED },
     { path: "/services", priority: 0.8, lastModified: SITE_CONTENT_UPDATED },
     { path: "/join-our-team", priority: 0.6, lastModified: SITE_CONTENT_UPDATED },
     { path: "/privacy", priority: 0.3, lastModified: legalConfig.privacyLastUpdated },

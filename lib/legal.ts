@@ -2,14 +2,15 @@
 // Update `lastUpdated` whenever Privacy Policy or Terms content changes.
 
 export const legalConfig = {
-  privacyLastUpdated: "2026-07-20",
-  termsLastUpdated: "2026-07-20",
+  privacyLastUpdated: "2026-08-10",
+  termsLastUpdated: "2026-08-10",
   // Centralized third-party service-provider names so the legal pages stay
   // accurate if a provider is swapped later (e.g. Formspree replaced with
-  // another form processor).
-  bookingProviderName: "BookingKoala",
-  bookingPrivacyUrl: "https://www.bookingkoala.com/privacy-policy/",
-  bookingTermsUrl: "https://www.bookingkoala.com/terms-of-use/",
+  // another form processor). Online booking is BeLa's own system as of
+  // Milestone 5 — the only third-party provider involved in it is Stripe,
+  // which processes and stores payment method information exclusively.
+  paymentProcessorName: "Stripe",
+  paymentProcessorPrivacyUrl: "https://stripe.com/privacy",
   formProviderName: "Formspree",
   formProviderPrivacyUrl: "https://formspree.io/legal/privacy-policy/",
   hostingProviderName: "Vercel",

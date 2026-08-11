@@ -5,9 +5,10 @@ vi.mock("./sheetsClient", () => ({
   getRange: vi.fn(),
   batchGetRanges: vi.fn(),
   updateRange: vi.fn(),
+  batchUpdateRanges: vi.fn(),
 }));
 
-import { appendRow, getRange, batchGetRanges, updateRange } from "./sheetsClient";
+import { appendRow, getRange, batchGetRanges, updateRange, batchUpdateRanges } from "./sheetsClient";
 import { GoogleSheetsBookingRepository } from "./googleSheetsRepository";
 import { BOOKINGS_COLUMNS, BOOKINGS_FULL_RANGE } from "./bookingsSheetSchema";
 import type { BookingRecord } from "./types";
@@ -16,12 +17,14 @@ const mockedAppendRow = vi.mocked(appendRow);
 const mockedGetRange = vi.mocked(getRange);
 const mockedBatchGetRanges = vi.mocked(batchGetRanges);
 const mockedUpdateRange = vi.mocked(updateRange);
+const mockedBatchUpdateRanges = vi.mocked(batchUpdateRanges);
 
 beforeEach(() => {
   mockedAppendRow.mockReset();
   mockedGetRange.mockReset();
   mockedBatchGetRanges.mockReset();
   mockedUpdateRange.mockReset();
+  mockedBatchUpdateRanges.mockReset();
 });
 
 function sampleRecord(overrides: Partial<BookingRecord> = {}): BookingRecord {
@@ -70,6 +73,18 @@ function sampleRecord(overrides: Partial<BookingRecord> = {}): BookingRecord {
     customerConfirmationStatus: "",
     internalNotificationStatus: "",
     notificationAttemptAt: "",
+    stripeCustomerId: "cus_test123",
+    stripePaymentMethodId: "pm_test123",
+    stripeSetupIntentId: "seti_test123",
+    scheduledChargeAt: "2026-09-22T18:00:00.000Z",
+    originalBookingTotal: 150,
+    chargeAmount: 150,
+    paymentAttemptCount: 0,
+    lastPaymentAttemptAt: "",
+    nextPaymentAttemptAt: "",
+    paymentFailureCode: "",
+    manualAmountOverride: false,
+    manualAmountOverrideAt: "",
     ...overrides,
   };
 }

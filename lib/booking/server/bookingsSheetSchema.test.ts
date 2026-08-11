@@ -8,13 +8,13 @@ import {
 } from "./bookingsSheetSchema";
 
 describe("bookingsSheetSchema", () => {
-  it("has exactly 44 columns with no duplicates (41 Milestone 3 + 3 Milestone 4 notification-status columns)", () => {
-    expect(BOOKINGS_COLUMNS.length).toBe(44);
-    expect(new Set(BOOKINGS_COLUMNS).size).toBe(44);
+  it("has exactly 56 columns with no duplicates (41 Milestone 3 + 3 Milestone 4 + 12 Milestone 5 columns)", () => {
+    expect(BOOKINGS_COLUMNS.length).toBe(56);
+    expect(new Set(BOOKINGS_COLUMNS).size).toBe(56);
   });
 
-  it("places the 3 notification-status columns at the end, after Schema Version", () => {
-    expect(BOOKINGS_COLUMNS.slice(-4)).toEqual([
+  it("places the 3 notification-status columns right after Schema Version", () => {
+    expect(BOOKINGS_COLUMNS.slice(40, 44)).toEqual([
       "Schema Version",
       "Customer Confirmation Status",
       "Internal Notification Status",
@@ -22,10 +22,27 @@ describe("bookingsSheetSchema", () => {
     ]);
   });
 
-  it("maps the new notification-status columns to AP, AQ, AR", () => {
+  it("maps the notification-status columns to AP, AQ, AR", () => {
     expect(columnLetter("Customer Confirmation Status")).toBe("AP");
     expect(columnLetter("Internal Notification Status")).toBe("AQ");
     expect(columnLetter("Notification Attempt At")).toBe("AR");
+  });
+
+  it("places the 12 Milestone 5 payment columns at the end, after Notification Attempt At", () => {
+    expect(BOOKINGS_COLUMNS.slice(-12)).toEqual([
+      "Stripe Customer ID",
+      "Stripe PaymentMethod ID",
+      "Stripe SetupIntent ID",
+      "Scheduled Charge At",
+      "Original Booking Total",
+      "Charge Amount",
+      "Payment Attempt Count",
+      "Last Payment Attempt At",
+      "Next Payment Attempt At",
+      "Payment Failure Code",
+      "Manual Amount Override",
+      "Manual Amount Override At",
+    ]);
   });
 
   it("maps the first column to A", () => {

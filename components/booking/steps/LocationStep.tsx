@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { EXAMPLE_SUPPORTED_ZIP, getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
+import { businessConfig } from "@/lib/config";
 import StepShell from "@/components/booking/StepShell";
 
 type LocationStepProps = {
@@ -33,6 +34,17 @@ export default function LocationStep({
     const digitsOnly = value.replace(/\D/g, "").slice(0, 5);
     onZipChange(digitsOnly);
   };
+
+  const outOfAreaMailBody = [
+    "Hi BeLa Cleaning team,",
+    "",
+    `I'm outside your instant-booking area (ZIP ${trimmedZip}) and would like to know if you can help.`,
+    "",
+    outOfAreaMessage.trim() ? `Details: ${outOfAreaMessage.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const outOfAreaMailtoHref = `mailto:${businessConfig.email}?subject=${encodeURIComponent("Service Area Inquiry")}&body=${encodeURIComponent(outOfAreaMailBody)}`;
 
   return (
     <StepShell
@@ -113,24 +125,17 @@ export default function LocationStep({
             />
           </div>
 
-          {/*
-            DEVELOPER NOTE: intentionally disabled for this milestone — no
-            email/CRM/database integration exists yet to receive this
-            request. Do not remove `disabled` without also building real
-            submission handling.
-          */}
           <div className="mt-5 flex flex-wrap items-center gap-5">
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              className="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-[#3B2F27] px-8 py-3.5 text-sm font-medium tracking-wide text-white opacity-50"
+            <a
+              href={outOfAreaMailtoHref}
+              className="inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-8 py-3.5 text-sm font-medium tracking-wide text-white transition-colors duration-150 hover:bg-[#2A211C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
             >
               Contact BeLa Cleaning
-            </button>
+            </a>
           </div>
           <p className="mt-3 text-xs text-[#A9998A]">
-            Prototype only — this button does not send a request yet.
+            Opens your email app so our team can follow up. You can also call us at{" "}
+            {businessConfig.phoneDisplay}.
           </p>
         </div>
       )}

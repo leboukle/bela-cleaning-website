@@ -55,6 +55,14 @@ export type BookingSubmissionInput = {
 
   agreedToPolicy?: unknown;
 
+  // Milestone 5: the SetupIntent confirmed during the Payment step of the
+  // two-phase submission. Never trusted as proof of anything by itself —
+  // validateSubmission.ts only checks it's a plausible Stripe ID string;
+  // bookingService.ts re-verifies it against Stripe directly (status
+  // "succeeded", has a Customer + PaymentMethod) before this booking is
+  // ever persisted. See docs/payments.md.
+  setupIntentId?: unknown;
+
   // Client-displayed values, used only for tamper detection — never
   // trusted as the authoritative figures. See validateSubmission.ts.
   clientTotalPrice?: unknown;
@@ -92,6 +100,7 @@ export type ValidatedBooking = {
 
   agreedToPolicy: true;
   idempotencyToken: string;
+  setupIntentId: string;
 };
 
 export type ValidationIssue = {
@@ -152,4 +161,56 @@ export type BookingRecord = {
   customerConfirmationStatus: string;
   internalNotificationStatus: string;
   notificationAttemptAt: string;
+  // Milestone 5: see docs/payments.md for the full field-by-field
+  // rationale. Set once at appendBooking() time from the verified
+  // SetupIntent (stripeCustomerId/stripePaymentMethodId/stripeSetupIntentId,
+  // scheduledChargeAt, originalBookingTotal, chargeAmount) and never
+  // touched again by the booking-submission path; everything else here is
+  // owned by the payment-processing endpoint (paymentAttemptCount through
+  // paymentFailureCode) or by BeLa staff editing the sheet directly
+  // (manualAmountOverride, manualAmountOverrideAt).
+  stripeCustomerId: string;
+  stripePaymentMethodId: string;
+  stripeSetupIntentId: string;
+  scheduledChargeAt: string;
+  originalBookingTotal: number;
+  chargeAmount: number;
+  paymentAttemptCount: number;
+  lastPaymentAttemptAt: string;
+  nextPaymentAttemptAt: string;
+  paymentFailureCode: string;
+  manualAmountOverride: boolean;
+  manualAmountOverrideAt: string;
+};
+
+/**
+ * The payment-relevant slice of a booking row, re-read fresh from Sheets
+ * by the payment-processing endpoint for every attempt — this is the
+ * authoritative state the endpoint decides from, never anything the
+ * scheduler (or any other caller) asserts about the booking directly.
+ */
+export type BookingPaymentState = {
+  bookingId: string;
+  bookingStatus: string;
+  paymentStatus: string;
+  serviceDate: string;
+  stripeCustomerId: string;
+  stripePaymentMethodId: string;
+  scheduledChargeAt: string;
+  originalBookingTotal: number;
+  chargeAmount: number;
+  paymentAttemptCount: number;
+  nextPaymentAttemptAt: string;
+  manualAmountOverride: boolean;
+};
+
+/** Written back by the payment-processing endpoint after every attempt. */
+export type PaymentAttemptUpdate = {
+  paymentStatus: string;
+  stripePaymentIntentId: string;
+  paidAt: string;
+  paymentAttemptCount: number;
+  lastPaymentAttemptAt: string;
+  nextPaymentAttemptAt: string;
+  paymentFailureCode: string;
 };

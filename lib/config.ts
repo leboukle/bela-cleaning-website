@@ -5,9 +5,11 @@
 export const businessConfig = {
   businessName: "BeLa Cleaning",
   websiteUrl: "https://www.belacleaning.com",
-  // Direct BookingKoala booking URL. Every "Book Cleaning" button must point
-  // here, open in a new tab, and use rel="noopener noreferrer".
-  bookingUrl: "https://belacleaning.bookingkoala.com/booknow",
+  // Site-relative path to BeLa's own booking experience (app/booking).
+  // Every "Book Cleaning" button reads this — PrimaryButton renders an
+  // internal Link for a path like this one, an external <a> only if the
+  // value ever starts with "http".
+  bookingUrl: "/booking",
   email: "info@belacleaning.com",
   phoneDisplay: "(551) 225-0276",
   phoneHref: "tel:+15512250276",

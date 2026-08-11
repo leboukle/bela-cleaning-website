@@ -1,5 +1,7 @@
 "use client";
 
+import { businessConfig } from "@/lib/config";
+
 type CustomEstimateNoticeProps = {
   message: string;
   notes: string;
@@ -8,11 +10,23 @@ type CustomEstimateNoticeProps = {
 };
 
 // Shown whenever a selection (square footage, bedroom count, or bathroom
-// count) exceeds what this prototype can instantly price. Stops the
-// instant-booking flow rather than guessing at a number. The "Request a
-// Custom Estimate" action is intentionally non-functional in this
-// milestone — see the DEVELOPER NOTE below.
+// count) exceeds what instant pricing can handle. Stops the instant-booking
+// flow rather than guessing at a number. "Request a Custom Estimate" opens
+// the customer's email client, prefilled and addressed to BeLa directly —
+// the simplest way to route this request to a real human without building
+// a separate lead-intake system.
 export default function CustomEstimateNotice({ message, notes, onNotesChange, onBack }: CustomEstimateNoticeProps) {
+  const mailBody = [
+    "Hi BeLa Cleaning team,",
+    "",
+    "I'd like to request a custom cleaning estimate for my home.",
+    "",
+    notes.trim() ? `Details: ${notes.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const mailtoHref = `mailto:${businessConfig.email}?subject=${encodeURIComponent("Custom Cleaning Estimate Request")}&body=${encodeURIComponent(mailBody)}`;
+
   return (
     <div className="rounded-2xl border border-[#E7DECE] bg-white p-7 shadow-[0_4px_24px_-8px_rgba(59,47,39,0.12)] sm:p-9">
       <p className="font-heading text-2xl leading-snug text-[#3B2F27] sm:text-[1.75rem]">{message}</p>
@@ -31,22 +45,13 @@ export default function CustomEstimateNotice({ message, notes, onNotesChange, on
         />
       </div>
 
-      {/*
-        DEVELOPER NOTE: This button is intentionally disabled for Milestone
-        1. Wiring it up to actually send a request (email, CRM lead, etc.)
-        is out of scope for this prototype — see the milestone report for
-        details. Do not remove the `disabled` attribute without also
-        building real submission handling.
-      */}
       <div className="mt-7 flex flex-wrap items-center gap-5">
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          className="inline-flex cursor-not-allowed items-center justify-center rounded-full bg-[#3B2F27] px-8 py-3.5 text-sm font-medium tracking-wide text-white opacity-50"
+        <a
+          href={mailtoHref}
+          className="inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-8 py-3.5 text-sm font-medium tracking-wide text-white transition-colors duration-150 hover:bg-[#2A211C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
         >
           Request a Custom Estimate
-        </button>
+        </a>
         <button
           type="button"
           onClick={onBack}
@@ -56,7 +61,8 @@ export default function CustomEstimateNotice({ message, notes, onNotesChange, on
         </button>
       </div>
       <p className="mt-3 text-xs text-[#A9998A]">
-        Prototype only — this button does not send a request yet.
+        Opens your email app so we can prepare a custom estimate for you. You can also call us at{" "}
+        {businessConfig.phoneDisplay}.
       </p>
     </div>
   );

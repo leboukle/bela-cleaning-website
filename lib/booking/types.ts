@@ -1,4 +1,4 @@
-// Shared types for the booking-preview prototype. Kept separate from
+// Shared types for the booking flow. Kept separate from
 // config.ts so option data and the shape of in-progress booking state can
 // evolve independently. This state shape is intentionally flat and
 // serializable (no functions, no class instances) so it can later be
@@ -63,6 +63,7 @@ export const STEP_ORDER = [
   "service-address",
   "access",
   "special-instructions",
+  "payment",
   "review",
 ] as const;
 
@@ -127,6 +128,12 @@ export type BookingState = {
 
   agreedToPolicy: boolean;
 
+  // Milestone 5: the confirmed Stripe SetupIntent ID from the Payment
+  // step, carried into the final /api/booking submission. Never anything
+  // else payment-related (no card data ever reaches this client state) —
+  // see PaymentStep.tsx and lib/booking/server/stripe/setupIntent.ts.
+  setupIntentId: string | null;
+
   // Set by the Review step's "Edit" links so the relevant group's last
   // step can jump straight back to Review instead of continuing linearly
   // through the rest of the flow. See BookingFlow's `advance()`.
@@ -178,6 +185,8 @@ export const initialBookingState: BookingState = {
   specialInstructions: "",
 
   agreedToPolicy: false,
+
+  setupIntentId: null,
 
   returnToStepId: null,
 };

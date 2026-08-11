@@ -46,6 +46,7 @@ import CustomerPhoneStep from "@/components/booking/steps/CustomerPhoneStep";
 import ServiceAddressStep from "@/components/booking/steps/ServiceAddressStep";
 import AccessStep from "@/components/booking/steps/AccessStep";
 import SpecialInstructionsStep from "@/components/booking/steps/SpecialInstructionsStep";
+import PaymentStep from "@/components/booking/steps/PaymentStep";
 import ReviewStep from "@/components/booking/steps/ReviewStep";
 
 const CUSTOM_ESTIMATE_MESSAGES: Record<"square-footage" | "bedrooms" | "bathrooms", string> = {
@@ -228,6 +229,13 @@ export default function BookingFlow() {
   // --- Review & policy ---
   const setAgreedToPolicy = (agreed: boolean) => setState((s) => ({ ...s, agreedToPolicy: agreed }));
 
+  // --- Payment (Milestone 5) ---
+  const handleSetupComplete = (setupIntentId: string) => {
+    setState((s) => ({ ...s, setupIntentId }));
+    advance();
+  };
+  const redoPayment = () => editSection("payment");
+
   // Sends the booking to /api/booking. Every server outcome (success,
   // validation issue, date no longer available, transient server error) is
   // a typed JSON body — see bookingService.ts and app/api/booking/route.ts
@@ -264,6 +272,7 @@ export default function BookingFlow() {
       someoneHome: state.someoneHome,
       specialInstructions: state.specialInstructions,
       agreedToPolicy: state.agreedToPolicy,
+      setupIntentId: state.setupIntentId,
       clientTotalPrice: estimate?.totalPrice ?? null,
       clientDurationMinutes: estimate?.totalDurationMinutes ?? null,
     };
@@ -305,6 +314,11 @@ export default function BookingFlow() {
 
     if (body.code === "date-unavailable") {
       setSubmission({ status: "date-unavailable", message: String(body.message) });
+      return;
+    }
+
+    if (body.code === "payment-setup-invalid") {
+      setSubmission({ status: "payment-setup-invalid", message: String(body.message) });
       return;
     }
 
@@ -428,6 +442,18 @@ export default function BookingFlow() {
             onBack={goBack}
           />
         );
+      case "payment":
+        return (
+          <PaymentStep
+            firstName={state.firstName}
+            lastName={state.lastName}
+            email={state.email}
+            phone={state.phone}
+            totalPrice={estimate?.totalPrice ?? null}
+            onSetupComplete={handleSetupComplete}
+            onBack={goBack}
+          />
+        );
       case "review":
         return (
           <ReviewStep
@@ -438,6 +464,7 @@ export default function BookingFlow() {
             submission={submission}
             onSubmit={submitBooking}
             onPickNewDate={pickNewDate}
+            onRedoPayment={redoPayment}
             honeypot={honeypot}
             onHoneypotChange={setHoneypot}
             onBack={goBack}

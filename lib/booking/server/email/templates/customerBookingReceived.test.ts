@@ -44,14 +44,14 @@ describe("buildCustomerBookingReceivedEmail", () => {
     expect(email.text).not.toContain("Extras:");
   });
 
-  it("never claims the booking is confirmed or that payment was collected", () => {
+  it("never claims the booking is confirmed or that payment was already charged", () => {
     const record = sampleBookingRecord();
     const email = buildCustomerBookingReceivedEmail(record);
     const lowerText = email.text.toLowerCase();
     expect(lowerText).not.toContain("your appointment is confirmed");
     expect(lowerText).not.toContain("payment has been collected");
     expect(lowerText).not.toContain("card has been charged");
-    expect(email.text).toContain("Payment has not yet been processed");
+    expect(email.text).toContain("you have not been charged");
   });
 
   it("does not expose Google Sheets, spreadsheet IDs, or infrastructure details", () => {

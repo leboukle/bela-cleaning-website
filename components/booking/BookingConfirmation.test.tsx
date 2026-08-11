@@ -100,7 +100,7 @@ describe("BookingConfirmation", () => {
     expect(text).not.toContain("your appointment is confirmed");
     expect(text).not.toContain("cleaner has been assigned");
     expect(text).not.toContain("payment has been collected");
-    expect(text).toContain("payment has not yet been processed");
+    expect(text).toContain("you have not been charged");
   });
 
   it("does not display internal administrative fields or spreadsheet details", () => {

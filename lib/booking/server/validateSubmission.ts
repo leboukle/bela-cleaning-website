@@ -54,6 +54,15 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
     addIssue("idempotencyToken", "A valid submission token is required.");
   }
 
+  // Only a shape check ("is this plausibly a Stripe SetupIntent ID") —
+  // proof that it actually succeeded and belongs to a real Customer +
+  // PaymentMethod happens server-side against Stripe itself in
+  // bookingService.ts, never here. See docs/payments.md.
+  const setupIntentId = asTrimmedString(input.setupIntentId);
+  if (!setupIntentId.startsWith("seti_") || setupIntentId.length > 100) {
+    addIssue("setupIntentId", "A valid payment setup is required before booking.");
+  }
+
   // --- Customer data ---
   const firstName = asTrimmedString(input.firstName);
   if (!isNonEmpty(firstName) || firstName.length > MAX_TEXT_FIELD_LENGTH) {
@@ -230,6 +239,7 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
     specialInstructions,
     agreedToPolicy: true,
     idempotencyToken,
+    setupIntentId,
   };
 
   return { ok: true, booking };

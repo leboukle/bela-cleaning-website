@@ -64,6 +64,28 @@ export const BOOKINGS_COLUMNS = [
   "Customer Confirmation Status",
   "Internal Notification Status",
   "Notification Attempt At",
+  // Milestone 5 addition, approved before implementation — see
+  // docs/payments.md. Appended at the end, same rationale as the
+  // Milestone 4 columns: every prior column keeps its exact position.
+  // "Stripe Checkout Session ID" (above) is a Milestone-3-era placeholder
+  // for an architecture this milestone doesn't use (SetupIntent +
+  // off-session PaymentIntent, not Checkout Sessions) — left in place,
+  // permanently blank, rather than repurposed or removed. "Stripe Payment
+  // Intent ID" and "Paid At" (also above) are reused as-is; "Payment
+  // Status" (column D) now carries the richer PAYMENT_STATUS value set
+  // defined below instead of only "Unpaid".
+  "Stripe Customer ID",
+  "Stripe PaymentMethod ID",
+  "Stripe SetupIntent ID",
+  "Scheduled Charge At",
+  "Original Booking Total",
+  "Charge Amount",
+  "Payment Attempt Count",
+  "Last Payment Attempt At",
+  "Next Payment Attempt At",
+  "Payment Failure Code",
+  "Manual Amount Override",
+  "Manual Amount Override At",
 ] as const;
 
 export type BookingColumn = (typeof BOOKINGS_COLUMNS)[number];
@@ -96,8 +118,19 @@ export const BOOKING_STATUS = {
   CANCELLED: "Cancelled",
 } as const;
 
+// "Unpaid" is the Milestone 3/4-era value, kept for backward compatibility
+// with rows written before Milestone 5 — no migration needed for historical
+// test rows, they simply predate the richer payment lifecycle. Every new
+// booking (Milestone 5 onward) starts at SCHEDULED, never UNPAID. See
+// docs/payments.md for the full state machine and transition rules.
 export const PAYMENT_STATUS = {
   UNPAID: "Unpaid",
+  SCHEDULED: "Scheduled",
+  PROCESSING: "Processing",
+  PAID: "Paid",
+  RETRY_SCHEDULED: "Retry Scheduled",
+  REQUIRES_ACTION: "Requires Action",
+  FINAL_FAILURE: "Final Failure",
 } as const;
 
 export const SUBMISSION_SOURCE = "Website";

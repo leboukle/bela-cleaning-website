@@ -40,9 +40,9 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord): Omit<E
 
   lines.push(
     "",
-    `Status: ${record.bookingStatus}. Payment has not yet been processed — no charge has been made and no card`,
-    "information has been collected. We'll follow up with next-step payment and appointment communications",
-    "before your visit. Please keep your Booking ID for reference.",
+    `Status: ${record.bookingStatus}. Your payment method has been saved securely — you have not been charged.`,
+    `The estimated total above will be charged automatically starting 1 hour after your cleaning's scheduled`,
+    "end time. Please keep your Booking ID for reference.",
     "",
     "Plans change — reschedule or cancel free of charge up to 24 hours before your visit, per the BeLa Cleaning",
     "Service Policy.",
@@ -81,9 +81,9 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord): Omit<E
     ${extrasRow}
   </table>
   <p style="font-size:14px;color:#6B5B4C;">
-    Status: <strong>${escapeHtml(record.bookingStatus)}</strong>. Payment has not yet been processed — no charge has
-    been made and no card information has been collected. We'll follow up with next-step payment and appointment
-    communications before your visit. Please keep your Booking ID for reference.
+    Status: <strong>${escapeHtml(record.bookingStatus)}</strong>. Your payment method has been saved securely —
+    you have not been charged. The estimated total above will be charged automatically starting 1 hour after your
+    cleaning's scheduled end time. Please keep your Booking ID for reference.
   </p>
   <p style="font-size:14px;color:#6B5B4C;">
     Plans change — reschedule or cancel free of charge up to 24 hours before your visit, per the BeLa Cleaning

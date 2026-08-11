@@ -5,7 +5,7 @@
 // interface and changing a single wiring point, not touching the booking
 // UI or the validation/pricing/availability logic at all.
 import "server-only";
-import type { BookingRecord } from "./types";
+import type { BookingPaymentState, BookingRecord, PaymentAttemptUpdate } from "./types";
 import type { NotificationStatusUpdate } from "./notificationStatus";
 
 export type IdempotentBookingResult = {
@@ -40,4 +40,33 @@ export interface BookingRepository {
    * booking's own success result (Milestone 4, docs/notifications.md §7).
    */
   updateNotificationStatus(bookingId: string, update: NotificationStatusUpdate): Promise<void>;
+
+  /**
+   * Re-reads a single booking's authoritative payment-relevant state by
+   * ID. The payment-processing endpoint calls this for every booking ID
+   * the scheduler reports as due — it never trusts amount, status, or
+   * timing data asserted by the caller, only what this returns fresh from
+   * the sheet. Returns null if the ID doesn't exist (defensive only; the
+   * scheduler reads IDs from this same sheet, so this should not happen in
+   * practice).
+   */
+  getBookingPaymentState(bookingId: string): Promise<BookingPaymentState | null>;
+
+  /**
+   * Writes the outcome of one charge attempt back to the booking's row.
+   * Never touches any column outside the payment-attempt set (Payment
+   * Status, Stripe Payment Intent ID, Paid At, Payment Attempt Count, Last/
+   * Next Payment Attempt At, Payment Failure Code) — Manual Amount
+   * Override and its timestamp are owned by BeLa staff editing the sheet
+   * directly, never written by this method.
+   */
+  updatePaymentAttempt(bookingId: string, update: PaymentAttemptUpdate): Promise<void>;
+
+  /**
+   * Reads back the complete, current row for one booking. Used only where
+   * the full record is genuinely needed (building payment notification
+   * emails, which reference customer name/email/amount/etc.) — everything
+   * else in the payment pipeline uses the narrower getBookingPaymentState.
+   */
+  getFullBookingRecord(bookingId: string): Promise<BookingRecord | null>;
 }

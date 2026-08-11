@@ -24,6 +24,7 @@ const MAX_BODY_BYTES = 20_000;
 const STATUS_BY_FAILURE_CODE = {
   validation: 422,
   "date-unavailable": 409,
+  "payment-setup-invalid": 422,
   "server-error": 500,
 } as const;
 

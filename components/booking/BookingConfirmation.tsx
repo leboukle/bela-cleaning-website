@@ -98,10 +98,9 @@ export default function BookingConfirmation({ state, submission }: BookingConfir
 
       <div className="rounded-2xl border border-[#E7DECE] bg-[#FBF7EF] p-6">
         <p className="text-sm text-[#6B5B4C]">
-          Your booking request has been received and your Booking ID above is your reference for it. Payment has not
-          yet been processed — no charge has been made and no card information has been collected. You&rsquo;ll
-          receive the appropriate next-step communication once your appointment and payment are ready to be
-          finalized.
+          Your booking request has been received and your Booking ID above is your reference for it. Your payment
+          method has been saved securely — you have not been charged. The estimated total above will be charged
+          automatically starting 1 hour after your cleaning&rsquo;s scheduled end time.
         </p>
       </div>
 

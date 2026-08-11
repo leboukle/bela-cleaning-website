@@ -48,6 +48,18 @@ export function sampleBookingRecord(overrides: Partial<BookingRecord> = {}): Boo
     customerConfirmationStatus: "",
     internalNotificationStatus: "",
     notificationAttemptAt: "",
+    stripeCustomerId: "cus_test123",
+    stripePaymentMethodId: "pm_test123",
+    stripeSetupIntentId: "seti_test123",
+    scheduledChargeAt: "2026-02-15T18:00:00.000Z",
+    originalBookingTotal: 190.5,
+    chargeAmount: 190.5,
+    paymentAttemptCount: 0,
+    lastPaymentAttemptAt: "",
+    nextPaymentAttemptAt: "",
+    paymentFailureCode: "",
+    manualAmountOverride: false,
+    manualAmountOverrideAt: "",
     ...overrides,
   };
 }
