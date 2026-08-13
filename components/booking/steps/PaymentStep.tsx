@@ -122,39 +122,88 @@ type PaymentFormProps = {
   onBack: () => void;
 };
 
+// Stripe.js can leave stripe.confirmSetup() unresolved indefinitely under
+// some failure conditions (the PaymentElement's own internal state never
+// settles) — this bounds that call so a hang always resolves into a
+// visible, retryable error instead of an infinite "Saving…" state.
+const CONFIRM_SETUP_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 function PaymentForm({ totalPrice, onSetupComplete, onBack }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [consented, setConsented] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `stripe`/`elements` being non-null: those only mean the
+  // Stripe.js SDK and Elements group exist, not that the PaymentElement's
+  // own iframe has actually finished loading and can accept input. Gating
+  // confirmation on this too is the fix for the Production hang — the
+  // customer must never be able to submit before Stripe has confirmed the
+  // fields are actually ready.
+  const [elementReady, setElementReady] = useState(false);
+  const [elementError, setElementError] = useState<string | null>(null);
 
   const returnUrl = useMemo(() => (typeof window !== "undefined" ? window.location.href : ""), []);
 
   const handleConfirm = async () => {
-    if (!stripe || !elements || !consented || submitting) return;
+    if (!stripe || !elements || !elementReady || elementError || !consented || submitting) return;
     setSubmitting(true);
     setError(null);
 
-    const { error: confirmError, setupIntent } = await stripe.confirmSetup({
-      elements,
-      confirmParams: { return_url: returnUrl },
-      redirect: "if_required",
-    });
+    try {
+      // Required before confirmSetup() with a PaymentElement — validates
+      // the entered details client-side and surfaces an incomplete/invalid
+      // card error immediately, rather than only discovering it (or hanging)
+      // inside confirmSetup() itself.
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        setError(submitError.message ?? "Please check your card details and try again.");
+        setSubmitting(false);
+        return;
+      }
 
-    if (confirmError) {
-      setError(confirmError.message ?? "We couldn't save your payment method. Please check your card details and try again.");
+      const { error: confirmError, setupIntent } = await withTimeout(
+        stripe.confirmSetup({
+          elements,
+          confirmParams: { return_url: returnUrl },
+          redirect: "if_required",
+        }),
+        CONFIRM_SETUP_TIMEOUT_MS,
+      );
+
+      if (confirmError) {
+        setError(confirmError.message ?? "We couldn't save your payment method. Please check your card details and try again.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (setupIntent?.status === "succeeded") {
+        onSetupComplete(setupIntent.id);
+        return;
+      }
+
+      setError("We couldn't confirm your payment method. Please try again.");
       setSubmitting(false);
-      return;
+    } catch {
+      setError("This is taking longer than expected. Please try again, or contact us if the problem continues.");
+      setSubmitting(false);
     }
-
-    if (setupIntent?.status === "succeeded") {
-      onSetupComplete(setupIntent.id);
-      return;
-    }
-
-    setError("We couldn't confirm your payment method. Please try again.");
-    setSubmitting(false);
   };
 
   return (
@@ -165,7 +214,25 @@ function PaymentForm({ totalPrice, onSetupComplete, onBack }: PaymentFormProps) 
     >
       <div className="space-y-5">
         <div className="rounded-2xl border border-[#E7DECE] bg-white p-6">
-          <PaymentElement options={{ layout: "tabs" }} />
+          {!elementReady && !elementError && (
+            <div className="mb-4 flex items-center gap-3 text-[#8A7A6B]">
+              <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+              <span className="text-sm">Loading payment fields…</span>
+            </div>
+          )}
+          {elementError && (
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-[#C97B63] bg-[#FBEAE4] p-4">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#B14A2E]" aria-hidden="true" />
+              <p className="text-sm font-medium text-[#3B2F27]">{elementError}</p>
+            </div>
+          )}
+          <PaymentElement
+            options={{ layout: "tabs" }}
+            onReady={() => setElementReady(true)}
+            onLoadError={(event) => {
+              setElementError(event.error.message ?? "We couldn't load the payment form. Please go back and try again.");
+            }}
+          />
         </div>
 
         <div className="rounded-2xl border border-[#E7DECE] bg-[#FBF7EF] p-6">
@@ -205,7 +272,7 @@ function PaymentForm({ totalPrice, onSetupComplete, onBack }: PaymentFormProps) 
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={!stripe || !elements || !consented || submitting}
+          disabled={!stripe || !elements || !elementReady || Boolean(elementError) || !consented || submitting}
           className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#3B2F27] px-8 py-4 text-base font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_32px_-12px_rgba(59,47,39,0.4)] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:w-auto"
         >
           {submitting && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
