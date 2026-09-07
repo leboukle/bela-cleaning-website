@@ -26,6 +26,87 @@ export function getArrivalWindowOption(id: ArrivalWindowId): ArrivalWindowOption
   return option;
 }
 
+// The Bookings sheet stores the display label ("Morning"), not the raw ID
+// — this is the reverse lookup Milestone 6's cancellation/reschedule
+// timing logic needs to turn a persisted record back into an ArrivalWindowId
+// before it can compute a real-world start time. Returns null rather than
+// throwing so callers can produce a clear server-error response instead of
+// an unhandled exception for a row with an unexpected label.
+export function getArrivalWindowIdByLabel(label: string): ArrivalWindowId | null {
+  return ARRIVAL_WINDOWS.find((o) => o.label === label)?.id ?? null;
+}
+
+// ---- Exact appointment start times (Milestone 6 amendment) ----
+// Replaces broad Arrival Window selection for new bookings going forward.
+// Business-approved operating rules: hourly increments, no lunch
+// exclusion, earliest start 8:00 AM, latest possible start 4:00 PM, and
+// every cleaning must finish by 8:00 PM — so a start time's actual
+// availability also depends on the booking's estimated duration (see
+// filterStartTimesByDuration below). These constants are the single
+// source of truth for both the client picker and the server's
+// authoritative validation (lib/booking/server/exactTime.ts,
+// lib/booking/server/availability.ts) — never duplicated.
+export const OPERATING_START_HOUR = 8; // 8:00 AM, earliest selectable start
+export const OPERATING_LATEST_START_HOUR = 16; // 4:00 PM, latest possible start
+export const OPERATING_CLOSE_HOUR = 20; // 8:00 PM — every cleaning must finish by this time
+export const START_TIME_STEP_MINUTES = 60;
+
+const EXACT_TIME_REGEX = /^([01]\d|2[0-3]):00$/;
+
+/** Every hourly mark BeLa could ever offer as a start time, before duration/availability filtering. */
+export function getAllExactStartTimeCandidates(): string[] {
+  const times: string[] = [];
+  for (let hour = OPERATING_START_HOUR; hour <= OPERATING_LATEST_START_HOUR; hour++) {
+    times.push(`${String(hour).padStart(2, "0")}:00`);
+  }
+  return times;
+}
+
+/** True only for a canonical "HH:00" string on an hourly mark — not a full range/business-hours check. */
+export function isPlausibleExactTimeFormat(value: string): boolean {
+  return EXACT_TIME_REGEX.test(value);
+}
+
+/**
+ * Narrows a candidate list to start times whose service would actually
+ * finish by OPERATING_CLOSE_HOUR given `estimatedDurationMinutes` — e.g. a
+ * 5-hour cleaning cannot start at 4:00 PM (would end at 9:00 PM). Pure
+ * duration/operating-hours math only; the live overlap/capacity check
+ * against other bookings happens server-side (see availability.ts).
+ */
+export function filterStartTimesByDuration(candidates: string[], estimatedDurationMinutes: number): string[] {
+  const closeMinutes = OPERATING_CLOSE_HOUR * 60;
+  return candidates.filter((time) => {
+    const hour = Number(time.slice(0, 2));
+    return hour * 60 + estimatedDurationMinutes <= closeMinutes;
+  });
+}
+
+/** "09:00" -> "9:00 AM". Assumes a canonical "HH:00" string (see isPlausibleExactTimeFormat). */
+export function formatExactTime(time: string): string {
+  const hour = Number(time.slice(0, 2));
+  const period = hour < 12 ? "AM" : "PM";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:00 ${period}`;
+}
+
+/**
+ * The single "what time does this booking show as" resolver for anything
+ * customer- or staff-facing (UI, emails, Manage Booking) — prefers the
+ * exact Service Start Time when populated ("9:00 AM"), falling back to
+ * the legacy Arrival Window's label + range ("Morning (8:00 AM – 10:00 AM)")
+ * otherwise. Mirrors serviceTime.ts's resolveRecordStartSpec (the
+ * server-only equivalent used for real timing math) but is itself
+ * client-safe pure string logic — no server-only import, no DST/UTC
+ * conversion, since it only ever formats already-persisted display values.
+ */
+export function getScheduleDisplayLabel(record: { serviceStartTime: string; arrivalWindow: string }): string {
+  if (record.serviceStartTime) return formatExactTime(record.serviceStartTime);
+  if (!record.arrivalWindow) return "—";
+  const option = ARRIVAL_WINDOWS.find((o) => o.label === record.arrivalWindow);
+  return option ? `${option.label} (${option.timeRangeLabel})` : record.arrivalWindow;
+}
+
 // ---- Date helpers ----
 // Dates are represented as "yyyy-mm-dd" strings interpreted as local
 // calendar dates — never as UTC ISO timestamps — since a customer picking

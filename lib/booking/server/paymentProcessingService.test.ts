@@ -6,7 +6,16 @@ import { createOffSessionPaymentIntent } from "./stripe/paymentIntent";
 import { processDueBooking, type PaymentAttemptNotificationSender } from "./paymentProcessingService";
 import { BOOKING_STATUS, PAYMENT_STATUS } from "./bookingsSheetSchema";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
-import type { BookingPaymentState, BookingRecord, PaymentAttemptUpdate } from "./types";
+import type {
+  AppointmentReminderUpdate,
+  BookingCancellationInitiateUpdate,
+  BookingPaymentState,
+  BookingRecord,
+  BookingReminderState,
+  BookingRescheduleUpdate,
+  CancellationFeeOutcomeUpdate,
+  PaymentAttemptUpdate,
+} from "./types";
 import { sampleBookingRecord } from "./testFixtures";
 
 const mockedCreatePaymentIntent = vi.mocked(createOffSessionPaymentIntent);
@@ -42,6 +51,46 @@ class FakeRepository implements BookingRepository {
   async getFullBookingRecord(bookingId: string): Promise<BookingRecord | null> {
     return this.records.get(bookingId) ?? null;
   }
+
+  async findBookingIdByManageTokenHash(tokenHash: string): Promise<string | null> {
+    for (const record of this.records.values()) {
+      if (record.manageBookingTokenHash === tokenHash) return record.bookingId;
+    }
+    return null;
+  }
+
+  async markBookingCancelled(bookingId: string, update: BookingCancellationInitiateUpdate): Promise<void> {
+    const record = this.records.get(bookingId);
+    if (!record) throw new Error("Booking ID not found.");
+    record.bookingStatus = "Cancelled";
+    record.paymentStatus = update.paymentStatus;
+    record.cancelledAt = update.cancelledAt;
+    record.cancellationFeeAmount = update.cancellationFeeAmount;
+  }
+
+  async updateCancellationFeeOutcome(bookingId: string, update: CancellationFeeOutcomeUpdate): Promise<void> {
+    const record = this.records.get(bookingId);
+    if (!record) throw new Error("Booking ID not found.");
+    record.paymentStatus = update.paymentStatus;
+    record.stripePaymentIntentId = update.stripePaymentIntentId;
+    record.paidAt = update.paidAt;
+  }
+
+  async updateBookingReschedule(bookingId: string, update: BookingRescheduleUpdate): Promise<void> {
+    const record = this.records.get(bookingId);
+    if (!record) throw new Error("Booking ID not found.");
+    record.serviceDate = update.serviceDate;
+    record.arrivalWindow = update.arrivalWindow;
+    record.scheduledChargeAt = update.scheduledChargeAt;
+    record.rescheduledAt = update.rescheduledAt;
+    record.originalServiceDate = update.originalServiceDate;
+    record.originalArrivalWindow = update.originalArrivalWindow;
+  }
+
+  async getBookingReminderState(): Promise<BookingReminderState | null> {
+    return null;
+  }
+  async updateAppointmentReminderStatus(_bookingId: string, _update: AppointmentReminderUpdate): Promise<void> {}
 }
 
 function baseState(overrides: Partial<BookingPaymentState> = {}): BookingPaymentState {

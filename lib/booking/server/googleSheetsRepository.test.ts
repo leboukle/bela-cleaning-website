@@ -85,6 +85,17 @@ function sampleRecord(overrides: Partial<BookingRecord> = {}): BookingRecord {
     paymentFailureCode: "",
     manualAmountOverride: false,
     manualAmountOverrideAt: "",
+    manageBookingTokenHash: "c".repeat(64),
+    cancellationFeeAmount: 0,
+    rescheduledAt: "",
+    originalServiceDate: "",
+    originalArrivalWindow: "",
+    appointmentReminderStatus: "",
+    appointmentReminderSentAt: "",
+    appointmentReminderAttempts: 0,
+    serviceStartTime: "",
+    originalServiceStartTime: "",
+    manageBookingReminderTokenHash: "",
     ...overrides,
   };
 }
@@ -121,7 +132,8 @@ describe("GoogleSheetsBookingRepository", () => {
       [["100"], ["150"]], // Total Price
       [["120"], ["210"]], // Estimated Duration Minutes
       [["2026-09-01"], ["2026-09-22"]], // Service Date
-      [["Morning"], ["Afternoon"]], // Arrival Window
+      [["Morning"], [""]], // Arrival Window
+      [[""], ["14:00"]], // Service Start Time
     ]);
     const repo = new GoogleSheetsBookingRepository();
     const found = await repo.findRecentBookingByIdempotencyToken("match-me");
@@ -130,7 +142,8 @@ describe("GoogleSheetsBookingRepository", () => {
       totalPrice: 150,
       estimatedDurationMinutes: 210,
       serviceDate: "2026-09-22",
-      arrivalWindow: "Afternoon",
+      arrivalWindow: "",
+      serviceStartTime: "14:00",
     });
   });
 
@@ -142,6 +155,7 @@ describe("GoogleSheetsBookingRepository", () => {
       [["120"]],
       [["2026-09-01"]],
       [["Morning"]],
+      [[""]],
     ]);
     const repo = new GoogleSheetsBookingRepository();
     expect(await repo.findRecentBookingByIdempotencyToken("missing-token")).toBeNull();
@@ -173,5 +187,158 @@ describe("GoogleSheetsBookingRepository", () => {
       }),
     ).rejects.toThrow();
     expect(mockedUpdateRange).not.toHaveBeenCalled();
+  });
+
+  it("findBookingIdByManageTokenHash matches the original hash and returns the corresponding Booking ID", async () => {
+    const hash = "d".repeat(64);
+    mockedBatchGetRanges.mockResolvedValue([
+      [["e".repeat(64)], [hash]], // Manage Booking Token Hash
+      [[""], [""]], // Manage Booking Reminder Token Hash
+      [["BELA-OLD"], ["BELA-TARGET"]], // Booking ID
+    ]);
+    const repo = new GoogleSheetsBookingRepository();
+    expect(await repo.findBookingIdByManageTokenHash(hash)).toBe("BELA-TARGET");
+  });
+
+  it("findBookingIdByManageTokenHash returns null when no hash matches either column (unauthorized/incorrect tokens rejected)", async () => {
+    mockedBatchGetRanges.mockResolvedValue([[["e".repeat(64)]], [["6".repeat(64)]], [["BELA-OLD"]]]);
+    const repo = new GoogleSheetsBookingRepository();
+    expect(await repo.findBookingIdByManageTokenHash("f".repeat(64))).toBeNull();
+  });
+
+  it("findBookingIdByManageTokenHash also matches a reminder-issued hash, scoped to the correct booking", async () => {
+    // Post-verification fix: the 72-hour reminder embeds a second,
+    // independently-minted token (never a rotation of the original) so
+    // its own hash lives in a separate column — either hash on a row
+    // resolves to that row's own booking ID.
+    const reminderHash = "1".repeat(64);
+    mockedBatchGetRanges.mockResolvedValue([
+      [["a".repeat(64)], ["b".repeat(64)]], // Manage Booking Token Hash (originals — neither matches)
+      [[""], [reminderHash]], // Manage Booking Reminder Token Hash — only the 2nd row has one
+      [["BELA-OTHER"], ["BELA-TARGET"]], // Booking ID
+    ]);
+    const repo = new GoogleSheetsBookingRepository();
+    expect(await repo.findBookingIdByManageTokenHash(reminderHash)).toBe("BELA-TARGET");
+  });
+
+  it("a reminder-issued hash never resolves to a different booking's row", async () => {
+    const reminderHashForOther = "2".repeat(64);
+    mockedBatchGetRanges.mockResolvedValue([
+      [["a".repeat(64)], ["b".repeat(64)]], // Manage Booking Token Hash
+      [[reminderHashForOther], [""]], // only BELA-OTHER (row 0) has this reminder hash
+      [["BELA-OTHER"], ["BELA-TARGET"]], // Booking ID
+    ]);
+    const repo = new GoogleSheetsBookingRepository();
+    expect(await repo.findBookingIdByManageTokenHash(reminderHashForOther)).toBe("BELA-OTHER");
+    expect(await repo.findBookingIdByManageTokenHash(reminderHashForOther)).not.toBe("BELA-TARGET");
+  });
+
+  it("the original booking-confirmation link still resolves correctly after a reminder token has been issued for the same row", async () => {
+    // Intended behavior: issuing a reminder token never invalidates the
+    // original — both remain simultaneously valid for the same booking.
+    const originalHash = "3".repeat(64);
+    const reminderHash = "4".repeat(64);
+    mockedBatchGetRanges.mockResolvedValue([
+      [[originalHash]], // Manage Booking Token Hash — untouched by reminder issuance
+      [[reminderHash]], // Manage Booking Reminder Token Hash — now populated
+      [["BELA-TARGET"]], // Booking ID
+    ]);
+    const repo = new GoogleSheetsBookingRepository();
+    expect(await repo.findBookingIdByManageTokenHash(originalHash)).toBe("BELA-TARGET");
+    expect(await repo.findBookingIdByManageTokenHash(reminderHash)).toBe("BELA-TARGET");
+  });
+
+  it("markBookingCancelled writes Booking Status/Payment Status, Cancelled At, and Cancellation Fee Amount to the correct row", async () => {
+    mockedGetRange.mockResolvedValue([["BELA-OLD"], ["BELA-TARGET"]]);
+    const repo = new GoogleSheetsBookingRepository();
+    await repo.markBookingCancelled("BELA-TARGET", {
+      paymentStatus: "Cancellation Fee Processing",
+      cancelledAt: "2026-09-10T12:00:00.000Z",
+      cancellationFeeAmount: 95.25,
+    });
+    expect(mockedBatchUpdateRanges).toHaveBeenCalledWith([
+      { range: "Bookings!C3:D3", row: ["Cancelled", "Cancellation Fee Processing"] },
+      { range: "Bookings!AL3", row: ["2026-09-10T12:00:00.000Z"] },
+      { range: "Bookings!BF3", row: [95.25] },
+    ]);
+  });
+
+  it("updateCancellationFeeOutcome writes Payment Status and the Stripe Payment Intent ID/Paid At pair", async () => {
+    mockedGetRange.mockResolvedValue([["BELA-TARGET"]]);
+    const repo = new GoogleSheetsBookingRepository();
+    await repo.updateCancellationFeeOutcome("BELA-TARGET", {
+      paymentStatus: "Cancellation Fee Paid",
+      stripePaymentIntentId: "pi_fee_123",
+      paidAt: "2026-09-10T12:05:00.000Z",
+    });
+    expect(mockedBatchUpdateRanges).toHaveBeenCalledWith([
+      { range: "Bookings!D2", row: ["Cancellation Fee Paid"] },
+      { range: "Bookings!AJ2:AK2", row: ["pi_fee_123", "2026-09-10T12:05:00.000Z"] },
+    ]);
+  });
+
+  it("updateBookingReschedule writes the new date/window, Scheduled Charge At, Rescheduled At, the Original pair, and the Service Start Time pair", async () => {
+    mockedGetRange.mockResolvedValue([["BELA-OLD"], ["BELA-TARGET"]]);
+    const repo = new GoogleSheetsBookingRepository();
+    await repo.updateBookingReschedule("BELA-TARGET", {
+      serviceDate: "2026-10-01",
+      arrivalWindow: "",
+      serviceStartTime: "14:00",
+      scheduledChargeAt: "2026-10-01T22:00:00.000Z",
+      rescheduledAt: "2026-09-15T09:00:00.000Z",
+      originalServiceDate: "2026-09-22",
+      originalArrivalWindow: "Morning",
+      originalServiceStartTime: "",
+    });
+    expect(mockedBatchUpdateRanges).toHaveBeenCalledWith([
+      { range: "Bookings!O3:P3", row: ["2026-10-01", ""] },
+      { range: "Bookings!AV3", row: ["2026-10-01T22:00:00.000Z"] },
+      { range: "Bookings!BG3", row: ["2026-09-15T09:00:00.000Z"] },
+      { range: "Bookings!BH3:BI3", row: ["2026-09-22", "Morning"] },
+      { range: "Bookings!BL3", row: ["14:00"] },
+      { range: "Bookings!BM3", row: [""] },
+    ]);
+  });
+
+  it("getBookingReminderState reads back the reminder-relevant fields for the matching row", async () => {
+    mockedBatchGetRanges.mockResolvedValue([
+      [["BELA-OLD"], ["BELA-TARGET"]], // Booking ID
+      [["Pending Payment"], ["Cancelled"]], // Booking Status
+      [[""], ["Retry Scheduled"]], // Appointment Reminder Status
+      [["0"], ["1"]], // Appointment Reminder Attempts
+      [["2026-09-01T00:00:00.000Z"], ["2026-09-22T18:00:00.000Z"]], // Scheduled Charge At
+      [["120"], ["210"]], // Estimated Duration Minutes
+    ]);
+    const repo = new GoogleSheetsBookingRepository();
+    const state = await repo.getBookingReminderState("BELA-TARGET");
+    expect(state).toEqual({
+      bookingId: "BELA-TARGET",
+      bookingStatus: "Cancelled",
+      appointmentReminderStatus: "Retry Scheduled",
+      appointmentReminderAttempts: 1,
+      scheduledChargeAt: "2026-09-22T18:00:00.000Z",
+      estimatedDurationMinutes: 210,
+    });
+  });
+
+  it("getBookingReminderState returns null when the booking ID isn't found", async () => {
+    mockedBatchGetRanges.mockResolvedValue([[["BELA-OLD"]], [["Pending Payment"]], [[""]], [["0"]], [[""]], [["120"]]]);
+    const repo = new GoogleSheetsBookingRepository();
+    expect(await repo.getBookingReminderState("BELA-MISSING")).toBeNull();
+  });
+
+  it("updateAppointmentReminderStatus writes Status/Sent At together, and Attempts/Reminder Token Hash together", async () => {
+    mockedGetRange.mockResolvedValue([["BELA-OLD"], ["BELA-TARGET"]]);
+    const repo = new GoogleSheetsBookingRepository();
+    await repo.updateAppointmentReminderStatus("BELA-TARGET", {
+      appointmentReminderStatus: "Sent",
+      appointmentReminderSentAt: "2026-09-19T12:00:00.000Z",
+      appointmentReminderAttempts: 1,
+      manageBookingReminderTokenHash: "1".repeat(64),
+    });
+    expect(mockedBatchUpdateRanges).toHaveBeenCalledWith([
+      { range: "Bookings!BJ3:BK3", row: ["Sent", "2026-09-19T12:00:00.000Z"] },
+      { range: "Bookings!BN3:BO3", row: [1, "1".repeat(64)] },
+    ]);
   });
 });

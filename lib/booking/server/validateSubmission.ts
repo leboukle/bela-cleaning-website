@@ -13,7 +13,7 @@ import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
 } from "@/lib/booking/config";
-import { ARRIVAL_WINDOWS } from "@/lib/booking/schedule";
+import { getAllExactStartTimeCandidates, isPlausibleExactTimeFormat } from "@/lib/booking/schedule";
 import { EXTRAS_QUANTITY_MAX, SPECIAL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/booking/limits";
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
@@ -192,9 +192,15 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
     addIssue("serviceDate", "That date is too soon. Please choose a date further out.");
   }
 
-  const arrivalWindow = asTrimmedString(input.arrivalWindow);
-  if (!ARRIVAL_WINDOWS.some((w) => w.id === arrivalWindow)) {
-    addIssue("arrivalWindow", "Please select a valid arrival window.");
+  // Milestone 6 amendment: format/catalog check only — this is cheap and
+  // synchronous, matching this function's existing scope. The
+  // authoritative "is this specific date+time+duration actually available
+  // right now" decision (overlap/capacity-aware) happens later in
+  // bookingService.ts, once duration is known and a Sheets read is
+  // affordable — see availability.ts's checkExactTimeAvailability.
+  const serviceStartTime = asTrimmedString(input.serviceStartTime);
+  if (!isPlausibleExactTimeFormat(serviceStartTime) || !getAllExactStartTimeCandidates().includes(serviceStartTime)) {
+    addIssue("serviceStartTime", "Please select a valid appointment start time.");
   }
 
   // --- Access & instructions ---
@@ -225,7 +231,7 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
     zipCode,
     city: getCityForZip(addressZip) ?? "",
     serviceDate,
-    arrivalWindow: arrivalWindow as ValidatedBooking["arrivalWindow"],
+    serviceStartTime,
     firstName,
     lastName,
     email,

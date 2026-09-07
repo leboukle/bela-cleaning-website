@@ -34,7 +34,7 @@ function sampleState(overrides: Partial<BookingState> = {}): BookingState {
 const SUBMISSION = {
   bookingId: "BELA-20260101-ABCDEF",
   serviceDate: "2026-02-16",
-  arrivalWindow: "Morning",
+  serviceStartTime: "9:00 AM",
   totalPrice: 190.5,
   estimatedDurationMinutes: 270,
 };
@@ -50,10 +50,10 @@ describe("BookingConfirmation", () => {
     expect(screen.getByText("BELA-20260101-ABCDEF")).toBeTruthy();
   });
 
-  it("displays the correct appointment information (date, arrival window, cleaning type)", () => {
+  it("displays the correct appointment information (date, appointment time, cleaning type)", () => {
     render(<BookingConfirmation state={sampleState()} submission={SUBMISSION} />);
     expect(screen.getByText(/February 16, 2026/)).toBeTruthy();
-    expect(screen.getByText("Morning")).toBeTruthy();
+    expect(screen.getByText("9:00 AM")).toBeTruthy();
     expect(screen.getByText("Standard cleaning")).toBeTruthy();
   });
 

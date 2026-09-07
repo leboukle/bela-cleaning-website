@@ -30,7 +30,7 @@ describe("NotificationService.sendCustomerBookingReceived", () => {
     const service = new NotificationService(transport);
     const record = sampleBookingRecord({ email: "customer@example.com", bookingId: "BELA-20260101-ABCDEF" });
 
-    const result = await service.sendCustomerBookingReceived(record);
+    const result = await service.sendCustomerBookingReceived(record, "test-manage-token");
 
     expect(result.ok).toBe(true);
     expect(transport.sent).toHaveLength(1);
@@ -43,7 +43,7 @@ describe("NotificationService.sendCustomerBookingReceived", () => {
     transport.result = { ok: false, error: "Gmail API request failed with status 500." };
     const service = new NotificationService(transport);
 
-    const result = await service.sendCustomerBookingReceived(sampleBookingRecord());
+    const result = await service.sendCustomerBookingReceived(sampleBookingRecord(), "test-manage-token");
     expect(result.ok).toBe(false);
   });
 });

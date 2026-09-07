@@ -37,7 +37,7 @@ function validInput(overrides: Partial<BookingSubmissionInput> = {}): BookingSub
     frequency: "one-time",
     zipCode: "07030",
     serviceDate: futureDateKey(30),
-    arrivalWindow: "morning",
+    serviceStartTime: "09:00",
     firstName: "Jane",
     lastName: "Doe",
     email: "jane@example.com",
@@ -135,8 +135,18 @@ describe("validateSubmission", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("rejects an invalid arrival window", () => {
-    const result = validateSubmission(validInput({ arrivalWindow: "midnight" }), { settings: SETTINGS });
+  it("rejects an out-of-catalog appointment start time", () => {
+    const result = validateSubmission(validInput({ serviceStartTime: "midnight" }), { settings: SETTINGS });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects a half-hour start time not on the approved hourly catalog", () => {
+    const result = validateSubmission(validInput({ serviceStartTime: "09:30" }), { settings: SETTINGS });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects a start time before operating hours", () => {
+    const result = validateSubmission(validInput({ serviceStartTime: "07:00" }), { settings: SETTINGS });
     expect(result.ok).toBe(false);
   });
 

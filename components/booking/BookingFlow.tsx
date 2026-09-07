@@ -13,7 +13,6 @@ import {
   initialBookingState,
   STEP_ORDER,
   type AccessId,
-  type ArrivalWindowId,
   type BathroomId,
   type BedroomId,
   type CleaningTypeId,
@@ -39,7 +38,7 @@ import ExtrasStep from "@/components/booking/steps/ExtrasStep";
 import FrequencyStep from "@/components/booking/steps/FrequencyStep";
 import LocationStep from "@/components/booking/steps/LocationStep";
 import ScheduleDateStep from "@/components/booking/steps/ScheduleDateStep";
-import ArrivalWindowStep from "@/components/booking/steps/ArrivalWindowStep";
+import StartTimeStep from "@/components/booking/steps/StartTimeStep";
 import CustomerNameStep from "@/components/booking/steps/CustomerNameStep";
 import CustomerEmailStep from "@/components/booking/steps/CustomerEmailStep";
 import CustomerPhoneStep from "@/components/booking/steps/CustomerPhoneStep";
@@ -166,8 +165,8 @@ export default function BookingFlow() {
     setState((s) => ({ ...s, appointmentDate: dateKey }));
     advance();
   };
-  const selectArrivalWindow = (id: ArrivalWindowId) => {
-    setState((s) => ({ ...s, arrivalWindow: id }));
+  const selectServiceStartTime = (time: string) => {
+    setState((s) => ({ ...s, serviceStartTime: time }));
     advance();
   };
 
@@ -259,7 +258,7 @@ export default function BookingFlow() {
       frequency: state.frequency,
       zipCode: state.zipCode,
       serviceDate: state.appointmentDate,
-      arrivalWindow: state.arrivalWindow,
+      serviceStartTime: state.serviceStartTime,
       firstName: state.firstName,
       lastName: state.lastName,
       email: state.email,
@@ -305,7 +304,7 @@ export default function BookingFlow() {
         status: "success",
         bookingId: String(body.bookingId),
         serviceDate: String(body.serviceDate),
-        arrivalWindow: String(body.arrivalWindow),
+        serviceStartTime: String(body.serviceStartTime),
         totalPrice: Number(body.totalPrice),
         estimatedDurationMinutes: Number(body.estimatedDurationMinutes),
       });
@@ -396,7 +395,15 @@ export default function BookingFlow() {
           <ScheduleDateStep appointmentDate={state.appointmentDate} onSelect={selectAppointmentDate} onBack={goBack} />
         );
       case "arrival-window":
-        return <ArrivalWindowStep value={state.arrivalWindow} onSelect={selectArrivalWindow} onBack={goBack} />;
+        return (
+          <StartTimeStep
+            value={state.serviceStartTime}
+            appointmentDate={state.appointmentDate}
+            estimatedDurationMinutes={estimate?.totalDurationMinutes ?? null}
+            onSelect={selectServiceStartTime}
+            onBack={goBack}
+          />
+        );
       case "customer-name":
         return (
           <CustomerNameStep

@@ -10,7 +10,7 @@ import type { BookingState } from "@/lib/booking/types";
 type BookingConfirmationSubmission = {
   bookingId: string;
   serviceDate: string;
-  arrivalWindow: string;
+  serviceStartTime: string;
   totalPrice: number;
   estimatedDurationMinutes: number;
 };
@@ -87,7 +87,7 @@ export default function BookingConfirmation({ state, submission }: BookingConfir
           <ConfirmationLine label="First name" value={state.firstName || "—"} />
           <ConfirmationLine label="Cleaning type" value={cleaningTypeLabel} />
           <ConfirmationLine label="Service date" value={formatReadableDate(submission.serviceDate)} />
-          <ConfirmationLine label="Arrival window" value={submission.arrivalWindow} />
+          <ConfirmationLine label="Appointment time" value={submission.serviceStartTime} />
           <ConfirmationLine label="Service address" value={addressLine || "—"} />
           <ConfirmationLine label="Estimated duration" value={formatDuration(submission.estimatedDurationMinutes)} />
           <ConfirmationLine label="Estimated total" value={formatCurrency(submission.totalPrice)} />

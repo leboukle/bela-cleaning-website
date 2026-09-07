@@ -105,7 +105,9 @@ export type BookingState = {
 
   // Schedule
   appointmentDate: string | null; // ISO yyyy-mm-dd, always interpreted as a local calendar date
-  arrivalWindow: ArrivalWindowId | null;
+  // Milestone 6 amendment: replaces arrivalWindow — canonical "HH:00"
+  // 24-hour string (e.g. "09:00"). See lib/booking/schedule.ts.
+  serviceStartTime: string | null;
 
   // Customer info — client-side prototype state only, never submitted.
   // See CustomerNameStep/CustomerEmailStep/CustomerPhoneStep for the
@@ -168,7 +170,7 @@ export const initialBookingState: BookingState = {
   outOfAreaMessage: "",
 
   appointmentDate: null,
-  arrivalWindow: null,
+  serviceStartTime: null,
 
   firstName: "",
   lastName: "",

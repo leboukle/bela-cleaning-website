@@ -14,6 +14,14 @@ export type CreateOffSessionPaymentIntentInput = {
   bookingId: string;
   serviceDate: string;
   idempotencyKey: string;
+  // Milestone 6: tags a late-cancellation fee's PaymentIntent so
+  // paymentWebhookService.ts can route its succeeded/failed events to the
+  // cancellation-fee handlers instead of the normal scheduled-charge ones.
+  // Omitted (undefined) for the normal charge — never set to any other
+  // value today, but typed as a union rather than a bare boolean so a
+  // future distinct charge type has somewhere to go without another
+  // signature change.
+  metadataType?: "cancellation_fee";
 };
 
 export type PaymentIntentOutcome =
@@ -55,6 +63,7 @@ export async function createOffSessionPaymentIntent(
           bookingId: input.bookingId,
           serviceDate: input.serviceDate,
           environment: ENVIRONMENT,
+          ...(input.metadataType ? { type: input.metadataType } : {}),
         },
       },
       { idempotencyKey: input.idempotencyKey },

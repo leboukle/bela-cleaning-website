@@ -16,7 +16,7 @@ import type Stripe from "stripe";
 
 export type PaymentWebhookNotificationSender = Pick<
   NotificationService,
-  "sendPaymentReceipt" | "sendInternalPaymentSucceeded" | "sendInternalPaymentFailed"
+  "sendPaymentReceipt" | "sendInternalPaymentSucceeded" | "sendInternalPaymentFailed" | "sendInternalCancellationFeeFailed"
 >;
 
 function logError(step: string, bookingId: string, error: unknown): void {
@@ -26,6 +26,11 @@ function logError(step: string, bookingId: string, error: unknown): void {
 function extractBookingId(paymentIntent: Stripe.PaymentIntent): string | null {
   const bookingId = paymentIntent.metadata?.bookingId;
   return typeof bookingId === "string" && bookingId.length > 0 ? bookingId : null;
+}
+
+/** Milestone 6: distinguishes a cancellation-fee PaymentIntent from the normal scheduled-charge one. */
+function isCancellationFeeIntent(paymentIntent: Stripe.PaymentIntent): boolean {
+  return paymentIntent.metadata?.type === "cancellation_fee";
 }
 
 export async function handlePaymentIntentSucceeded(
@@ -38,6 +43,10 @@ export async function handlePaymentIntentSucceeded(
   if (!bookingId) {
     console.error(`[paymentWebhookService] payment_intent.succeeded missing metadata.bookingId: ${paymentIntent.id}`);
     return;
+  }
+
+  if (isCancellationFeeIntent(paymentIntent)) {
+    return handleCancellationFeeSucceeded(bookingId, paymentIntent, repository, now);
   }
 
   const state = await repository.getBookingPaymentState(bookingId);
@@ -86,6 +95,10 @@ export async function handlePaymentIntentFailed(
   if (!bookingId) {
     console.error(`[paymentWebhookService] payment_intent.payment_failed missing metadata.bookingId: ${paymentIntent.id}`);
     return;
+  }
+
+  if (isCancellationFeeIntent(paymentIntent)) {
+    return handleCancellationFeeFailed(bookingId, paymentIntent, repository, notifications);
   }
 
   const state = await repository.getBookingPaymentState(bookingId);
@@ -143,5 +156,81 @@ export async function handlePaymentIntentFailed(
     }
   } catch (error) {
     logError("sendInternalPaymentFailed", bookingId, error);
+  }
+}
+
+// ---- Milestone 6: late-cancellation fee PaymentIntents ----
+//
+// A cancellation-fee PaymentIntent is a single-shot charge, never subject
+// to the normal charge's multi-attempt retry cadence (see
+// cancellationService.ts and docs/manage-booking.md) — these two handlers
+// resolve Cancellation Fee Processing to Paid/Failed directly, with no
+// attempt-count or retry-scheduling logic. Both are guarded the same way
+// as the normal handlers: only act while still Processing, so a
+// redelivered event is always a safe no-op.
+
+async function handleCancellationFeeSucceeded(
+  bookingId: string,
+  paymentIntent: Stripe.PaymentIntent,
+  repository: BookingRepository,
+  now: Date,
+): Promise<void> {
+  const record = await repository.getFullBookingRecord(bookingId);
+  if (!record) {
+    console.error(`[paymentWebhookService] cancellation-fee payment_intent.succeeded for unknown booking: ${bookingId}`);
+    return;
+  }
+  if (record.paymentStatus !== PAYMENT_STATUS.CANCELLATION_FEE_PROCESSING) return;
+
+  try {
+    await repository.updateCancellationFeeOutcome(bookingId, {
+      paymentStatus: PAYMENT_STATUS.CANCELLATION_FEE_PAID,
+      stripePaymentIntentId: paymentIntent.id,
+      paidAt: now.toISOString(),
+    });
+  } catch (error) {
+    logError("updateCancellationFeeOutcome (paid)", bookingId, error);
+    throw error; // lets the route return 500 so Stripe retries delivery
+  }
+}
+
+async function handleCancellationFeeFailed(
+  bookingId: string,
+  paymentIntent: Stripe.PaymentIntent,
+  repository: BookingRepository,
+  notifications: PaymentWebhookNotificationSender,
+): Promise<void> {
+  const record = await repository.getFullBookingRecord(bookingId);
+  if (!record) {
+    console.error(`[paymentWebhookService] cancellation-fee payment_intent.payment_failed for unknown booking: ${bookingId}`);
+    return;
+  }
+  if (record.paymentStatus !== PAYMENT_STATUS.CANCELLATION_FEE_PROCESSING) return;
+
+  const failure: PaymentIntentFailureDetail = {
+    type: paymentIntent.last_payment_error?.type ?? null,
+    code: paymentIntent.last_payment_error?.code ?? null,
+    declineCode: paymentIntent.last_payment_error?.decline_code ?? null,
+  };
+
+  try {
+    await repository.updateCancellationFeeOutcome(bookingId, {
+      paymentStatus: PAYMENT_STATUS.CANCELLATION_FEE_FAILED,
+      stripePaymentIntentId: paymentIntent.id,
+      paidAt: "",
+    });
+  } catch (error) {
+    logError("updateCancellationFeeOutcome (failed)", bookingId, error);
+    throw error; // lets the route return 500 so Stripe retries delivery
+  }
+
+  // The booking is already, and remains, Cancelled — this is purely
+  // informational so BeLa can follow up on the fee manually. No automatic
+  // retry: cancellation fees are single-shot.
+  try {
+    const updated = await repository.getFullBookingRecord(bookingId);
+    if (updated) await notifications.sendInternalCancellationFeeFailed(updated, failure);
+  } catch (error) {
+    logError("sendInternalCancellationFeeFailed", bookingId, error);
   }
 }

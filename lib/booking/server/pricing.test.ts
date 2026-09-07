@@ -22,7 +22,7 @@ function sampleBooking(overrides: Partial<ValidatedBooking> = {}): ValidatedBook
     zipCode: "07030",
     city: "Hoboken",
     serviceDate: "2026-09-22",
-    arrivalWindow: "morning",
+    serviceStartTime: "09:00",
     firstName: "Jane",
     lastName: "Doe",
     email: "jane@example.com",
