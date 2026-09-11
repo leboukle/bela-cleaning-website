@@ -130,9 +130,42 @@ describe("validateSubmission", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("rejects a service date inside the minimum lead window", () => {
-    const result = validateSubmission(validInput({ serviceDate: futureDateKey(1) }), { settings: SETTINGS });
+  it("rejects an appointment less than 24 hours away", () => {
+    // Noon ET; the same day's afternoon window (2:00 PM ET) is only 2 hours out.
+    const now = new Date("2026-06-15T12:00:00-04:00");
+    const result = validateSubmission(
+      validInput({ serviceDate: "2026-06-15", arrivalWindow: "afternoon" }),
+      { settings: SETTINGS, now },
+    );
     expect(result.ok).toBe(false);
+  });
+
+  it("rejects an appointment one minute short of the 24-hour boundary", () => {
+    const now = new Date("2026-06-14T14:01:00-04:00");
+    const result = validateSubmission(
+      validInput({ serviceDate: "2026-06-15", arrivalWindow: "afternoon" }),
+      { settings: SETTINGS, now },
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it("accepts an appointment exactly at the 24-hour boundary", () => {
+    // 2:00 PM ET; next day's afternoon window (2:00 PM ET) starts exactly 24h later.
+    const now = new Date("2026-06-14T14:00:00-04:00");
+    const result = validateSubmission(
+      validInput({ serviceDate: "2026-06-15", arrivalWindow: "afternoon" }),
+      { settings: SETTINGS, now },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts an appointment safely beyond the 24-hour boundary", () => {
+    const now = new Date("2026-06-14T14:00:00-04:00");
+    const result = validateSubmission(
+      validInput({ serviceDate: "2026-06-16", arrivalWindow: "morning" }),
+      { settings: SETTINGS, now },
+    );
+    expect(result.ok).toBe(true);
   });
 
   it("rejects an invalid arrival window", () => {

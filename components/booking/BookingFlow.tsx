@@ -396,7 +396,14 @@ export default function BookingFlow() {
           <ScheduleDateStep appointmentDate={state.appointmentDate} onSelect={selectAppointmentDate} onBack={goBack} />
         );
       case "arrival-window":
-        return <ArrivalWindowStep value={state.arrivalWindow} onSelect={selectArrivalWindow} onBack={goBack} />;
+        return (
+          <ArrivalWindowStep
+            value={state.arrivalWindow}
+            appointmentDate={state.appointmentDate}
+            onSelect={selectArrivalWindow}
+            onBack={goBack}
+          />
+        );
       case "customer-name":
         return (
           <CustomerNameStep

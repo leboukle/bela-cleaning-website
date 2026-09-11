@@ -18,8 +18,10 @@ import { EXTRAS_QUANTITY_MAX, SPECIAL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/book
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
 import type { AccessId, ExtrasState } from "@/lib/booking/types";
-import { isValidDateKey, isPastOrWithinLeadWindow } from "./dateUtils";
+import { isValidDateKey, isLessThanMinimumLeadTime } from "./dateUtils";
+import { calculateServiceStart } from "./scheduledCharge";
 import type { BookingSettings } from "./settings";
+import type { ArrivalWindowId } from "@/lib/booking/types";
 import type { BookingSubmissionInput, ValidatedBooking, ValidationIssue, ValidationResult } from "./types";
 
 function asString(value: unknown): string {
@@ -34,6 +36,8 @@ const MAX_TEXT_FIELD_LENGTH = 200; // sanity bound for name/address/email/etc.
 
 export type ValidateSubmissionOptions = {
   settings: BookingSettings;
+  /** Overridable for tests; defaults to the real current time. */
+  now?: Date;
 };
 
 export function validateSubmission(input: BookingSubmissionInput, options: ValidateSubmissionOptions): ValidationResult {
@@ -185,16 +189,34 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
   }
 
   // --- Scheduling ---
+  // Standing rule: an appointment must start at least 24 hours from the
+  // moment of booking (exactly 24h is eligible). This depends on both the
+  // date and the arrival window's actual start time, so it can only be
+  // checked once both are individually valid — see calculateServiceStart,
+  // which reuses the same DST-safe timezone math as the automatic-charge
+  // calculation rather than duplicating it. The Settings-Sheet-driven
+  // minimumLeadDays value is intentionally no longer consulted here.
   const serviceDate = asTrimmedString(input.serviceDate);
-  if (!isValidDateKey(serviceDate)) {
+  const serviceDateValid = isValidDateKey(serviceDate);
+  if (!serviceDateValid) {
     addIssue("serviceDate", "Please choose a valid appointment date.");
-  } else if (isPastOrWithinLeadWindow(serviceDate, options.settings.timezone, options.settings.minimumLeadDays)) {
-    addIssue("serviceDate", "That date is too soon. Please choose a date further out.");
   }
 
   const arrivalWindow = asTrimmedString(input.arrivalWindow);
-  if (!ARRIVAL_WINDOWS.some((w) => w.id === arrivalWindow)) {
+  const arrivalWindowValid = ARRIVAL_WINDOWS.some((w) => w.id === arrivalWindow);
+  if (!arrivalWindowValid) {
     addIssue("arrivalWindow", "Please select a valid arrival window.");
+  }
+
+  if (serviceDateValid && arrivalWindowValid) {
+    const serviceStart = calculateServiceStart(
+      serviceDate,
+      arrivalWindow as ArrivalWindowId,
+      options.settings.timezone,
+    );
+    if (isLessThanMinimumLeadTime(serviceStart, options.now)) {
+      addIssue("serviceDate", "That date and time is too soon — please choose an appointment at least 24 hours from now.");
+    }
   }
 
   // --- Access & instructions ---

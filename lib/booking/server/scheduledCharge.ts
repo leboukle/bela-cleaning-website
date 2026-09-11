@@ -64,17 +64,30 @@ function zonedWallTimeToUtc(year: number, month: number, day: number, hour: numb
   return new Date(utcGuessMs);
 }
 
+/**
+ * The real UTC instant an arrival window starts, in the business's
+ * configured timezone. Exported so other server-only scheduling logic
+ * (e.g. the minimum-lead-time check in validateSubmission.ts) can reuse
+ * this DST-safe computation instead of re-deriving it.
+ */
+export function calculateServiceStart(
+  serviceDateKey: string, // "yyyy-mm-dd"
+  arrivalWindow: ArrivalWindowId,
+  timezone: string,
+): Date {
+  const [year, month, day] = serviceDateKey.split("-").map(Number);
+  const start = ARRIVAL_WINDOW_START_TIME[arrivalWindow];
+  return zonedWallTimeToUtc(year, month, day, start.hour, start.minute, timezone);
+}
+
 export function calculateScheduledChargeAt(
   serviceDateKey: string, // "yyyy-mm-dd"
   arrivalWindow: ArrivalWindowId,
   estimatedDurationMinutes: number,
   timezone: string,
 ): Date {
-  const [year, month, day] = serviceDateKey.split("-").map(Number);
-  const start = ARRIVAL_WINDOW_START_TIME[arrivalWindow];
-
   const totalMinutesFromStart = estimatedDurationMinutes + CHARGE_DELAY_AFTER_END_MINUTES;
-  const startUtc = zonedWallTimeToUtc(year, month, day, start.hour, start.minute, timezone);
+  const startUtc = calculateServiceStart(serviceDateKey, arrivalWindow, timezone);
 
   return new Date(startUtc.getTime() + totalMinutesFromStart * 60_000);
 }
