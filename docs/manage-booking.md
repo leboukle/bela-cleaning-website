@@ -36,7 +36,7 @@ extras, property, and address changes remain BeLa-only (contact required).
 ```
 GET  /api/manage-booking/[token]              -> customer-safe booking view
 POST /api/manage-booking/[token]/cancel       -> cancellation (free or late-fee)
-POST /api/manage-booking/[token]/reschedule   -> { serviceDate, arrivalWindow }
+POST /api/manage-booking/[token]/reschedule   -> { serviceDate, serviceStartTime }
 ```
 
 All three: validate the token server-side on every call, never trust any
@@ -58,9 +58,18 @@ notification status, internal notes, or any other operational-only field —
 enforced by construction (the view type simply has no such fields), not by
 redaction.
 
-## 4. The 24-hour rule
+## 4. The 24-hour rule(s)
 
-One rule, computed server-side only, in
+Two related but distinct 24-hour rules, both computed server-side only,
+both built on the same DST-safe wall-clock-to-UTC conversion Milestone 5
+established for Scheduled Charge At — extracted to a shared
+[`timezone.ts`](../lib/booking/server/timezone.ts) /
+[`serviceTime.ts`](../lib/booking/server/serviceTime.ts) so every
+timing-sensitive module calls the identical conversion rather than
+maintaining its own copy:
+
+**Cancellation/reschedule eligibility** — is the customer's *existing*
+appointment far enough out to self-serve for free, in
 [`cancellationPolicy.ts`](../lib/booking/server/cancellationPolicy.ts):
 
 ```
@@ -68,13 +77,27 @@ millisecondsUntilStart <= 24 hours  -> late (fee / self-reschedule disabled)
 millisecondsUntilStart >  24 hours  -> free (no fee / self-reschedule allowed)
 ```
 
-Uses the business's configured timezone (`America/New_York`) and the same
-DST-safe wall-clock-to-UTC conversion Milestone 5 established for
-Scheduled Charge At — extracted to a shared
-[`timezone.ts`](../lib/booking/server/timezone.ts) /
-[`serviceTime.ts`](../lib/booking/server/serviceTime.ts) so both modules
-call the identical conversion rather than maintaining two copies. Exactly
-24 hours out counts as late (inclusive on the late side), per spec.
+**Booking minimum lead time** — is a *candidate* appointment (a new
+booking, or the new target slot of a reschedule) itself far enough out to
+even be offered/accepted, in
+[`availability.ts`](../lib/booking/server/availability.ts)'s
+`checkExactTimeAvailability`/`getAvailableStartTimes`:
+
+```
+candidateStart >= now + 24 hours  -> eligible, subject to blackout/capacity
+candidateStart <  now + 24 hours  -> unavailable ("too-soon")
+```
+
+This replaces the original, day-granular `minimumLeadDays` (Settings
+Sheet) check that used to gate new bookings — that setting is no longer
+consulted anywhere in the booking or rescheduling path.
+
+Note the two rules resolve the exact 24-hour boundary in opposite
+directions, per their respective specs: cancellation/reschedule
+eligibility treats an appointment *exactly* 24 hours out as still late
+(strictly more than 24h is required to be free), while booking minimum
+lead time treats a candidate *exactly* 24 hours out as already eligible
+(24 hours or more qualifies).
 
 ## 5. Cancellation flow
 
@@ -105,24 +128,26 @@ a row `Cancelled` *is* the capacity release.
 ## 6. Rescheduling flow
 
 [`reschedulingService.ts`](../lib/booking/server/reschedulingService.ts),
-entry point `rescheduleBookingByToken()`. Only eligible when >24h out and
-still pre-charge (Payment Status `Scheduled`). Validates the new date the
-same way a new booking is validated — `isValidDateKey`/
-`isPastOrWithinLeadWindow` (`dateUtils.ts`) for lead time, then
-`checkDateAvailability()` (`availability.ts`), the exact same function
-`/api/booking` uses — **no second availability implementation**. Rechecks
-availability immediately before writing (mirroring
-`bookingService.ts`'s own "recheck right before append" pattern), so an
-unavailable new slot always leaves the existing booking completely
-untouched; the old slot is never released before the new one is confirmed
-available. On success: overwrites Service Date/Arrival Window (which is
-also the old-slot-release/new-slot-reservation operation, per the capacity
-model above), recalculates Scheduled Charge At, and records **Original
-Service Date**/**Original Arrival Window** — but only on the *first*
-reschedule ever (a blank `originalServiceDate` is the signal); a second or
-later reschedule leaves those two columns untouched, so they always
-reflect the true original appointment regardless of how many times it's
-since moved.
+entry point `rescheduleBookingByToken()`. Only eligible when the
+*current* appointment is >24h out and still pre-charge (Payment Status
+`Scheduled`). Validates the new date/time the same way a new booking is
+validated — `isValidDateKey` for format, then `checkExactTimeAvailability()`
+(`availability.ts`), the exact same overlap/capacity- and (per §4)
+minimum-lead-time-aware function `/api/booking` uses — **no second
+availability implementation**. Rechecks availability immediately before
+writing (mirroring `bookingService.ts`'s own "recheck right before
+append" pattern), so an unavailable new slot always leaves the existing
+booking completely untouched; the old slot is never released before the
+new one is confirmed available. On success: overwrites Service
+Date/Service Start Time (always clearing legacy Arrival Window on any
+reschedule, regardless of which kind of booking it started as — this is
+also the old-slot-release/new-slot-reservation operation, per the
+capacity model above), recalculates Scheduled Charge At, and records
+**Original Service Date**/**Original Arrival Window**/**Original Service
+Start Time** — but only on the *first* reschedule ever (a blank
+`originalServiceDate` is the signal); a second or later reschedule leaves
+those columns untouched, so they always reflect the true original
+appointment regardless of how many times it's since moved.
 
 ## 7. Crash-recoverable late-cancellation fee
 
@@ -187,11 +212,14 @@ The webhook (`paymentWebhookService.ts`) branches on
 fee handlers instead of the normal-charge ones; both are single-shot and
 idempotent (only act while still `Cancellation Fee Processing`).
 
-## 9. Sheet columns (5 new)
+## 9. Sheet columns (11 new)
 
 Appended to the end of `BOOKINGS_COLUMNS` — no existing column reordered,
-matching every prior milestone's precedent. The sheet contract is now 61
-columns total (41 M3 + 3 M4 + 12 M5 + 5 here).
+matching every prior milestone's precedent. The sheet contract is now 67
+columns total (A–BO: 41 M3 + 3 M4 + 12 M5 + 11 here), reflecting both the
+original Milestone 6 spec (first 5 below) and the amendment that added
+exact appointment start times, reminders, and the second reminder-email
+token (remaining 6).
 
 | Column | Set by | Notes |
 |---|---|---|
@@ -200,6 +228,25 @@ columns total (41 M3 + 3 M4 + 12 M5 + 5 here).
 | Rescheduled At | reschedule | Timestamp of the most recent reschedule |
 | Original Service Date | first reschedule only | Populated once, never overwritten by later reschedules |
 | Original Arrival Window | first reschedule only | Populated once, never overwritten by later reschedules |
+| Appointment Reminder Status | reminder scheduler | Blank / `Retry Scheduled` / `Sent` / `Failed` — `Sent`/`Failed` are terminal |
+| Appointment Reminder Sent At | reminder scheduler | Timestamp of the successful send |
+| Service Start Time | booking submission or reschedule | Canonical "HH:00"; blank means a legacy row resolved via Arrival Window — see §1 amendment note below |
+| Original Service Start Time | first reschedule only | Exact-time counterpart to Original Arrival Window; populated once, whichever field was actually set at the time |
+| Appointment Reminder Attempts | reminder scheduler | Bounded retry counter, max 3 customer-send attempts |
+| Manage Booking Reminder Token Hash | reminder scheduler (every attempt) | A second, independent token minted per reminder attempt — never a rotation of the original; both hashes remain valid indefinitely for the same booking |
+
+**Exact start times are the Production end state.** `StartTimeStep.tsx`
+(hourly, 8:00 AM–4:00 PM, must finish by 8:00 PM) fully replaces Arrival
+Window selection for every new booking going forward — Arrival Window is
+written only by rows that predate this amendment. Both are read through
+one chokepoint, [`serviceTime.ts`](../lib/booking/server/serviceTime.ts)'s
+`resolveRecordStartSpec()` (prefers Service Start Time when populated,
+falls back to the legacy Arrival Window label otherwise), so every
+timing-sensitive consumer — cancellation, rescheduling, the automatic
+charge, reminders — works identically for both kinds of row without its
+own branching. A reschedule always writes Service Start Time and clears
+Arrival Window, regardless of which kind of booking it started as, so a
+booking that has ever been rescheduled is exact-time going forward.
 
 ## 10. Notifications
 

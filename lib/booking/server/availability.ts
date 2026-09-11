@@ -16,7 +16,8 @@ import "server-only";
 import { batchGetRanges, getRange } from "./sheetsClient";
 import { getBookingSettings, type BookingSettings } from "./settings";
 import { BOOKING_STATUS, BOOKINGS_SHEET_NAME, columnLetter } from "./bookingsSheetSchema";
-import { resolveRecordStartSpec, ServiceTimeError } from "./serviceTime";
+import { calculateServiceStart, resolveRecordStartSpec, ServiceTimeError } from "./serviceTime";
+import { isLessThanMinimumLeadTime } from "./dateUtils";
 import { filterStartTimesByDuration, getAllExactStartTimeCandidates, isPlausibleExactTimeFormat } from "@/lib/booking/schedule";
 
 export class AvailabilityError extends Error {
@@ -226,7 +227,7 @@ function peakConcurrentCount(existing: BookingInterval[], candidateStart: number
 
 export type ExactTimeAvailabilityResult = {
   available: boolean;
-  reason: "blackout" | "outside-operating-hours" | "at-capacity" | null;
+  reason: "blackout" | "outside-operating-hours" | "too-soon" | "at-capacity" | null;
   maxCapacity: number;
   peakConcurrentCount: number;
 };
@@ -242,11 +243,20 @@ export type ExactTimeAvailabilityResult = {
  * the books) against that same single capacity number, instead of a
  * simple whole-day count. Never trusts a client-supplied "available"
  * claim — always re-reads current Sheets state.
+ *
+ * Also enforces the standing minimum-lead-time rule (the candidate start
+ * must be >= MINIMUM_LEAD_TIME_HOURS from `now`): checked first, cheaply,
+ * before any Sheets read, using the exact same DST-safe start-time
+ * resolution (serviceTime.ts) every other timing-sensitive consumer
+ * shares — never a second, duplicated conversion. This replaces the old
+ * day-granular minimumLeadDays check for both new bookings and
+ * rescheduling; that setting is no longer consulted for eligibility.
  */
 export async function checkExactTimeAvailability(
   dateKey: string,
   startTime: string,
   estimatedDurationMinutes: number,
+  now: Date = new Date(),
 ): Promise<ExactTimeAvailabilityResult> {
   const settings = await getBookingSettings();
 
@@ -256,6 +266,11 @@ export async function checkExactTimeAvailability(
     filterStartTimesByDuration([startTime], estimatedDurationMinutes).length === 0
   ) {
     return { available: false, reason: "outside-operating-hours", maxCapacity: settings.defaultDailyCapacity, peakConcurrentCount: 0 };
+  }
+
+  const candidateStart = calculateServiceStart(dateKey, resolveRecordStartSpec({ serviceStartTime: startTime, arrivalWindow: "" }), settings.timezone);
+  if (isLessThanMinimumLeadTime(candidateStart, now)) {
+    return { available: false, reason: "too-soon", maxCapacity: settings.defaultDailyCapacity, peakConcurrentCount: 0 };
   }
 
   const [blackoutDates, overrides, intervalsByDate] = await Promise.all([
@@ -286,10 +301,18 @@ export async function checkExactTimeAvailability(
  * lib/booking/schedule.ts, narrowed further by the same overlap/capacity
  * rule checkExactTimeAvailability applies, computed from one shared data
  * fetch rather than one Sheets round trip per candidate hour.
+ *
+ * Also excludes any candidate less than MINIMUM_LEAD_TIME_HOURS from
+ * `now` (see checkExactTimeAvailability's docstring) — this is what keeps
+ * StartTimeStep.tsx from ever offering a time the server would reject on
+ * submission; the server never trusts this list back regardless.
  */
-export async function getAvailableStartTimes(dateKey: string, estimatedDurationMinutes: number): Promise<string[]> {
+export async function getAvailableStartTimes(dateKey: string, estimatedDurationMinutes: number, now: Date = new Date()): Promise<string[]> {
   const settings = await getBookingSettings();
-  const candidates = filterStartTimesByDuration(getAllExactStartTimeCandidates(), estimatedDurationMinutes);
+  const candidates = filterStartTimesByDuration(getAllExactStartTimeCandidates(), estimatedDurationMinutes).filter((time) => {
+    const candidateStart = calculateServiceStart(dateKey, resolveRecordStartSpec({ serviceStartTime: time, arrivalWindow: "" }), settings.timezone);
+    return !isLessThanMinimumLeadTime(candidateStart, now);
+  });
   if (candidates.length === 0) return [];
 
   const [blackoutDates, overrides, intervalsByDate] = await Promise.all([

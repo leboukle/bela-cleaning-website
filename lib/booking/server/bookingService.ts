@@ -245,7 +245,7 @@ export async function submitBooking(
     return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
   }
 
-  const validation = validateSubmission(input, { settings });
+  const validation = validateSubmission(input);
   if (!validation.ok) {
     return { ok: false, code: "validation", issues: validation.issues };
   }

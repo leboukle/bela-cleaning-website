@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isValidDateKey, isPastOrWithinLeadWindow, getTodayDateKeyInTimezone } from "./dateUtils";
+import { isValidDateKey, isPastOrWithinLeadWindow, getTodayDateKeyInTimezone, isLessThanMinimumLeadTime } from "./dateUtils";
 
 describe("isValidDateKey", () => {
   it("accepts a well-formed real calendar date", () => {
@@ -35,5 +35,31 @@ describe("isPastOrWithinLeadWindow", () => {
     future.setUTCDate(future.getUTCDate() + 30);
     const futureKey = `${future.getUTCFullYear()}-${String(future.getUTCMonth() + 1).padStart(2, "0")}-${String(future.getUTCDate()).padStart(2, "0")}`;
     expect(isPastOrWithinLeadWindow(futureKey, "America/New_York", 7)).toBe(false);
+  });
+});
+
+describe("isLessThanMinimumLeadTime", () => {
+  it("is true for a service start under 24 hours from now", () => {
+    const now = new Date("2026-06-14T12:00:00Z");
+    const serviceStart = new Date(now.getTime() + 23 * 60 * 60 * 1000);
+    expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(true);
+  });
+
+  it("is false at exactly the 24-hour boundary (inclusive-eligible)", () => {
+    const now = new Date("2026-06-14T12:00:00Z");
+    const serviceStart = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(false);
+  });
+
+  it("is true one minute short of the 24-hour boundary", () => {
+    const now = new Date("2026-06-14T12:00:00Z");
+    const serviceStart = new Date(now.getTime() + 24 * 60 * 60 * 1000 - 60 * 1000);
+    expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(true);
+  });
+
+  it("is false for a service start safely beyond 24 hours", () => {
+    const now = new Date("2026-06-14T12:00:00Z");
+    const serviceStart = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(false);
   });
 });

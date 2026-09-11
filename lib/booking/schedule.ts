@@ -4,7 +4,14 @@
 // availability rules, not cost rules.
 import type { ArrivalWindowId } from "./types";
 
-export const MIN_LEAD_DAYS = 7;
+// Standing minimum-lead-time rule: an appointment must start at least
+// this many hours from the moment of booking (exactly 24h is eligible).
+// This mirrors the authoritative server-side rule in
+// lib/booking/server/dateUtils.ts (MINIMUM_LEAD_TIME_HOURS) — kept as a
+// separate constant here since this file is client-facing UX only and the
+// server never trusts anything computed in this module. Replaces the old
+// day-granular MIN_LEAD_DAYS constant.
+export const MINIMUM_LEAD_HOURS = 24;
 export const MAX_MONTHS_AHEAD = 6;
 
 export type ArrivalWindowOption = {
@@ -131,10 +138,29 @@ export function fromDateKey(key: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function isAtLeastLeadHoursAway(day: Date, startHour: number, now: Date): boolean {
+  const windowStart = new Date(day);
+  windowStart.setHours(startHour, 0, 0, 0);
+  return windowStart.getTime() - now.getTime() >= MINIMUM_LEAD_HOURS * 60 * 60 * 1000;
+}
+
+/**
+ * Earliest calendar date on which at least one exact start time could
+ * still satisfy the 24-hour minimum lead time, using the latest possible
+ * offered start (OPERATING_LATEST_START_HOUR, 4:00 PM) as the permissive
+ * per-date gate — the customer picks the specific exact time in the next
+ * step (StartTimeStep.tsx), which fetches the real, authoritative,
+ * already-24h-filtered list from /api/booking/available-times
+ * (availability.ts's getAvailableStartTimes); this is only a calendar-
+ * level hint so the customer isn't invited to pick a date that would show
+ * zero available times.
+ */
 export function getMinSelectableDate(today: Date = new Date()): Date {
-  const min = startOfDay(today);
-  min.setDate(min.getDate() + MIN_LEAD_DAYS);
-  return min;
+  const candidate = startOfDay(today);
+  while (!isAtLeastLeadHoursAway(candidate, OPERATING_LATEST_START_HOUR, today)) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
 }
 
 export function getMaxSelectableDate(today: Date = new Date()): Date {

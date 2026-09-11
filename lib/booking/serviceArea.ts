@@ -50,6 +50,18 @@ export const SUPPORTED_ZIP_CODES: ServiceAreaZip[] = [
   { zip: "07107", city: "Newark" },
   { zip: "07108", city: "Newark" },
   { zip: "07112", city: "Newark" },
+  // Hudson-Bergen Light Rail corridor expansion — added after a real
+  // prospective Weehawken customer was rejected by this check. Weehawken,
+  // Union City, and West New York are each small, single-ZIP townships
+  // sitting directly along the HBLR line (the same rationale that already
+  // covers Bayonne/Jersey City/Hoboken above). North Bergen also hosts an
+  // HBLR terminus (Tonnelle Avenue), but is a much larger township whose
+  // single ZIP extends well past the immediate rail corridor — flagged
+  // for the business to confirm rather than assumed safe by default.
+  { zip: "07086", city: "Weehawken" },
+  { zip: "07087", city: "Union City" },
+  { zip: "07093", city: "West New York" },
+  { zip: "07047", city: "North Bergen" },
 ];
 
 const SUPPORTED_ZIP_SET = new Set(SUPPORTED_ZIP_CODES.map((entry) => entry.zip));

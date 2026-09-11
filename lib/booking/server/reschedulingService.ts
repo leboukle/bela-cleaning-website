@@ -21,7 +21,7 @@ import { getBookingTimingStatus } from "./cancellationPolicy";
 import { checkExactTimeAvailability } from "./availability";
 import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { getBookingSettings } from "./settings";
-import { isValidDateKey, isPastOrWithinLeadWindow } from "./dateUtils";
+import { isValidDateKey } from "./dateUtils";
 import { getAllExactStartTimeCandidates, isPlausibleExactTimeFormat } from "@/lib/booking/schedule";
 import type { NotificationService } from "./notificationService";
 import type { BookingRepository } from "./repository";
@@ -66,12 +66,14 @@ export async function rescheduleBookingByToken(
   const currentTiming = getBookingTimingStatus(record.serviceDate, record.serviceStartTime, record.arrivalWindow, settings.timezone, now);
   if (!currentTiming.isMoreThan24HoursOut) return { outcome: "not-eligible", bookingId };
 
-  // Never trusts the new date/time from the client beyond format/range —
-  // the same rules new bookings are held to. The "finishes by 8pm" /
-  // operating-hours filter and the real overlap/capacity decision both
-  // happen in checkExactTimeAvailability below, using this booking's own
-  // (unchanged by rescheduling) estimated duration.
-  if (!isValidDateKey(newServiceDate) || isPastOrWithinLeadWindow(newServiceDate, settings.timezone, settings.minimumLeadDays)) {
+  // Never trusts the new date/time from the client beyond format — the
+  // same rules new bookings are held to. The standing 24-hour minimum-
+  // lead-time rule (replacing the old day-granular minimumLeadDays
+  // check — no longer consulted here), the "finishes by 8pm"/operating-
+  // hours filter, and the real overlap/capacity decision all happen in
+  // checkExactTimeAvailability below, using this booking's own (unchanged
+  // by rescheduling) estimated duration.
+  if (!isValidDateKey(newServiceDate)) {
     return { outcome: "invalid-input", bookingId };
   }
   if (!isPlausibleExactTimeFormat(newServiceStartTime) || !getAllExactStartTimeCandidates().includes(newServiceStartTime)) {
@@ -80,7 +82,7 @@ export async function rescheduleBookingByToken(
 
   let availability;
   try {
-    availability = await checkExactTimeAvailability(newServiceDate, newServiceStartTime, record.estimatedDurationMinutes);
+    availability = await checkExactTimeAvailability(newServiceDate, newServiceStartTime, record.estimatedDurationMinutes, now);
   } catch (error) {
     logError("checkExactTimeAvailability", bookingId, error);
     throw error;
@@ -94,7 +96,7 @@ export async function rescheduleBookingByToken(
   // existing booking completely untouched.
   let recheck;
   try {
-    recheck = await checkExactTimeAvailability(newServiceDate, newServiceStartTime, record.estimatedDurationMinutes);
+    recheck = await checkExactTimeAvailability(newServiceDate, newServiceStartTime, record.estimatedDurationMinutes, now);
   } catch (error) {
     logError("checkExactTimeAvailability (recheck)", bookingId, error);
     throw error;

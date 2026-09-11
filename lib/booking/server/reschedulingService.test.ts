@@ -92,12 +92,13 @@ function fakeNotifications(): RescheduleNotificationSender & { calls: Record<str
 }
 
 // Dates are computed relative to the real system clock rather than
-// hardcoded — isPastOrWithinLeadWindow() (reused, unmodified, from
-// dateUtils.ts) always checks against real wall-clock time regardless of
-// any injected `now`, so a hardcoded date eventually goes stale as real
-// time passes. The 24-hour boundary itself is still fully controlled via
-// the injected `now` below, derived from the real computed scheduled
-// start rather than a second hardcoded instant.
+// hardcoded so these fixtures never go stale as real time passes.
+// checkExactTimeAvailability is mocked in this file (both the current
+// booking's >24h reschedule-eligibility check and the new target slot's
+// own 24-hour minimum-lead-time check are fully controlled via the
+// injected `now` below), so nothing here actually depends on real
+// wall-clock time at assertion time — this is just future-dating the
+// fixtures defensively.
 function futureDateKey(daysFromNow: number): string {
   const d = new Date();
   d.setDate(d.getDate() + daysFromNow);
@@ -162,7 +163,7 @@ describe("rescheduleBookingByToken — availability", () => {
     repo.records.set("BELA-1", activeBooking());
 
     await rescheduleBookingByToken(RAW_TOKEN, NEW_DATE, NEW_TIME, repo, fakeNotifications(), MORE_THAN_24H_BEFORE);
-    expect(mockedCheckExactTimeAvailability).toHaveBeenCalledWith(NEW_DATE, NEW_TIME, 210);
+    expect(mockedCheckExactTimeAvailability).toHaveBeenCalledWith(NEW_DATE, NEW_TIME, 210, MORE_THAN_24H_BEFORE);
   });
 
   it("an unavailable new slot leaves the existing booking completely untouched", async () => {

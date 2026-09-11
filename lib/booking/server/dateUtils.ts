@@ -45,3 +45,19 @@ export function isPastOrWithinLeadWindow(dateKey: string, timezone: string, mini
   const earliestSelectableKey = addDaysToDateKey(todayKey, minimumLeadDays);
   return dateKey < earliestSelectableKey;
 }
+
+// Standing minimum-lead-time rule (replaces the day-granular check above
+// for booking/rescheduling eligibility — see availability.ts's
+// checkExactTimeAvailability/getAvailableStartTimes, the sole consumers):
+// a candidate appointment must start at least this many hours from the
+// moment of booking. Instant-based, not day-granular, so it correctly
+// accounts for the exact selected start time rather than just the
+// calendar date. `serviceStart` must already be the real, DST-safe UTC
+// instant — see serviceTime.ts's calculateServiceStart — never
+// recomputed here.
+export const MINIMUM_LEAD_TIME_HOURS = 24;
+
+/** True when `serviceStart` is less than MINIMUM_LEAD_TIME_HOURS from `now`. */
+export function isLessThanMinimumLeadTime(serviceStart: Date, now: Date = new Date()): boolean {
+  return serviceStart.getTime() - now.getTime() < MINIMUM_LEAD_TIME_HOURS * 60 * 60 * 1000;
+}

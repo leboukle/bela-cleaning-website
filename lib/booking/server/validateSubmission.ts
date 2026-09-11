@@ -18,8 +18,7 @@ import { EXTRAS_QUANTITY_MAX, SPECIAL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/book
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
 import type { AccessId, ExtrasState } from "@/lib/booking/types";
-import { isValidDateKey, isPastOrWithinLeadWindow } from "./dateUtils";
-import type { BookingSettings } from "./settings";
+import { isValidDateKey } from "./dateUtils";
 import type { BookingSubmissionInput, ValidatedBooking, ValidationIssue, ValidationResult } from "./types";
 
 function asString(value: unknown): string {
@@ -32,11 +31,7 @@ function asTrimmedString(value: unknown): string {
 
 const MAX_TEXT_FIELD_LENGTH = 200; // sanity bound for name/address/email/etc.
 
-export type ValidateSubmissionOptions = {
-  settings: BookingSettings;
-};
-
-export function validateSubmission(input: BookingSubmissionInput, options: ValidateSubmissionOptions): ValidationResult {
+export function validateSubmission(input: BookingSubmissionInput): ValidationResult {
   const issues: ValidationIssue[] = [];
   const addIssue = (field: string, message: string) => issues.push({ field, message });
 
@@ -185,11 +180,17 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
   }
 
   // --- Scheduling ---
+  // Format check only — the authoritative "is this specific date+time+
+  // duration actually available right now" decision (blackout, capacity,
+  // and the standing 24-hour minimum-lead-time rule alike) happens later
+  // in bookingService.ts, once duration is known and a Sheets read is
+  // affordable — see availability.ts's checkExactTimeAvailability. The
+  // Settings-Sheet-driven minimumLeadDays value is intentionally no
+  // longer consulted here or anywhere in the submission path — the true,
+  // instant-based 24-hour rule in checkExactTimeAvailability replaces it.
   const serviceDate = asTrimmedString(input.serviceDate);
   if (!isValidDateKey(serviceDate)) {
     addIssue("serviceDate", "Please choose a valid appointment date.");
-  } else if (isPastOrWithinLeadWindow(serviceDate, options.settings.timezone, options.settings.minimumLeadDays)) {
-    addIssue("serviceDate", "That date is too soon. Please choose a date further out.");
   }
 
   // Milestone 6 amendment: format/catalog check only — this is cheap and

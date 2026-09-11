@@ -42,7 +42,7 @@ export default function ScheduleDateStep({ appointmentDate, onSelect, onBack }: 
   return (
     <StepShell
       question="When would you like us to visit?"
-      note="We're here seven days a week. Appointments open up starting one week out, and you can browse as far as six months ahead."
+      note="We're here seven days a week. Appointments must be booked at least 24 hours in advance, and you can browse as far as six months ahead."
       onBack={onBack}
     >
       <Calendar selectedDateKey={appointmentDate} onSelect={onSelect} unavailableDateKeys={unavailableDateKeys} />

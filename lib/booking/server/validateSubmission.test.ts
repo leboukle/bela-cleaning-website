@@ -1,14 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateSubmission } from "./validateSubmission";
 import type { BookingSubmissionInput } from "./types";
-import type { BookingSettings } from "./settings";
-
-const SETTINGS: BookingSettings = {
-  minimumLeadDays: 7,
-  defaultDailyCapacity: 2,
-  timezone: "America/New_York",
-  schemaVersion: 1,
-};
 
 function futureDateKey(daysFromNow: number): string {
   const d = new Date();
@@ -57,42 +49,42 @@ function validInput(overrides: Partial<BookingSubmissionInput> = {}): BookingSub
 
 describe("validateSubmission", () => {
   it("accepts a fully valid submission", () => {
-    const result = validateSubmission(validInput(), { settings: SETTINGS });
+    const result = validateSubmission(validInput());
     expect(result.ok).toBe(true);
   });
 
   it("rejects a filled honeypot", () => {
-    const result = validateSubmission(validInput({ honeypot: "http://spam.example" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ honeypot: "http://spam.example" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects a missing idempotency token", () => {
-    const result = validateSubmission(validInput({ idempotencyToken: "" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ idempotencyToken: "" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects an invalid email", () => {
-    const result = validateSubmission(validInput({ email: "not-an-email" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ email: "not-an-email" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects an invalid phone number", () => {
-    const result = validateSubmission(validInput({ phone: "123" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ phone: "123" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects a malformed ZIP code", () => {
-    const result = validateSubmission(validInput({ addressZip: "ABCDE" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ addressZip: "ABCDE" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects a ZIP code outside the service area", () => {
-    const result = validateSubmission(validInput({ addressZip: "99999" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ addressZip: "99999" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects a bedroom option that requires a custom estimate", () => {
-    const result = validateSubmission(validInput({ bedrooms: "more-than-5" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ bedrooms: "more-than-5" }));
     expect(result.ok).toBe(false);
   });
 
@@ -108,7 +100,6 @@ describe("validateSubmission", () => {
           noExtras: true,
         },
       }),
-      { settings: SETTINGS },
     );
     expect(result.ok).toBe(false);
   });
@@ -125,55 +116,60 @@ describe("validateSubmission", () => {
           noExtras: false,
         },
       }),
-      { settings: SETTINGS },
     );
     expect(result.ok).toBe(false);
   });
 
-  it("rejects a service date inside the minimum lead window", () => {
-    const result = validateSubmission(validInput({ serviceDate: futureDateKey(1) }), { settings: SETTINGS });
+  it("rejects a malformed service date", () => {
+    const result = validateSubmission(validInput({ serviceDate: "not-a-date" }));
     expect(result.ok).toBe(false);
   });
 
+  // The standing 24-hour minimum-lead-time rule is no longer enforced
+  // here — validateSubmission.ts only checks date/time format now. It is
+  // enforced authoritatively in availability.ts's checkExactTimeAvailability/
+  // getAvailableStartTimes (see availability.test.ts), which is what
+  // bookingService.ts actually calls before ever appending a booking.
+  // A date close to "now" (e.g. futureDateKey(1)) is therefore no longer
+  // rejected by this function by itself.
+
   it("rejects an out-of-catalog appointment start time", () => {
-    const result = validateSubmission(validInput({ serviceStartTime: "midnight" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ serviceStartTime: "midnight" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects a half-hour start time not on the approved hourly catalog", () => {
-    const result = validateSubmission(validInput({ serviceStartTime: "09:30" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ serviceStartTime: "09:30" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects a start time before operating hours", () => {
-    const result = validateSubmission(validInput({ serviceStartTime: "07:00" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ serviceStartTime: "07:00" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects an invalid someoneHome value", () => {
-    const result = validateSubmission(validInput({ someoneHome: "maybe" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ someoneHome: "maybe" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects when the policy is not accepted", () => {
-    const result = validateSubmission(validInput({ agreedToPolicy: false }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ agreedToPolicy: false }));
     expect(result.ok).toBe(false);
   });
 
   it('rejects propertyType "other" without a description', () => {
-    const result = validateSubmission(validInput({ propertyType: "other", propertyTypeOther: "" }), {
-      settings: SETTINGS,
-    });
+    const result = validateSubmission(validInput({ propertyType: "other", propertyTypeOther: "" }));
     expect(result.ok).toBe(false);
   });
 
   it("rejects an unrecognized propertyType", () => {
-    const result = validateSubmission(validInput({ propertyType: "castle" }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ propertyType: "castle" }));
     expect(result.ok).toBe(false);
   });
 
   it("truncates special instructions to the max length rather than rejecting", () => {
-    const result = validateSubmission(validInput({ specialInstructions: "x".repeat(600) }), { settings: SETTINGS });
+    const result = validateSubmission(validInput({ specialInstructions: "x".repeat(600) }));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.booking.specialInstructions.length).toBe(500);
