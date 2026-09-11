@@ -45,3 +45,14 @@ export function isPastOrWithinLeadWindow(dateKey: string, timezone: string, mini
   const earliestSelectableKey = addDaysToDateKey(todayKey, minimumLeadDays);
   return dateKey < earliestSelectableKey;
 }
+
+// Standing minimum-lead-time rule: an appointment must start at least this
+// many hours from the moment of booking. Instant-based (not day-granular),
+// so it correctly accounts for the arrival window's actual time of day
+// rather than just the calendar date.
+export const MINIMUM_LEAD_TIME_HOURS = 24;
+
+/** True when `serviceStart` is less than MINIMUM_LEAD_TIME_HOURS from `now`. */
+export function isLessThanMinimumLeadTime(serviceStart: Date, now: Date = new Date()): boolean {
+  return serviceStart.getTime() - now.getTime() < MINIMUM_LEAD_TIME_HOURS * 60 * 60 * 1000;
+}
