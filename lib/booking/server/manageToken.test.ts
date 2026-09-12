@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { generateManageToken, hashManageToken, manageTokenHashesMatch, isPlausibleManageToken, buildManageBookingUrl } from "./manageToken";
 
 describe("generateManageToken", () => {
@@ -64,9 +64,36 @@ describe("isPlausibleManageToken", () => {
 });
 
 describe("buildManageBookingUrl", () => {
+  const ORIGINAL_ENV = process.env.MANAGE_BOOKING_BASE_URL;
+
+  afterEach(() => {
+    if (ORIGINAL_ENV === undefined) delete process.env.MANAGE_BOOKING_BASE_URL;
+    else process.env.MANAGE_BOOKING_BASE_URL = ORIGINAL_ENV;
+  });
+
   it("builds an absolute URL containing the raw token", () => {
     const url = buildManageBookingUrl("abc123");
     expect(url).toMatch(/^https:\/\//);
     expect(url).toContain("/manage-booking/abc123");
+  });
+
+  it("falls back to the Production URL when MANAGE_BOOKING_BASE_URL is unset", () => {
+    delete process.env.MANAGE_BOOKING_BASE_URL;
+    expect(buildManageBookingUrl("abc123")).toBe("https://www.belacleaning.com/manage-booking/abc123");
+  });
+
+  it("falls back to the Production URL when MANAGE_BOOKING_BASE_URL is blank", () => {
+    process.env.MANAGE_BOOKING_BASE_URL = "   ";
+    expect(buildManageBookingUrl("abc123")).toBe("https://www.belacleaning.com/manage-booking/abc123");
+  });
+
+  it("uses MANAGE_BOOKING_BASE_URL when set (Preview)", () => {
+    process.env.MANAGE_BOOKING_BASE_URL = "https://bela-payments-preview.vercel.app";
+    expect(buildManageBookingUrl("abc123")).toBe("https://bela-payments-preview.vercel.app/manage-booking/abc123");
+  });
+
+  it("strips a trailing slash from MANAGE_BOOKING_BASE_URL", () => {
+    process.env.MANAGE_BOOKING_BASE_URL = "https://bela-payments-preview.vercel.app/";
+    expect(buildManageBookingUrl("abc123")).toBe("https://bela-payments-preview.vercel.app/manage-booking/abc123");
   });
 });

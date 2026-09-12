@@ -44,7 +44,22 @@ export function isPlausibleManageToken(token: string): boolean {
   return TOKEN_SHAPE_REGEX.test(token);
 }
 
+// Preview deployments need their Manage Booking links to point back at
+// the stable Preview alias rather than Production — otherwise every email
+// sent while testing on Preview links to a domain with none of this
+// milestone's routes. Set explicitly per Vercel environment
+// (MANAGE_BOOKING_BASE_URL, Preview only) rather than hardcoded here;
+// Production never needs to set it — falling back to
+// businessConfig.websiteUrl (the one true Production URL, also what
+// canonical/OG tags resolve against via app/layout.tsx's metadataBase,
+// deliberately untouched by this) keeps Production's behavior
+// byte-for-byte unchanged even if this var is ever unset there.
+function getManageBookingBaseUrl(): string {
+  const override = process.env.MANAGE_BOOKING_BASE_URL?.trim().replace(/\/+$/, "");
+  return override && override.length > 0 ? override : businessConfig.websiteUrl;
+}
+
 /** The full, absolute Manage Booking URL for a raw token — used in every email/UI surface. */
 export function buildManageBookingUrl(token: string): string {
-  return `${businessConfig.websiteUrl}/manage-booking/${token}`;
+  return `${getManageBookingBaseUrl()}/manage-booking/${token}`;
 }
