@@ -141,15 +141,26 @@ export default function TermsPage() {
 
       <LegalSection id="cancellations" number={7} title="Cancellations and Rescheduling">
         <p>
-          Appointments may be rescheduled or cancelled free of charge up to 24 hours
-          before the scheduled appointment. To reschedule or cancel, contact BeLa
-          Cleaning at{" "}
+          Cancel more than 24 hours before your scheduled cleaning at no charge.
+          Cancellations made within 24 hours of the scheduled start time are subject to
+          a late-cancellation fee equal to 50% of the booking total.
+        </p>
+        <p>
+          Appointments may also be rescheduled at no charge more than 24 hours before
+          the scheduled start time, subject to availability. Self-service rescheduling
+          is not available within 24 hours of the scheduled start time; contact BeLa
+          Cleaning directly to request a change.
+        </p>
+        <p>
+          The booking confirmation email includes a secure link to manage your booking
+          online, where you can view, cancel, or reschedule your appointment subject to
+          the timing rules above. You may also contact BeLa Cleaning at{" "}
           <a href={`mailto:${businessConfig.email}`}>{businessConfig.email}</a> or{" "}
           <a href={businessConfig.phoneHref}>{businessConfig.phoneDisplay}</a>.
         </p>
         <p>
-          Cancellations made less than 24 hours before the scheduled appointment may be
-          subject to a fee at BeLa Cleaning&rsquo;s discretion.
+          BeLa Cleaning may waive or reduce a late-cancellation fee at its discretion in
+          exceptional circumstances.
         </p>
       </LegalSection>
 
@@ -170,6 +181,11 @@ export default function TermsPage() {
           By confirming a booking, you authorize this future charge in the amount
           displayed, subject to any adjustment BeLa Cleaning communicates to you before
           the charge occurs.
+        </p>
+        <p>
+          Your saved payment method may also be charged a late-cancellation fee, as
+          described in Section 7 (Cancellations and Rescheduling), if you cancel within
+          24 hours of your scheduled start time.
         </p>
       </LegalSection>
 

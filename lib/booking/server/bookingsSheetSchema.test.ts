@@ -8,9 +8,9 @@ import {
 } from "./bookingsSheetSchema";
 
 describe("bookingsSheetSchema", () => {
-  it("has exactly 56 columns with no duplicates (41 Milestone 3 + 3 Milestone 4 + 12 Milestone 5 columns)", () => {
-    expect(BOOKINGS_COLUMNS.length).toBe(56);
-    expect(new Set(BOOKINGS_COLUMNS).size).toBe(56);
+  it("has exactly 67 columns with no duplicates (41 M3 + 3 M4 + 12 M5 + 5 M6 + 5 M6-amendment + 1 post-verification-fix column)", () => {
+    expect(BOOKINGS_COLUMNS.length).toBe(67);
+    expect(new Set(BOOKINGS_COLUMNS).size).toBe(67);
   });
 
   it("places the 3 notification-status columns right after Schema Version", () => {
@@ -28,8 +28,8 @@ describe("bookingsSheetSchema", () => {
     expect(columnLetter("Notification Attempt At")).toBe("AR");
   });
 
-  it("places the 12 Milestone 5 payment columns at the end, after Notification Attempt At", () => {
-    expect(BOOKINGS_COLUMNS.slice(-12)).toEqual([
+  it("places the 12 Milestone 5 payment columns right after Notification Attempt At", () => {
+    expect(BOOKINGS_COLUMNS.slice(44, 56)).toEqual([
       "Stripe Customer ID",
       "Stripe PaymentMethod ID",
       "Stripe SetupIntent ID",
@@ -43,6 +43,47 @@ describe("bookingsSheetSchema", () => {
       "Manual Amount Override",
       "Manual Amount Override At",
     ]);
+  });
+
+  it("places the 5 Milestone 6 manage-booking columns right after Manual Amount Override At", () => {
+    expect(BOOKINGS_COLUMNS.slice(56, 61)).toEqual([
+      "Manage Booking Token Hash",
+      "Cancellation Fee Amount",
+      "Rescheduled At",
+      "Original Service Date",
+      "Original Arrival Window",
+    ]);
+  });
+
+  it("maps the Milestone 6 columns to BE through BI", () => {
+    expect(columnLetter("Manage Booking Token Hash")).toBe("BE");
+    expect(columnLetter("Cancellation Fee Amount")).toBe("BF");
+    expect(columnLetter("Rescheduled At")).toBe("BG");
+    expect(columnLetter("Original Service Date")).toBe("BH");
+    expect(columnLetter("Original Arrival Window")).toBe("BI");
+  });
+
+  it("places the 5 Milestone 6 amendment columns (reminders + exact time) right after Original Arrival Window", () => {
+    expect(BOOKINGS_COLUMNS.slice(61, 66)).toEqual([
+      "Appointment Reminder Status",
+      "Appointment Reminder Sent At",
+      "Service Start Time",
+      "Original Service Start Time",
+      "Appointment Reminder Attempts",
+    ]);
+  });
+
+  it("maps the Milestone 6 amendment columns to BJ through BN", () => {
+    expect(columnLetter("Appointment Reminder Status")).toBe("BJ");
+    expect(columnLetter("Appointment Reminder Sent At")).toBe("BK");
+    expect(columnLetter("Service Start Time")).toBe("BL");
+    expect(columnLetter("Original Service Start Time")).toBe("BM");
+    expect(columnLetter("Appointment Reminder Attempts")).toBe("BN");
+  });
+
+  it("places the post-verification-fix reminder-token-hash column at the very end, after Appointment Reminder Attempts", () => {
+    expect(BOOKINGS_COLUMNS.slice(-1)).toEqual(["Manage Booking Reminder Token Hash"]);
+    expect(columnLetter("Manage Booking Reminder Token Hash")).toBe("BO");
   });
 
   it("maps the first column to A", () => {

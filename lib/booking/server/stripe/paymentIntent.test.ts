@@ -85,6 +85,18 @@ describe("createOffSessionPaymentIntent", () => {
     });
   });
 
+  it("tags a cancellation-fee charge with metadata.type so the webhook can route it, and omits it for the normal charge", async () => {
+    const stripe = fakeStripe();
+    stripe.paymentIntents.create.mockResolvedValue({ id: "pi_123", status: "succeeded" });
+    mockedGetStripeClient.mockReturnValue(stripe as never);
+
+    await createOffSessionPaymentIntent(BASE_INPUT);
+    expect(stripe.paymentIntents.create.mock.calls[0][0].metadata).not.toHaveProperty("type");
+
+    await createOffSessionPaymentIntent({ ...BASE_INPUT, metadataType: "cancellation_fee" });
+    expect(stripe.paymentIntents.create.mock.calls[1][0].metadata).toMatchObject({ type: "cancellation_fee" });
+  });
+
   it("passes the given idempotency key through to Stripe unchanged", async () => {
     const stripe = fakeStripe();
     stripe.paymentIntents.create.mockResolvedValue({ id: "pi_123", status: "succeeded" });

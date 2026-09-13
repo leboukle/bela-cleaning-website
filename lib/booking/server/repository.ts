@@ -5,7 +5,16 @@
 // interface and changing a single wiring point, not touching the booking
 // UI or the validation/pricing/availability logic at all.
 import "server-only";
-import type { BookingPaymentState, BookingRecord, PaymentAttemptUpdate } from "./types";
+import type {
+  AppointmentReminderUpdate,
+  BookingCancellationInitiateUpdate,
+  BookingPaymentState,
+  BookingRecord,
+  BookingReminderState,
+  BookingRescheduleUpdate,
+  CancellationFeeOutcomeUpdate,
+  PaymentAttemptUpdate,
+} from "./types";
 import type { NotificationStatusUpdate } from "./notificationStatus";
 
 export type IdempotentBookingResult = {
@@ -14,6 +23,7 @@ export type IdempotentBookingResult = {
   estimatedDurationMinutes: number;
   serviceDate: string;
   arrivalWindow: string;
+  serviceStartTime: string;
 };
 
 export interface BookingRepository {
@@ -69,4 +79,56 @@ export interface BookingRepository {
    * else in the payment pipeline uses the narrower getBookingPaymentState.
    */
   getFullBookingRecord(bookingId: string): Promise<BookingRecord | null>;
+
+  /**
+   * Resolves a Manage Booking token's SHA-256 hash to the booking ID it
+   * belongs to, by scanning the "Manage Booking Token Hash" column — the
+   * only lookup path for a manage token; the raw token is never stored,
+   * so there is nothing to look up more directly. Returns null if no row
+   * matches (invalid/unrecognized token).
+   */
+  findBookingIdByManageTokenHash(tokenHash: string): Promise<string | null>;
+
+  /**
+   * The first write of a cancellation — sets Booking Status to Cancelled
+   * unconditionally, plus Cancelled At / Payment Status / Cancellation Fee
+   * Amount. Always called before any Stripe interaction, so that a
+   * booking is durably Cancelled independent of whether a late-cancellation
+   * fee charge later succeeds or fails.
+   */
+  markBookingCancelled(bookingId: string, update: BookingCancellationInitiateUpdate): Promise<void>;
+
+  /**
+   * Records the outcome of a cancellation-fee PaymentIntent attempt —
+   * either "a PaymentIntent now exists, still Processing" (webhook will
+   * resolve it) or a terminal Paid/Failed. Never touches Booking Status,
+   * Cancelled At, or Cancellation Fee Amount.
+   */
+  updateCancellationFeeOutcome(bookingId: string, update: CancellationFeeOutcomeUpdate): Promise<void>;
+
+  /**
+   * Applies a successful reschedule: new Service Date/Arrival Window,
+   * recalculated Scheduled Charge At, Rescheduled At, and the Original
+   * Service Date/Arrival Window pair (which the caller has already
+   * resolved to either "capture now" or "preserve the existing value" —
+   * this method just writes whatever it's given).
+   */
+  updateBookingReschedule(bookingId: string, update: BookingRescheduleUpdate): Promise<void>;
+
+  /**
+   * Re-reads a single booking's authoritative reminder-relevant state by
+   * ID. Milestone 6 amendment: the reminder scheduler endpoint calls this
+   * for every booking ID the Apps Script reminder trigger reports — it
+   * never trusts due-ness, attempt count, or eligibility asserted by the
+   * caller, only what this returns fresh from the sheet. Returns null if
+   * the ID doesn't exist (defensive only).
+   */
+  getBookingReminderState(bookingId: string): Promise<BookingReminderState | null>;
+
+  /**
+   * Writes the outcome of one appointment-reminder attempt — success,
+   * a retry-eligible transient failure, or a permanent (3rd-attempt)
+   * failure. Never touches any other column.
+   */
+  updateAppointmentReminderStatus(bookingId: string, update: AppointmentReminderUpdate): Promise<void>;
 }

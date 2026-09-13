@@ -234,6 +234,15 @@ alias**, not a per-deployment URL — `vercel alias set <deployment-url>
 bela-payments-preview.vercel.app`, re-run after every future deploy this
 milestone touches. This never affects the Production custom domain.
 
+**Do not point the Stripe webhook or either Apps Script scheduler at any
+other domain** (e.g. a custom subdomain like `preview.belacleaning.com`)
+even if one happens to already resolve to some Preview deployment — only
+`bela-payments-preview.vercel.app` is re-aliased after every deploy in
+this workflow. A webhook destination pointed at any other domain will
+silently drift out of sync (stale code, stale `STRIPE_WEBHOOK_SECRET`)
+the next time Preview is redeployed, exactly the class of bug that once
+caused webhook signature verification to fail here.
+
 ### Vercel Protection Bypass for Automation — two different mechanisms
 
 - **Stripe webhook**: the bypass secret is appended as the

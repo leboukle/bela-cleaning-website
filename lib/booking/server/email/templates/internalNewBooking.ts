@@ -8,6 +8,7 @@
 // from BELA_INTERNAL_NOTIFICATION_EMAIL, never from customer input.
 import "server-only";
 import { describeExtras } from "../../extrasDescription";
+import { getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import type { BookingRecord } from "../../types";
 import type { EmailMessage } from "../emailTransport";
 import { escapeHtml } from "../emailHtml";
@@ -35,7 +36,7 @@ export function buildInternalNewBookingEmail(record: BookingRecord): Omit<EmailM
     ["Extras", extrasText],
     ["Frequency", record.frequency],
     ["Appointment date", record.serviceDate],
-    ["Arrival window", record.arrivalWindow],
+    ["Appointment time", getScheduleDisplayLabel(record)],
     ["Someone home", record.someoneHome],
     ["Special instructions", record.specialInstructions.trim().length > 0 ? record.specialInstructions : "None"],
     ["Estimated duration", `${record.estimatedDurationMinutes} min`],

@@ -22,6 +22,7 @@ import { getNextRetryAt, MAX_PAYMENT_ATTEMPTS } from "./paymentRetryCadence";
 import type { NotificationService } from "./notificationService";
 import type { BookingRepository } from "./repository";
 import type { BookingPaymentState } from "./types";
+import { formatOperationalTimestamp } from "./dateUtils";
 
 export type PaymentAttemptNotificationSender = Pick<NotificationService, "sendInternalPaymentFailed">;
 
@@ -81,7 +82,7 @@ export async function processDueBooking(
       stripePaymentIntentId: "",
       paidAt: "",
       paymentAttemptCount: attemptNumber,
-      lastPaymentAttemptAt: now.toISOString(),
+      lastPaymentAttemptAt: formatOperationalTimestamp(now),
       nextPaymentAttemptAt: "",
       paymentFailureCode: "",
     });
@@ -118,7 +119,7 @@ export async function processDueBooking(
         stripePaymentIntentId: paymentIntentId,
         paidAt: "",
         paymentAttemptCount: attemptNumber,
-        lastPaymentAttemptAt: now.toISOString(),
+        lastPaymentAttemptAt: formatOperationalTimestamp(now),
         nextPaymentAttemptAt: "",
         paymentFailureCode: "",
       });
@@ -149,7 +150,7 @@ export async function processDueBooking(
       stripePaymentIntentId: "",
       paidAt: "",
       paymentAttemptCount: attemptNumber,
-      lastPaymentAttemptAt: now.toISOString(),
+      lastPaymentAttemptAt: formatOperationalTimestamp(now),
       nextPaymentAttemptAt,
       paymentFailureCode: result.error.code ?? result.error.type ?? "unknown_error",
     });

@@ -1,7 +1,6 @@
 // SERVER-ONLY. Computes the authoritative automatic-charge timestamp:
 //
-//   Scheduled Charge At = service date + arrival-window start time
-//                          + estimated duration + 1 hour
+//   Scheduled Charge At = service start + estimated duration + 1 hour
 //
 // Always computed server-side (never trust a browser-computed value) and
 // always in the business's configured timezone (Settings.timezone,
@@ -10,84 +9,27 @@
 // *local* time, correctly shifted across DST transitions because the
 // wall-clock-to-UTC conversion below re-derives the real UTC offset for
 // the specific calendar date in question, rather than assuming a fixed
-// offset.
+// offset. "Service start" itself is resolved by the caller — either the
+// Milestone 6 amendment's exact Service Start Time or, for legacy
+// bookings, the Arrival Window lookup — via serviceTime.ts's
+// resolveRecordStartSpec/arrivalWindowStartSpec; this function only knows
+// how to add duration + delay to an already-resolved start, and is also
+// the one absolute-timestamp value the Apps Script reminder scheduler
+// reuses (via pure arithmetic) to derive service start without needing
+// its own DST-aware conversion — see reminderService.ts.
 import "server-only";
-import type { ArrivalWindowId } from "@/lib/booking/types";
+import { calculateServiceStart, type ServiceStartSpec } from "./serviceTime";
 
-const CHARGE_DELAY_AFTER_END_MINUTES = 60;
-
-// Arrival-window start times, 24-hour clock, local to the business's
-// timezone. Deliberately a small server-only lookup rather than adding
-// these to lib/booking/schedule.ts's client-facing ARRIVAL_WINDOWS array —
-// this data is specific to server-side charge-time math, not to anything
-// the browser needs to display (the display label's time range already
-// conveys the same start time to the customer in schedule.ts).
-const ARRIVAL_WINDOW_START_TIME: Record<ArrivalWindowId, { hour: number; minute: number }> = {
-  morning: { hour: 8, minute: 0 },
-  midday: { hour: 10, minute: 0 },
-  "early-afternoon": { hour: 12, minute: 0 },
-  afternoon: { hour: 14, minute: 0 },
-};
-
-/**
- * Converts a wall-clock date/time in a given IANA timezone to the
- * corresponding UTC instant, correctly across DST transitions. There is
- * no built-in JS API for this reverse direction (Intl.DateTimeFormat only
- * converts UTC -> zoned, not zoned -> UTC), so this uses the standard
- * two-pass convergence technique: guess assuming the wall time was UTC,
- * see what that guess actually displays as in the target zone, and
- * correct by the difference. A second pass handles the rare case where
- * the correction itself crosses a DST boundary.
- */
-function zonedWallTimeToUtc(year: number, month: number, day: number, hour: number, minute: number, timeZone: string): Date {
-  let utcGuessMs = Date.UTC(year, month - 1, day, hour, minute, 0);
-  const desiredMs = utcGuessMs;
-
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-
-  for (let i = 0; i < 2; i++) {
-    const parts = formatter.formatToParts(new Date(utcGuessMs));
-    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-    const formattedMs = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
-    utcGuessMs += desiredMs - formattedMs;
-  }
-
-  return new Date(utcGuessMs);
-}
-
-/**
- * The real UTC instant an arrival window starts, in the business's
- * configured timezone. Exported so other server-only scheduling logic
- * (e.g. the minimum-lead-time check in validateSubmission.ts) can reuse
- * this DST-safe computation instead of re-deriving it.
- */
-export function calculateServiceStart(
-  serviceDateKey: string, // "yyyy-mm-dd"
-  arrivalWindow: ArrivalWindowId,
-  timezone: string,
-): Date {
-  const [year, month, day] = serviceDateKey.split("-").map(Number);
-  const start = ARRIVAL_WINDOW_START_TIME[arrivalWindow];
-  return zonedWallTimeToUtc(year, month, day, start.hour, start.minute, timezone);
-}
+export const CHARGE_DELAY_AFTER_END_MINUTES = 60;
 
 export function calculateScheduledChargeAt(
   serviceDateKey: string, // "yyyy-mm-dd"
-  arrivalWindow: ArrivalWindowId,
+  startSpec: ServiceStartSpec,
   estimatedDurationMinutes: number,
   timezone: string,
 ): Date {
   const totalMinutesFromStart = estimatedDurationMinutes + CHARGE_DELAY_AFTER_END_MINUTES;
-  const startUtc = calculateServiceStart(serviceDateKey, arrivalWindow, timezone);
+  const startUtc = calculateServiceStart(serviceDateKey, startSpec, timezone);
 
   return new Date(startUtc.getTime() + totalMinutesFromStart * 60_000);
 }

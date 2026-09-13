@@ -60,6 +60,17 @@ export function sampleBookingRecord(overrides: Partial<BookingRecord> = {}): Boo
     paymentFailureCode: "",
     manualAmountOverride: false,
     manualAmountOverrideAt: "",
+    manageBookingTokenHash: "a".repeat(64), // fixture-only: a plausible-looking SHA-256 hex digest
+    cancellationFeeAmount: 0,
+    rescheduledAt: "",
+    originalServiceDate: "",
+    originalArrivalWindow: "",
+    appointmentReminderStatus: "",
+    appointmentReminderSentAt: "",
+    appointmentReminderAttempts: 0,
+    serviceStartTime: "",
+    originalServiceStartTime: "",
+    manageBookingReminderTokenHash: "",
     ...overrides,
   };
 }

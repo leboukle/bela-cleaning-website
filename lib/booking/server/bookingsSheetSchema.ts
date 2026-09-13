@@ -86,6 +86,72 @@ export const BOOKINGS_COLUMNS = [
   "Payment Failure Code",
   "Manual Amount Override",
   "Manual Amount Override At",
+  // Milestone 6 addition, approved before implementation — see
+  // docs/manage-booking.md. Appended at the end, same rationale as every
+  // prior milestone's additions: every existing column keeps its exact
+  // position. "Stripe Payment Intent ID" and "Paid At" (above, Milestone
+  // 3/5) are reused as-is for the late-cancellation fee's PaymentIntent —
+  // safe because a booking can only ever be cancelled *before* its normal
+  // scheduled charge would ever be attempted (that charge only fires
+  // after the appointment happens), so those two columns are always still
+  // blank at cancellation time. "Payment Status" (column D) carries 4 new
+  // cancellation-specific values instead of a separate status column.
+  "Manage Booking Token Hash",
+  "Cancellation Fee Amount",
+  // Reschedule audit trail. "Original Service Date"/"Original Arrival
+  // Window" are populated only on a booking's *first* reschedule and are
+  // never overwritten afterward — see reschedulingService.ts.
+  "Rescheduled At",
+  "Original Service Date",
+  "Original Arrival Window",
+  // Milestone 6 amendment additions, approved before implementation — see
+  // docs/manage-booking.md. Appended at the end, same rationale as every
+  // prior addition: every existing column keeps its exact position.
+  // "Appointment Reminder Status"/"Appointment Reminder Sent At" were
+  // added to the Preview sheet by the business ahead of this
+  // implementation; "Service Start Time"/"Original Service Start Time"/
+  // "Appointment Reminder Attempts" are proposed here and NOT yet added to
+  // any live sheet — see the amendment report for the exact cells.
+  "Appointment Reminder Status",
+  "Appointment Reminder Sent At",
+  // Exact appointment start times: replaces "Arrival Window" for new
+  // bookings going forward. Canonical "HH:00" 24-hour string; blank means
+  // this is a legacy (pre-amendment) row still resolved via Arrival
+  // Window — see serviceTime.ts's resolveRecordStartSpec, the one
+  // chokepoint every timing-sensitive consumer uses instead of branching
+  // on "is this exact-time or legacy" itself. A reschedule always writes
+  // this field and clears Arrival Window, regardless of which kind of
+  // booking it started as (see reschedulingService.ts) — so once any
+  // booking is rescheduled, this field becomes its sole authoritative
+  // current time going forward.
+  "Service Start Time",
+  // Reschedule audit trail's exact-time counterpart to "Original Arrival
+  // Window" — populated only on a booking's *first* reschedule (whichever
+  // of the two start-time fields was actually populated then) and never
+  // overwritten afterward. Mirrors "Original Arrival Window" exactly; see
+  // reschedulingService.ts.
+  "Original Service Start Time",
+  // Bounded retry counter for the 72-hour appointment reminder (max 3
+  // customer-send attempts) — mirrors "Payment Attempt Count"'s existing
+  // role for the analogous bounded payment-retry scenario. See
+  // reminderService.ts.
+  "Appointment Reminder Attempts",
+  // Milestone 6 amendment (post-verification fix): the reminder email
+  // needs its own directly-usable Manage Booking link, but the original
+  // token's raw value is never recoverable from "Manage Booking Token
+  // Hash" (only its one-way hash is stored) — so a *second*, independent
+  // token is minted at reminder-send time, on the same secure random
+  // generator, and only ITS hash is stored here. This is deliberately a
+  // separate column, not an overwrite of "Manage Booking Token Hash":
+  // rotating the original would silently break a link the customer may
+  // already have saved from their confirmation email. Both hashes are
+  // checked on every token lookup (see googleSheetsRepository.ts's
+  // findBookingIdByManageTokenHash), so either link works, indefinitely,
+  // for the same booking. Re-minted on every reminder send attempt
+  // (overwriting only this column) — bounded to at most one currently-
+  // valid reminder-issued token at a time, never touching the original.
+  // See reminderService.ts and docs/manage-booking.md.
+  "Manage Booking Reminder Token Hash",
 ] as const;
 
 export type BookingColumn = (typeof BOOKINGS_COLUMNS)[number];
@@ -131,6 +197,31 @@ export const PAYMENT_STATUS = {
   RETRY_SCHEDULED: "Retry Scheduled",
   REQUIRES_ACTION: "Requires Action",
   FINAL_FAILURE: "Final Failure",
+  // Milestone 6: a free (>24h) cancellation's terminal payment state — no
+  // charge ever occurs, but this is more legible on a Cancelled row than
+  // leaving "Scheduled" stale forever.
+  CANCELLED_NO_CHARGE: "Cancelled — No Charge",
+  // Milestone 6: the late-cancellation (<=24h) fee's own lifecycle,
+  // reusing this same column rather than a separate status column — a
+  // cancellation fee is simply a different kind of "the one payment event
+  // this booking will have," which is exactly what this field already
+  // tracks. See cancellationService.ts and docs/manage-booking.md.
+  CANCELLATION_FEE_PROCESSING: "Cancellation Fee Processing",
+  CANCELLATION_FEE_PAID: "Cancellation Fee Paid",
+  CANCELLATION_FEE_FAILED: "Cancellation Fee Failed",
+} as const;
+
+// Milestone 6 amendment: bounded-retry state for the 72-hour appointment
+// reminder. Blank ("") = not yet attempted. "Retry Scheduled" mirrors
+// Payment Status's own vocabulary for an identical bounded-retry shape —
+// a transient failure with attempts remaining, eligible for the next
+// hourly scheduler run. "Sent"/"Failed" are both terminal: the scheduler
+// skips any row in either state permanently (see reminderService.ts) —
+// this is what satisfies "do not repeatedly spam the customer."
+export const APPOINTMENT_REMINDER_STATUS = {
+  RETRY_SCHEDULED: "Retry Scheduled",
+  SENT: "Sent",
+  FAILED: "Failed",
 } as const;
 
 export const SUBMISSION_SOURCE = "Website";

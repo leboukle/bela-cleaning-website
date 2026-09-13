@@ -245,6 +245,11 @@ function PaymentForm({ totalPrice, onSetupComplete, onBack }: PaymentFormProps) 
               charged automatically to this card starting 1 hour after your cleaning&rsquo;s scheduled end time.
             </li>
             <li>This automatic charge may occur even if you&rsquo;re not present or don&rsquo;t return to this site.</li>
+            <li>
+              You can cancel more than 24 hours before your scheduled cleaning at no charge. Cancellations made
+              within 24 hours of the scheduled start time are subject to a late-cancellation fee equal to 50% of
+              the booking total, charged to this same card.
+            </li>
           </ul>
         </div>
 
@@ -258,7 +263,9 @@ function PaymentForm({ totalPrice, onSetupComplete, onBack }: PaymentFormProps) 
           <span className="text-sm text-[#3B2F27]">
             I agree that BeLa Cleaning will securely save this payment method and automatically charge it
             {totalPrice != null ? ` ${formatCurrency(totalPrice)} ` : " the total shown "}
-            starting 1 hour after my cleaning&rsquo;s scheduled end time, without further action from me.
+            starting 1 hour after my cleaning&rsquo;s scheduled end time, without further action from me. I
+            understand this card may also be charged a late-cancellation fee equal to 50% of the booking total if
+            I cancel within 24 hours of the scheduled start time.
           </span>
         </label>
 

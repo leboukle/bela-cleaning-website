@@ -2,16 +2,18 @@ import { describe, it, expect } from "vitest";
 import { buildCustomerBookingReceivedEmail } from "./customerBookingReceived";
 import { sampleBookingRecord } from "../../testFixtures";
 
+const MANAGE_TOKEN = "test-manage-token-abc123";
+
 describe("buildCustomerBookingReceivedEmail", () => {
   it('builds the subject as "BeLa Cleaning — Booking [BOOKING ID]"', () => {
     const record = sampleBookingRecord({ bookingId: "BELA-20260101-ABCDEF" });
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     expect(email.subject).toBe("BeLa Cleaning — Booking BELA-20260101-ABCDEF");
   });
 
   it("includes the core booking details in both text and html bodies", () => {
     const record = sampleBookingRecord();
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     for (const body of [email.text, email.html]) {
       expect(body).toContain(record.bookingId);
       expect(body).toContain(record.cleaningType);
@@ -22,31 +24,31 @@ describe("buildCustomerBookingReceivedEmail", () => {
 
   it("includes frequency when recurring", () => {
     const record = sampleBookingRecord({ frequency: "Weekly" });
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     expect(email.text).toContain("Frequency: Weekly");
   });
 
   it("omits frequency when one-time", () => {
     const record = sampleBookingRecord({ frequency: "One time" });
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     expect(email.text).not.toContain("Frequency:");
   });
 
   it("includes extras when present, described in human-readable form", () => {
     const record = sampleBookingRecord({ extras: "kitchenCabinets;interiorWindows:2" });
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     expect(email.text).toContain("Extras: Inside kitchen cabinets, Interior windows × 2");
   });
 
   it('omits the extras line entirely when there are none ("none")', () => {
     const record = sampleBookingRecord({ extras: "none" });
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     expect(email.text).not.toContain("Extras:");
   });
 
   it("never claims the booking is confirmed or that payment was already charged", () => {
     const record = sampleBookingRecord();
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     const lowerText = email.text.toLowerCase();
     expect(lowerText).not.toContain("your appointment is confirmed");
     expect(lowerText).not.toContain("payment has been collected");
@@ -54,9 +56,24 @@ describe("buildCustomerBookingReceivedEmail", () => {
     expect(email.text).toContain("you have not been charged");
   });
 
+  it("includes the Manage Booking link built from the raw token, in both bodies", () => {
+    const record = sampleBookingRecord();
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+    expect(email.text).toContain(`/manage-booking/${MANAGE_TOKEN}`);
+    expect(email.html).toContain(`/manage-booking/${MANAGE_TOKEN}`);
+    expect(email.html).toContain("Manage Booking");
+  });
+
+  it("states the precise 24-hour / 50% late-cancellation policy, not vague language", () => {
+    const record = sampleBookingRecord();
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+    expect(email.text).toContain("50% of the booking total");
+    expect(email.text.toLowerCase()).not.toContain("fees may apply");
+  });
+
   it("does not expose Google Sheets, spreadsheet IDs, or infrastructure details", () => {
     const record = sampleBookingRecord();
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     const combined = `${email.text}\n${email.html}`.toLowerCase();
     expect(combined).not.toContain("sheet");
     expect(combined).not.toContain("spreadsheet");
@@ -66,7 +83,7 @@ describe("buildCustomerBookingReceivedEmail", () => {
 
   it("HTML-escapes customer-controlled values in the html body", () => {
     const record = sampleBookingRecord({ firstName: '<script>alert("x")</script>' });
-    const email = buildCustomerBookingReceivedEmail(record);
+    const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
     expect(email.html).not.toContain("<script>alert");
     expect(email.html).toContain("&lt;script&gt;");
   });

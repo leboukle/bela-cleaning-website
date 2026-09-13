@@ -9,7 +9,7 @@ export type BookingSubmissionUiState =
       status: "success";
       bookingId: string;
       serviceDate: string;
-      arrivalWindow: string;
+      serviceStartTime: string;
       totalPrice: number;
       estimatedDurationMinutes: number;
     }

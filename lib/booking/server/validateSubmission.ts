@@ -13,15 +13,12 @@ import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
 } from "@/lib/booking/config";
-import { ARRIVAL_WINDOWS } from "@/lib/booking/schedule";
+import { getAllExactStartTimeCandidates, isPlausibleExactTimeFormat } from "@/lib/booking/schedule";
 import { EXTRAS_QUANTITY_MAX, SPECIAL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/booking/limits";
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
 import type { AccessId, ExtrasState } from "@/lib/booking/types";
-import { isValidDateKey, isLessThanMinimumLeadTime } from "./dateUtils";
-import { calculateServiceStart } from "./scheduledCharge";
-import type { BookingSettings } from "./settings";
-import type { ArrivalWindowId } from "@/lib/booking/types";
+import { isValidDateKey } from "./dateUtils";
 import type { BookingSubmissionInput, ValidatedBooking, ValidationIssue, ValidationResult } from "./types";
 
 function asString(value: unknown): string {
@@ -34,13 +31,7 @@ function asTrimmedString(value: unknown): string {
 
 const MAX_TEXT_FIELD_LENGTH = 200; // sanity bound for name/address/email/etc.
 
-export type ValidateSubmissionOptions = {
-  settings: BookingSettings;
-  /** Overridable for tests; defaults to the real current time. */
-  now?: Date;
-};
-
-export function validateSubmission(input: BookingSubmissionInput, options: ValidateSubmissionOptions): ValidationResult {
+export function validateSubmission(input: BookingSubmissionInput): ValidationResult {
   const issues: ValidationIssue[] = [];
   const addIssue = (field: string, message: string) => issues.push({ field, message });
 
@@ -189,34 +180,28 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
   }
 
   // --- Scheduling ---
-  // Standing rule: an appointment must start at least 24 hours from the
-  // moment of booking (exactly 24h is eligible). This depends on both the
-  // date and the arrival window's actual start time, so it can only be
-  // checked once both are individually valid — see calculateServiceStart,
-  // which reuses the same DST-safe timezone math as the automatic-charge
-  // calculation rather than duplicating it. The Settings-Sheet-driven
-  // minimumLeadDays value is intentionally no longer consulted here.
+  // Format check only — the authoritative "is this specific date+time+
+  // duration actually available right now" decision (blackout, capacity,
+  // and the standing 24-hour minimum-lead-time rule alike) happens later
+  // in bookingService.ts, once duration is known and a Sheets read is
+  // affordable — see availability.ts's checkExactTimeAvailability. The
+  // Settings-Sheet-driven minimumLeadDays value is intentionally no
+  // longer consulted here or anywhere in the submission path — the true,
+  // instant-based 24-hour rule in checkExactTimeAvailability replaces it.
   const serviceDate = asTrimmedString(input.serviceDate);
-  const serviceDateValid = isValidDateKey(serviceDate);
-  if (!serviceDateValid) {
+  if (!isValidDateKey(serviceDate)) {
     addIssue("serviceDate", "Please choose a valid appointment date.");
   }
 
-  const arrivalWindow = asTrimmedString(input.arrivalWindow);
-  const arrivalWindowValid = ARRIVAL_WINDOWS.some((w) => w.id === arrivalWindow);
-  if (!arrivalWindowValid) {
-    addIssue("arrivalWindow", "Please select a valid arrival window.");
-  }
-
-  if (serviceDateValid && arrivalWindowValid) {
-    const serviceStart = calculateServiceStart(
-      serviceDate,
-      arrivalWindow as ArrivalWindowId,
-      options.settings.timezone,
-    );
-    if (isLessThanMinimumLeadTime(serviceStart, options.now)) {
-      addIssue("serviceDate", "That date and time is too soon — please choose an appointment at least 24 hours from now.");
-    }
+  // Milestone 6 amendment: format/catalog check only — this is cheap and
+  // synchronous, matching this function's existing scope. The
+  // authoritative "is this specific date+time+duration actually available
+  // right now" decision (overlap/capacity-aware) happens later in
+  // bookingService.ts, once duration is known and a Sheets read is
+  // affordable — see availability.ts's checkExactTimeAvailability.
+  const serviceStartTime = asTrimmedString(input.serviceStartTime);
+  if (!isPlausibleExactTimeFormat(serviceStartTime) || !getAllExactStartTimeCandidates().includes(serviceStartTime)) {
+    addIssue("serviceStartTime", "Please select a valid appointment start time.");
   }
 
   // --- Access & instructions ---
@@ -247,7 +232,7 @@ export function validateSubmission(input: BookingSubmissionInput, options: Valid
     zipCode,
     city: getCityForZip(addressZip) ?? "",
     serviceDate,
-    arrivalWindow: arrivalWindow as ValidatedBooking["arrivalWindow"],
+    serviceStartTime,
     firstName,
     lastName,
     email,

@@ -13,6 +13,7 @@ import type { PaymentIntentFailureDetail } from "../../stripe/paymentIntent";
 import type { BookingRecord } from "../../types";
 import type { EmailMessage } from "../emailTransport";
 import { escapeHtml } from "../emailHtml";
+import { formatOperationalTimestamp } from "../../dateUtils";
 
 export type PaymentFailureNotificationDetail = {
   classification: FailureClassification;
@@ -55,7 +56,10 @@ export function buildInternalPaymentFailedEmail(
     ["Stripe error type", detail.failure.type ?? "(none)"],
     ["Stripe error code", detail.failure.code ?? "(none)"],
     ["Stripe decline code", detail.failure.declineCode ?? "(none)"],
-    ["Next attempt at", record.nextPaymentAttemptAt || "(none scheduled)"],
+    [
+      "Next attempt at",
+      record.nextPaymentAttemptAt ? formatOperationalTimestamp(new Date(record.nextPaymentAttemptAt)) : "(none scheduled)",
+    ],
     ["Service date", record.serviceDate],
   ];
 

@@ -10,7 +10,7 @@ import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
 } from "./config";
-import { formatReadableDate, getArrivalWindowOption } from "./schedule";
+import { formatExactTime, formatReadableDate } from "./schedule";
 import { getCityForZip } from "./serviceArea";
 import type { BookingState } from "./types";
 
@@ -86,9 +86,8 @@ export function getSummaryLines(state: BookingState): SummaryLine[] {
     lines.push({ label: "Appointment date", value: formatReadableDate(state.appointmentDate) });
   }
 
-  if (state.arrivalWindow) {
-    const option = getArrivalWindowOption(state.arrivalWindow);
-    lines.push({ label: "Arrival window", value: `${option.label} (${option.timeRangeLabel})` });
+  if (state.serviceStartTime) {
+    lines.push({ label: "Appointment time", value: formatExactTime(state.serviceStartTime) });
   }
 
   return lines;

@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getFrequencyOption } from "@/lib/booking/config";
 import { getSummaryLines } from "@/lib/booking/summary";
-import { formatReadableDate, getArrivalWindowOption } from "@/lib/booking/schedule";
+import { formatExactTime, formatReadableDate } from "@/lib/booking/schedule";
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
 import { formatUsPhone, isNonEmpty, isValidEmail, isValidUsPhone } from "@/lib/booking/validation";
 import type { BookingState, StepId } from "@/lib/booking/types";
@@ -85,7 +85,6 @@ export default function ReviewStep({
   const frequencyOption = state.frequency ? getFrequencyOption(state.frequency) : null;
 
   const city = getCityForZip(state.zipCode);
-  const arrivalWindowOption = state.arrivalWindow ? getArrivalWindowOption(state.arrivalWindow) : null;
 
   const addressParts = [
     state.addressStreet,
@@ -106,7 +105,7 @@ export default function ReviewStep({
       state.frequency &&
       zipValid &&
       state.appointmentDate &&
-      state.arrivalWindow &&
+      state.serviceStartTime &&
       isNonEmpty(state.firstName) &&
       isNonEmpty(state.lastName) &&
       isValidEmail(state.email) &&
@@ -156,10 +155,7 @@ export default function ReviewStep({
             label="Appointment date"
             value={state.appointmentDate ? formatReadableDate(state.appointmentDate) : "—"}
           />
-          <ReviewLine
-            label="Arrival window"
-            value={arrivalWindowOption ? `${arrivalWindowOption.label} (${arrivalWindowOption.timeRangeLabel})` : "—"}
-          />
+          <ReviewLine label="Appointment time" value={state.serviceStartTime ? formatExactTime(state.serviceStartTime) : "—"} />
         </ReviewSection>
 
         <ReviewSection title="Contact" onEdit={() => onEdit("customer-name")}>

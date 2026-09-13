@@ -10,13 +10,22 @@ vi.mock("./settings", () => ({
 
 import { getRange, batchGetRanges } from "./sheetsClient";
 import { getBookingSettings } from "./settings";
-import { checkDateAvailability, getUnavailableDateKeysInWindow } from "./availability";
+import { checkDateAvailability, checkExactTimeAvailability, getAvailableStartTimes, getUnavailableDateKeysInWindow } from "./availability";
 
 const mockedGetRange = vi.mocked(getRange);
 const mockedBatchGetRanges = vi.mocked(batchGetRanges);
 const mockedGetBookingSettings = vi.mocked(getBookingSettings);
 
 const SETTINGS = { minimumLeadDays: 7, defaultDailyCapacity: 2, timezone: "America/New_York", schemaVersion: 1 };
+
+// Fixed reference "now" safely before every hardcoded fixture date below
+// (2026-09-10 through 2026-09-23) — those dates exist only to exercise
+// blackout/capacity/operating-hours logic unrelated to the 24-hour
+// minimum-lead-time rule, so they're pinned against this fixed clock
+// rather than the real one to stay deterministic regardless of when the
+// suite actually runs. The 24-hour rule itself has its own dedicated
+// describe blocks below, with their own precisely-chosen `now` values.
+const FAR_BEFORE_FIXTURES = new Date("2026-01-01T00:00:00-05:00");
 
 beforeEach(() => {
   mockedGetRange.mockReset();
@@ -108,5 +117,255 @@ describe("getUnavailableDateKeysInWindow", () => {
     setupSheetData({ overrides: [["2026-09-20", "0", "Closed", "TRUE"]] });
     const result = await getUnavailableDateKeysInWindow("2026-09-01", "2026-09-30");
     expect(result).toEqual(["2026-09-20"]);
+  });
+});
+
+// Milestone 6 amendment: exact appointment start times must become
+// overlap/capacity aware (not the old purely day-count model) — these
+// tests exercise checkExactTimeAvailability/getAvailableStartTimes
+// directly, reusing the same blackout/override/default-capacity data
+// source as the tests above.
+type ExistingBookingRow = { serviceDate: string; status?: string; arrivalWindow?: string; serviceStartTime?: string; durationMinutes: number };
+
+function setupExactTimeData(options: { blackout?: string[][]; overrides?: string[][]; bookings?: ExistingBookingRow[] }) {
+  const bookings = options.bookings ?? [];
+  mockedGetRange.mockImplementation(async (range: string) => {
+    if (range.startsWith("Blackout Dates")) return options.blackout ?? [];
+    if (range.startsWith("Availability Overrides")) return options.overrides ?? [];
+    return [];
+  });
+  mockedBatchGetRanges.mockImplementation(async () => [
+    bookings.map((b) => [b.serviceDate]),
+    bookings.map((b) => [b.status ?? "Pending Payment"]),
+    bookings.map((b) => [b.arrivalWindow ?? ""]),
+    bookings.map((b) => [b.serviceStartTime ?? ""]),
+    bookings.map((b) => [String(b.durationMinutes)]),
+  ]);
+}
+
+describe("checkExactTimeAvailability", () => {
+  it("is available for an exact time with no conflicting bookings", async () => {
+    setupExactTimeData({});
+    const result = await checkExactTimeAvailability("2026-09-10", "09:00", 210, FAR_BEFORE_FIXTURES);
+    expect(result).toEqual({ available: true, reason: null, maxCapacity: 2, peakConcurrentCount: 1 });
+  });
+
+  it("is unavailable for a blackout date, without even considering overlap", async () => {
+    setupExactTimeData({ blackout: [["2026-09-11", "Holiday", "TRUE"]] });
+    const result = await checkExactTimeAvailability("2026-09-11", "09:00", 210, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("blackout");
+  });
+
+  it("is unavailable for a start time outside the approved hourly catalog", async () => {
+    setupExactTimeData({});
+    const result = await checkExactTimeAvailability("2026-09-12", "07:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("outside-operating-hours");
+  });
+
+  it("is unavailable when the duration would push the cleaning past 8:00 PM close", async () => {
+    // A 5-hour cleaning cannot start at 4:00 PM — it would end at 9:00 PM.
+    setupExactTimeData({});
+    const result = await checkExactTimeAvailability("2026-09-13", "16:00", 300, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("outside-operating-hours");
+  });
+
+  it("is unavailable when accepting the candidate would exceed the date's capacity during an overlapping interval", async () => {
+    // Default capacity 2. Two existing bookings already overlap 9:00-11:00;
+    // a third candidate overlapping the same window would push concurrency to 3.
+    setupExactTimeData({
+      bookings: [
+        { serviceDate: "2026-09-14", serviceStartTime: "09:00", durationMinutes: 120 },
+        { serviceDate: "2026-09-14", serviceStartTime: "10:00", durationMinutes: 120 },
+      ],
+    });
+    const result = await checkExactTimeAvailability("2026-09-14", "10:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("at-capacity");
+  });
+
+  it("is available when existing bookings on the same day don't overlap the candidate interval", async () => {
+    setupExactTimeData({
+      bookings: [
+        { serviceDate: "2026-09-15", serviceStartTime: "08:00", durationMinutes: 120 },
+        { serviceDate: "2026-09-15", serviceStartTime: "09:00", durationMinutes: 120 },
+      ],
+    });
+    // Candidate at 14:00 doesn't overlap either 8-10am or 9-11am booking.
+    const result = await checkExactTimeAvailability("2026-09-15", "14:00", 120, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(true);
+  });
+
+  it("excludes cancelled bookings from the overlap count", async () => {
+    setupExactTimeData({
+      bookings: [
+        { serviceDate: "2026-09-16", serviceStartTime: "09:00", durationMinutes: 120, status: "Cancelled" },
+        { serviceDate: "2026-09-16", serviceStartTime: "09:00", durationMinutes: 120 },
+      ],
+    });
+    // Only 1 active overlapping booking + the candidate = 2, exactly at the default capacity.
+    const result = await checkExactTimeAvailability("2026-09-16", "09:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(true);
+  });
+
+  it("correctly resolves and counts a legacy Arrival Window row toward the overlap", async () => {
+    // Morning window = 8:00 AM start. A 3-hour legacy booking runs 8-11am,
+    // overlapping a 9:00 AM exact-time candidate.
+    setupExactTimeData({
+      bookings: [{ serviceDate: "2026-09-17", arrivalWindow: "Morning", durationMinutes: 180 }],
+    });
+    const result = await checkExactTimeAvailability("2026-09-17", "09:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.peakConcurrentCount).toBe(2);
+  });
+
+  it("respects an active capacity override instead of the default", async () => {
+    setupExactTimeData({
+      overrides: [["2026-09-18", "5", "Extra staff", "TRUE"]],
+      bookings: [
+        { serviceDate: "2026-09-18", serviceStartTime: "09:00", durationMinutes: 120 },
+        { serviceDate: "2026-09-18", serviceStartTime: "09:00", durationMinutes: 120 },
+        { serviceDate: "2026-09-18", serviceStartTime: "09:00", durationMinutes: 120 },
+      ],
+    });
+    const result = await checkExactTimeAvailability("2026-09-18", "09:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.maxCapacity).toBe(5);
+    expect(result.available).toBe(true);
+  });
+});
+
+describe("getAvailableStartTimes", () => {
+  it("returns every hourly candidate whose duration fits before close, when nothing else is booked", async () => {
+    setupExactTimeData({});
+    const result = await getAvailableStartTimes("2026-09-19", 60, FAR_BEFORE_FIXTURES);
+    expect(result).toEqual(["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"]);
+  });
+
+  it("excludes start times whose duration would finish after 8:00 PM close", async () => {
+    setupExactTimeData({});
+    // A 5-hour (300 min) cleaning: 16:00 start would end at 21:00 — excluded.
+    // 15:00 start ends at 20:00 exactly — still allowed (finishes AT close).
+    const result = await getAvailableStartTimes("2026-09-20", 300, FAR_BEFORE_FIXTURES);
+    expect(result).toContain("15:00");
+    expect(result).not.toContain("16:00");
+  });
+
+  it("returns an empty list for a blackout date", async () => {
+    setupExactTimeData({ blackout: [["2026-09-21", "Holiday", "TRUE"]] });
+    const result = await getAvailableStartTimes("2026-09-21", 60, FAR_BEFORE_FIXTURES);
+    expect(result).toEqual([]);
+  });
+
+  it("excludes start times that would push concurrency over capacity, while keeping non-overlapping ones", async () => {
+    // Default capacity 2. Two existing 2-hour bookings already fill 9-11am;
+    // a 60-minute candidate at 9:00, 9:30(n/a, hourly-only)... 10:00 overlaps
+    // both and would be the 3rd — excluded. 14:00 doesn't overlap at all.
+    setupExactTimeData({
+      bookings: [
+        { serviceDate: "2026-09-23", serviceStartTime: "09:00", durationMinutes: 120 },
+        { serviceDate: "2026-09-23", serviceStartTime: "09:00", durationMinutes: 120 },
+      ],
+    });
+    const result = await getAvailableStartTimes("2026-09-23", 60, FAR_BEFORE_FIXTURES);
+    expect(result).not.toContain("09:00");
+    expect(result).not.toContain("10:00");
+    expect(result).toContain("14:00");
+  });
+});
+
+// Reconciliation with the Production 24-hour minimum-lead-time hotfix:
+// applied against the customer's exact selected start time (not a
+// calendar-day granularity), replacing the old minimumLeadDays check for
+// both new bookings and rescheduling — see dateUtils.ts's
+// isLessThanMinimumLeadTime and this module's own docstrings.
+describe("checkExactTimeAvailability — 24-hour minimum lead time", () => {
+  it("rejects a candidate less than 24 hours away with reason 'too-soon'", async () => {
+    setupExactTimeData({});
+    // 2:00 PM EDT June 15 = 2026-06-15T18:00:00Z. One minute after the
+    // 24h-before instant (2026-06-14T18:00:00Z) is one minute short of 24h.
+    const now = new Date("2026-06-14T18:01:00.000Z");
+    const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("too-soon");
+  });
+
+  it("accepts a candidate exactly 24 hours away", async () => {
+    setupExactTimeData({});
+    const now = new Date("2026-06-14T18:00:00.000Z"); // exactly 24h before 2026-06-15T18:00:00Z
+    const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
+    expect(result.available).toBe(true);
+  });
+
+  it("rejects a candidate one minute inside the 24-hour boundary", async () => {
+    setupExactTimeData({});
+    const now = new Date("2026-06-14T18:01:00.000Z");
+    const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
+    expect(result.available).toBe(false);
+  });
+
+  it("accepts a candidate safely beyond 24 hours away", async () => {
+    setupExactTimeData({});
+    const now = new Date("2026-06-13T18:00:00.000Z"); // 48h before
+    const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
+    expect(result.available).toBe(true);
+  });
+
+  it("still rejects a blacked-out date with reason 'blackout', not 'too-soon', when it is otherwise far enough out", async () => {
+    setupExactTimeData({ blackout: [["2026-06-20", "Holiday", "TRUE"]] });
+    const result = await checkExactTimeAvailability("2026-06-20", "14:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("blackout");
+  });
+
+  it("resolves the 24-hour boundary correctly across the spring-forward DST transition (2026-03-08)", async () => {
+    setupExactTimeData({});
+    // 1:00 PM EDT March 8 (already past the 2am transition) = 2026-03-08T17:00:00Z.
+    // The real 24h-before instant is 2026-03-07T17:00:00Z, regardless of
+    // the lost hour — pure UTC-instant arithmetic, no naive calendar-day
+    // subtraction.
+    const exactlyOnBoundary = new Date("2026-03-07T17:00:00.000Z");
+    const oneMinuteShort = new Date("2026-03-07T17:01:00.000Z");
+    const onBoundaryResult = await checkExactTimeAvailability("2026-03-08", "13:00", 60, exactlyOnBoundary);
+    const shortResult = await checkExactTimeAvailability("2026-03-08", "13:00", 60, oneMinuteShort);
+    expect(onBoundaryResult.available).toBe(true);
+    expect(shortResult.available).toBe(false);
+    expect(shortResult.reason).toBe("too-soon");
+  });
+
+  it("resolves the 24-hour boundary correctly across the fall-back DST transition (2026-11-01)", async () => {
+    setupExactTimeData({});
+    // 1:00 PM EST November 1 (already past the 2am transition) = 2026-11-01T18:00:00Z.
+    const exactlyOnBoundary = new Date("2026-10-31T18:00:00.000Z");
+    const oneMinuteShort = new Date("2026-10-31T18:01:00.000Z");
+    const onBoundaryResult = await checkExactTimeAvailability("2026-11-01", "13:00", 60, exactlyOnBoundary);
+    const shortResult = await checkExactTimeAvailability("2026-11-01", "13:00", 60, oneMinuteShort);
+    expect(onBoundaryResult.available).toBe(true);
+    expect(shortResult.available).toBe(false);
+  });
+});
+
+describe("getAvailableStartTimes — 24-hour minimum lead time", () => {
+  it("excludes only the candidates less than 24 hours away, keeping later ones on the same date", async () => {
+    setupExactTimeData({});
+    // 10:00 AM EDT June 14 = 2026-06-14T14:00:00Z. On 2026-06-15 (EDT,
+    // UTC-4): 08:00/09:00 local are <24h away (22h/23h); 10:00 local is
+    // exactly 24h away; 11:00 onward are safely beyond.
+    const now = new Date("2026-06-14T14:00:00.000Z");
+    const result = await getAvailableStartTimes("2026-06-15", 60, now);
+    expect(result).not.toContain("08:00");
+    expect(result).not.toContain("09:00");
+    expect(result).toContain("10:00");
+    expect(result).toContain("11:00");
+    expect(result).toContain("16:00");
+  });
+
+  it("returns an empty list when every candidate on the date is less than 24 hours away", async () => {
+    setupExactTimeData({});
+    // Same instant as "now" as the earliest possible candidate start on
+    // the very next calendar day is still well under 24h for every hour.
+    const now = new Date("2026-06-15T23:00:00.000Z"); // 7:00 PM EDT June 15
+    const result = await getAvailableStartTimes("2026-06-16", 60, now);
+    expect(result).toEqual([]);
   });
 });

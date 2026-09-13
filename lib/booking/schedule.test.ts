@@ -1,19 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { getMinSelectableDate, isArrivalWindowSelectable, isDateSelectable, toDateKey } from "./schedule";
+import { getMinSelectableDate, isDateSelectable, toDateKey, OPERATING_LATEST_START_HOUR } from "./schedule";
 
-describe("getMinSelectableDate — 24-hour minimum lead time", () => {
-  it("returns tomorrow when now is well before today's latest (2:00 PM) window", () => {
+describe("getMinSelectableDate — 24-hour minimum lead time (exact-time model)", () => {
+  it("returns tomorrow when now is well before today's latest (4:00 PM) offered start", () => {
     const now = new Date(2026, 5, 14, 10, 0, 0); // June 14, 10:00 AM
     expect(toDateKey(getMinSelectableDate(now))).toBe("2026-06-15");
   });
 
-  it("returns tomorrow when tomorrow's 2:00 PM window is exactly 24 hours away", () => {
-    const now = new Date(2026, 5, 14, 14, 0, 0); // June 14, 2:00 PM
+  it("returns tomorrow when tomorrow's 4:00 PM start is exactly 24 hours away", () => {
+    const now = new Date(2026, 5, 14, OPERATING_LATEST_START_HOUR, 0, 0); // June 14, 4:00 PM
     expect(toDateKey(getMinSelectableDate(now))).toBe("2026-06-15");
   });
 
-  it("skips to the day after tomorrow once tomorrow's 2:00 PM window is less than 24 hours away", () => {
-    const now = new Date(2026, 5, 14, 14, 0, 1); // one second past 2:00 PM
+  it("skips to the day after tomorrow once tomorrow's 4:00 PM start is less than 24 hours away", () => {
+    const now = new Date(2026, 5, 14, OPERATING_LATEST_START_HOUR, 0, 1); // one second past 4:00 PM
     expect(toDateKey(getMinSelectableDate(now))).toBe("2026-06-16");
   });
 
@@ -33,23 +33,5 @@ describe("isDateSelectable — consistent with the 24-hour minimum lead time", (
     const now = new Date(2026, 5, 14, 10, 0, 0);
     const min = getMinSelectableDate(now);
     expect(isDateSelectable(min, { today: now })).toBe(true);
-  });
-});
-
-describe("isArrivalWindowSelectable — per-window 24-hour minimum lead time", () => {
-  it("accepts the afternoon window exactly at the 24-hour boundary", () => {
-    const now = new Date(2026, 5, 14, 14, 0, 0);
-    expect(isArrivalWindowSelectable("2026-06-15", "afternoon", now)).toBe(true);
-  });
-
-  it("rejects an earlier same-day window that is less than 24 hours away", () => {
-    const now = new Date(2026, 5, 14, 14, 0, 0);
-    expect(isArrivalWindowSelectable("2026-06-15", "morning", now)).toBe(false);
-  });
-
-  it("accepts every window on a date safely beyond the boundary", () => {
-    const now = new Date(2026, 5, 14, 14, 0, 0);
-    expect(isArrivalWindowSelectable("2026-06-16", "morning", now)).toBe(true);
-    expect(isArrivalWindowSelectable("2026-06-16", "afternoon", now)).toBe(true);
   });
 });

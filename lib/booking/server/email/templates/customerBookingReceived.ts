@@ -8,14 +8,16 @@
 import "server-only";
 import { businessConfig } from "@/lib/config";
 import { formatCurrency, formatDuration } from "@/lib/booking/calculate";
-import { formatReadableDate } from "@/lib/booking/schedule";
+import { formatReadableDate, getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import { describeExtras } from "../../extrasDescription";
+import { buildManageBookingUrl } from "../../manageToken";
 import type { BookingRecord } from "../../types";
 import type { EmailMessage } from "../emailTransport";
 import { escapeHtml } from "../emailHtml";
 
-export function buildCustomerBookingReceivedEmail(record: BookingRecord): Omit<EmailMessage, "to"> {
+export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageToken: string): Omit<EmailMessage, "to"> {
   const subject = `BeLa Cleaning — Booking ${record.bookingId}`;
+  const manageUrl = buildManageBookingUrl(manageToken);
   const address = [record.streetAddress, record.apartmentOrUnit, `${record.city}, ${record.state} ${record.zipCode}`]
     .filter((part) => part && part.trim().length > 0)
     .join(", ");
@@ -30,7 +32,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord): Omit<E
     `Booking ID: ${record.bookingId}`,
     `Cleaning type: ${record.cleaningType}`,
     `Service date: ${formatReadableDate(record.serviceDate)}`,
-    `Arrival window: ${record.arrivalWindow}`,
+    `Appointment time: ${getScheduleDisplayLabel(record)}`,
     `Service address: ${address}`,
     `Estimated duration: ${formatDuration(record.estimatedDurationMinutes)}`,
     `Estimated total: ${formatCurrency(record.totalPrice)}`,
@@ -44,8 +46,12 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord): Omit<E
     `The estimated total above will be charged automatically starting 1 hour after your cleaning's scheduled`,
     "end time. Please keep your Booking ID for reference.",
     "",
-    "Plans change — reschedule or cancel free of charge up to 24 hours before your visit, per the BeLa Cleaning",
-    "Service Policy.",
+    "Need to change or cancel your appointment? Manage your booking here:",
+    manageUrl,
+    "",
+    "Cancel more than 24 hours before your scheduled cleaning at no charge. Cancellations made within 24 hours",
+    "of the scheduled start time are subject to a late-cancellation fee equal to 50% of the booking total,",
+    "charged automatically to your saved payment method.",
     "",
     "Questions? We're happy to help.",
     `${businessConfig.email}  •  ${businessConfig.phoneDisplay}`,
@@ -73,7 +79,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord): Omit<E
     <tr><td style="padding:4px 0;color:#8A7A6B;">Booking ID</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(record.bookingId)}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">Cleaning type</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(record.cleaningType)}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">Service date</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatReadableDate(record.serviceDate))}</td></tr>
-    <tr><td style="padding:4px 0;color:#8A7A6B;">Arrival window</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(record.arrivalWindow)}</td></tr>
+    <tr><td style="padding:4px 0;color:#8A7A6B;">Appointment time</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(getScheduleDisplayLabel(record))}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">Service address</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(address)}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">Estimated duration</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatDuration(record.estimatedDurationMinutes))}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">Estimated total</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatCurrency(record.totalPrice))}</td></tr>
@@ -85,9 +91,13 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord): Omit<E
     you have not been charged. The estimated total above will be charged automatically starting 1 hour after your
     cleaning's scheduled end time. Please keep your Booking ID for reference.
   </p>
+  <p style="text-align:center;margin:24px 0;">
+    <a href="${escapeHtml(manageUrl)}" style="display:inline-block;background:#3B2F27;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:999px;font-size:14px;font-weight:600;">Manage Booking</a>
+  </p>
   <p style="font-size:14px;color:#6B5B4C;">
-    Plans change — reschedule or cancel free of charge up to 24 hours before your visit, per the BeLa Cleaning
-    Service Policy.
+    Cancel more than 24 hours before your scheduled cleaning at no charge. Cancellations made within 24 hours of
+    the scheduled start time are subject to a late-cancellation fee equal to 50% of the booking total, charged
+    automatically to your saved payment method.
   </p>
   <p style="font-size:14px;">
     Questions? We're happy to help.<br/>

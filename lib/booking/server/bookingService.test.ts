@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // idempotency fast path all run for real (pure, no I/O) so the orchestration
 // itself is genuinely tested, not just mocked end to end.
 vi.mock("./settings", () => ({ getBookingSettings: vi.fn() }));
-vi.mock("./availability", () => ({ checkDateAvailability: vi.fn() }));
+vi.mock("./availability", () => ({ checkDateAvailability: vi.fn(), checkExactTimeAvailability: vi.fn() }));
 // Stripe verification is mocked the same way settings/availability are —
 // this suite exercises bookingService's own sequencing, not real Stripe
 // I/O (which stripeConfig.ts would refuse to perform anyway without a real
@@ -14,22 +14,35 @@ vi.mock("./availability", () => ({ checkDateAvailability: vi.fn() }));
 vi.mock("./stripe/setupIntent", () => ({ verifySucceededSetupIntent: vi.fn() }));
 
 import { getBookingSettings } from "./settings";
-import { checkDateAvailability, type AvailabilityResult } from "./availability";
+import { checkDateAvailability, checkExactTimeAvailability, type AvailabilityResult, type ExactTimeAvailabilityResult } from "./availability";
 import { verifySucceededSetupIntent } from "./stripe/setupIntent";
 import { submitBooking, type NotificationSender } from "./bookingService";
 import { resetIdempotencyFastPathForTests } from "./idempotency";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
-import type { BookingPaymentState, BookingRecord, BookingSubmissionInput, PaymentAttemptUpdate } from "./types";
+import type {
+  AppointmentReminderUpdate,
+  BookingCancellationInitiateUpdate,
+  BookingPaymentState,
+  BookingRecord,
+  BookingReminderState,
+  BookingRescheduleUpdate,
+  BookingSubmissionInput,
+  CancellationFeeOutcomeUpdate,
+  PaymentAttemptUpdate,
+} from "./types";
 import type { NotificationStatusUpdate } from "./notificationStatus";
 
 const mockedGetSettings = vi.mocked(getBookingSettings);
 const mockedCheckAvailability = vi.mocked(checkDateAvailability);
+const mockedCheckExactTimeAvailability = vi.mocked(checkExactTimeAvailability);
 const mockedVerifySetupIntent = vi.mocked(verifySucceededSetupIntent);
 const VALID_SETUP_INTENT = { customerId: "cus_test123", paymentMethodId: "pm_test123" };
 
 const SETTINGS = { minimumLeadDays: 7, defaultDailyCapacity: 2, timezone: "America/New_York", schemaVersion: 1 };
 const AVAILABLE: AvailabilityResult = { available: true, reason: null, maxCapacity: 2, currentCount: 0 };
 const UNAVAILABLE: AvailabilityResult = { available: false, reason: "at-capacity", maxCapacity: 2, currentCount: 2 };
+const EXACT_AVAILABLE: ExactTimeAvailabilityResult = { available: true, reason: null, maxCapacity: 2, peakConcurrentCount: 1 };
+const EXACT_UNAVAILABLE: ExactTimeAvailabilityResult = { available: false, reason: "at-capacity", maxCapacity: 2, peakConcurrentCount: 3 };
 
 class InMemoryBookingRepository implements BookingRepository {
   appended: BookingRecord[] = [];
@@ -48,6 +61,7 @@ class InMemoryBookingRepository implements BookingRepository {
         estimatedDurationMinutes: record.estimatedDurationMinutes,
         serviceDate: record.serviceDate,
         arrivalWindow: record.arrivalWindow,
+        serviceStartTime: record.serviceStartTime,
       });
     }
   }
@@ -104,6 +118,61 @@ class InMemoryBookingRepository implements BookingRepository {
   async getFullBookingRecord(bookingId: string): Promise<BookingRecord | null> {
     return this.appended.find((r) => r.bookingId === bookingId) ?? null;
   }
+
+  async findBookingIdByManageTokenHash(tokenHash: string): Promise<string | null> {
+    return this.appended.find((r) => r.manageBookingTokenHash === tokenHash)?.bookingId ?? null;
+  }
+
+  async markBookingCancelled(bookingId: string, update: BookingCancellationInitiateUpdate): Promise<void> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (!record) throw new Error("Booking ID not found.");
+    record.bookingStatus = "Cancelled";
+    record.paymentStatus = update.paymentStatus;
+    record.cancelledAt = update.cancelledAt;
+    record.cancellationFeeAmount = update.cancellationFeeAmount;
+  }
+
+  async updateCancellationFeeOutcome(bookingId: string, update: CancellationFeeOutcomeUpdate): Promise<void> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (!record) throw new Error("Booking ID not found.");
+    record.paymentStatus = update.paymentStatus;
+    record.stripePaymentIntentId = update.stripePaymentIntentId;
+    record.paidAt = update.paidAt;
+  }
+
+  async updateBookingReschedule(bookingId: string, update: BookingRescheduleUpdate): Promise<void> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (!record) throw new Error("Booking ID not found.");
+    record.serviceDate = update.serviceDate;
+    record.arrivalWindow = update.arrivalWindow;
+    record.scheduledChargeAt = update.scheduledChargeAt;
+    record.rescheduledAt = update.rescheduledAt;
+    record.originalServiceDate = update.originalServiceDate;
+    record.originalArrivalWindow = update.originalArrivalWindow;
+    record.serviceStartTime = update.serviceStartTime;
+    record.originalServiceStartTime = update.originalServiceStartTime;
+  }
+
+  async getBookingReminderState(bookingId: string): Promise<BookingReminderState | null> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (!record) return null;
+    return {
+      bookingId: record.bookingId,
+      bookingStatus: record.bookingStatus,
+      appointmentReminderStatus: record.appointmentReminderStatus,
+      appointmentReminderAttempts: record.appointmentReminderAttempts,
+      scheduledChargeAt: record.scheduledChargeAt,
+      estimatedDurationMinutes: record.estimatedDurationMinutes,
+    };
+  }
+
+  async updateAppointmentReminderStatus(bookingId: string, update: AppointmentReminderUpdate): Promise<void> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (!record) throw new Error("Booking ID not found.");
+    record.appointmentReminderStatus = update.appointmentReminderStatus;
+    record.appointmentReminderSentAt = update.appointmentReminderSentAt;
+    record.appointmentReminderAttempts = update.appointmentReminderAttempts;
+  }
 }
 
 function createFakeNotificationSender(): NotificationSender & {
@@ -153,7 +222,7 @@ function validInput(overrides: Partial<BookingSubmissionInput> = {}): BookingSub
     frequency: "one-time",
     zipCode: "07030",
     serviceDate: futureDateKey(30),
-    arrivalWindow: "morning",
+    serviceStartTime: "09:00",
     firstName: "Jane",
     lastName: "Doe",
     email: "jane@example.com",
@@ -229,6 +298,17 @@ function sampleRecordWithToken(token: string): BookingRecord {
     paymentFailureCode: "",
     manualAmountOverride: false,
     manualAmountOverrideAt: "",
+    manageBookingTokenHash: "b".repeat(64),
+    cancellationFeeAmount: 0,
+    rescheduledAt: "",
+    originalServiceDate: "",
+    originalArrivalWindow: "",
+    appointmentReminderStatus: "",
+    appointmentReminderSentAt: "",
+    appointmentReminderAttempts: 0,
+    serviceStartTime: "",
+    originalServiceStartTime: "",
+    manageBookingReminderTokenHash: "",
   };
 }
 
@@ -236,6 +316,7 @@ beforeEach(() => {
   resetIdempotencyFastPathForTests();
   mockedGetSettings.mockReset().mockResolvedValue(SETTINGS);
   mockedCheckAvailability.mockReset().mockResolvedValue(AVAILABLE);
+  mockedCheckExactTimeAvailability.mockReset().mockResolvedValue(EXACT_AVAILABLE);
   mockedVerifySetupIntent.mockReset().mockResolvedValue(VALID_SETUP_INTENT);
 });
 
@@ -338,7 +419,7 @@ describe("submitBooking", () => {
   it("rejects with date-unavailable if the recheck immediately before append finds the date now full", async () => {
     const repo = new InMemoryBookingRepository();
     const notifications = createFakeNotificationSender();
-    mockedCheckAvailability.mockResolvedValueOnce(AVAILABLE).mockResolvedValueOnce(UNAVAILABLE);
+    mockedCheckExactTimeAvailability.mockResolvedValueOnce(EXACT_AVAILABLE).mockResolvedValueOnce(EXACT_UNAVAILABLE);
     const result = await submitBooking(validInput({ idempotencyToken: "recheck-token" }), repo, notifications);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("date-unavailable");

@@ -8,7 +8,7 @@
 import "server-only";
 import { validateSubmission } from "./validateSubmission";
 import { getBookingSettings } from "./settings";
-import { checkDateAvailability } from "./availability";
+import { checkDateAvailability, checkExactTimeAvailability } from "./availability";
 import { calculateAuthoritativePricing, PricingError } from "./pricing";
 import { generateBookingId } from "./bookingId";
 import { serializeExtras } from "./extras";
@@ -19,6 +19,8 @@ import { NOTIFICATION_STATUS } from "./notificationStatus";
 import { BOOKING_STATUS, PAYMENT_STATUS, SUBMISSION_SOURCE } from "./bookingsSheetSchema";
 import { verifySucceededSetupIntent, type ConfirmedSetupIntent } from "./stripe/setupIntent";
 import { calculateScheduledChargeAt } from "./scheduledCharge";
+import { generateManageToken, hashManageToken } from "./manageToken";
+import { formatOperationalTimestamp } from "./dateUtils";
 import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
@@ -27,7 +29,7 @@ import {
   getCleaningTypeOption,
   getFrequencyOption,
 } from "@/lib/booking/config";
-import { getArrivalWindowOption } from "@/lib/booking/schedule";
+import { formatExactTime, getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import type { BookingRepository } from "./repository";
 import type { BookingRecord, BookingSubmissionInput, ValidatedBooking, ValidationIssue } from "./types";
 
@@ -45,9 +47,19 @@ export type BookingSubmissionSuccess = {
   ok: true;
   bookingId: string;
   serviceDate: string;
-  arrivalWindow: string;
+  // Milestone 6 amendment: the formatted exact start time (e.g. "9:00 AM"),
+  // replacing the old arrival-window label everywhere it used to appear.
+  serviceStartTime: string;
   totalPrice: number;
   estimatedDurationMinutes: number;
+  // Milestone 6: the raw Manage Booking token, returned exactly once, here
+  // and in the confirmation email — never persisted or returned again
+  // afterward (only its hash lives in the Sheet). A duplicate submission
+  // resolved via the idempotency fast path has no way to recover the
+  // original token, so it comes back null in that case; the confirmation
+  // email already sent on the original attempt is the customer's real
+  // record of it.
+  manageToken: string | null;
 };
 
 export type BookingSubmissionFailure =
@@ -85,9 +97,10 @@ async function sendBookingNotifications(
   notificationService: NotificationSender,
   repository: BookingRepository,
   record: BookingRecord,
+  manageToken: string,
 ): Promise<void> {
   const [customerResult, internalResult] = await Promise.allSettled([
-    notificationService.sendCustomerBookingReceived(record),
+    notificationService.sendCustomerBookingReceived(record, manageToken),
     notificationService.sendInternalNewBookingNotification(record),
   ]);
 
@@ -117,7 +130,7 @@ async function sendBookingNotifications(
     await repository.updateNotificationStatus(record.bookingId, {
       customerConfirmationStatus: customerOutcome.ok ? NOTIFICATION_STATUS.SENT : NOTIFICATION_STATUS.FAILED,
       internalNotificationStatus: internalOutcome.ok ? NOTIFICATION_STATUS.SENT : NOTIFICATION_STATUS.FAILED,
-      notificationAttemptAt: new Date().toISOString(),
+      notificationAttemptAt: formatOperationalTimestamp(new Date()),
     });
   } catch (error) {
     logServerError("updateNotificationStatus", error);
@@ -132,14 +145,14 @@ function buildBookingRecord(
   now: Date,
   setupIntent: ConfirmedSetupIntent,
   scheduledChargeAt: Date,
+  manageToken: string,
 ): BookingRecord {
   const propertyTypeLabel = PROPERTY_TYPE_OPTIONS.find((o) => o.id === booking.propertyType)?.label ?? booking.propertyType;
   const squareFootageLabel = SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === booking.squareFootage)?.label ?? booking.squareFootage;
-  const arrivalWindowOption = getArrivalWindowOption(booking.arrivalWindow);
 
   return {
     bookingId,
-    submittedAt: now.toISOString(),
+    submittedAt: formatOperationalTimestamp(now),
     bookingStatus: BOOKING_STATUS.PENDING_PAYMENT,
     paymentStatus: PAYMENT_STATUS.SCHEDULED,
     firstName: sanitizeForSheets(booking.firstName),
@@ -153,7 +166,10 @@ function buildBookingRecord(
     zipCode: booking.addressZip,
     someoneHome: booking.someoneHome === "home" ? "Yes, someone will be home" : "No, no one will be home",
     serviceDate: booking.serviceDate,
-    arrivalWindow: arrivalWindowOption.label,
+    // Milestone 6 amendment: new bookings never populate the legacy
+    // Arrival Window field — Service Start Time (below) is the sole
+    // authoritative time for every booking created going forward.
+    arrivalWindow: "",
     propertyType: sanitizeForSheets(
       booking.propertyType === "other" && booking.propertyTypeOther
         ? `Other — ${booking.propertyTypeOther}`
@@ -198,6 +214,17 @@ function buildBookingRecord(
     paymentFailureCode: "",
     manualAmountOverride: false,
     manualAmountOverrideAt: "",
+    manageBookingTokenHash: hashManageToken(manageToken),
+    cancellationFeeAmount: 0,
+    rescheduledAt: "",
+    originalServiceDate: "",
+    originalArrivalWindow: "",
+    appointmentReminderStatus: "",
+    appointmentReminderSentAt: "",
+    appointmentReminderAttempts: 0,
+    serviceStartTime: booking.serviceStartTime,
+    originalServiceStartTime: "",
+    manageBookingReminderTokenHash: "",
   };
 }
 
@@ -219,7 +246,7 @@ export async function submitBooking(
     return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
   }
 
-  const validation = validateSubmission(input, { settings });
+  const validation = validateSubmission(input);
   if (!validation.ok) {
     return { ok: false, code: "validation", issues: validation.issues };
   }
@@ -238,20 +265,27 @@ export async function submitBooking(
         ok: true,
         bookingId: existing.bookingId,
         serviceDate: existing.serviceDate,
-        arrivalWindow: existing.arrivalWindow,
+        serviceStartTime: getScheduleDisplayLabel(existing),
         totalPrice: existing.totalPrice,
         estimatedDurationMinutes: existing.estimatedDurationMinutes,
+        manageToken: null,
       };
     }
 
-    let availability;
+    // Cheap fail-fast pre-check before the more expensive steps below
+    // (pricing, Stripe verification) — day-level only (blackout / whole-day
+    // capacity), since duration (needed for the real, overlap-aware
+    // exact-time check) isn't known yet. The authoritative decision is
+    // checkExactTimeAvailability below, run twice: once as soon as
+    // duration is known, and again immediately before the append.
+    let dayAvailability;
     try {
-      availability = await checkDateAvailability(booking.serviceDate);
+      dayAvailability = await checkDateAvailability(booking.serviceDate);
     } catch (error) {
       logServerError("checkDateAvailability", error);
       return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
     }
-    if (!availability.available) {
+    if (!dayAvailability.available) {
       return {
         ok: false,
         code: "date-unavailable",
@@ -266,6 +300,24 @@ export async function submitBooking(
       logServerError("calculateAuthoritativePricing", error);
       const message = error instanceof PricingError ? error.message : GENERIC_SERVER_ERROR_MESSAGE;
       return { ok: false, code: "server-error", message };
+    }
+
+    // The authoritative, overlap/capacity-aware check — now that duration
+    // is known. Run before the Stripe call too, so an unavailable slot
+    // fails fast without spending an external API round trip.
+    let exactAvailability;
+    try {
+      exactAvailability = await checkExactTimeAvailability(booking.serviceDate, booking.serviceStartTime, pricing.estimatedDurationMinutes);
+    } catch (error) {
+      logServerError("checkExactTimeAvailability", error);
+      return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
+    }
+    if (!exactAvailability.available) {
+      return {
+        ok: false,
+        code: "date-unavailable",
+        message: "That appointment time is no longer available. Please choose another.",
+      };
     }
 
     // Re-verifies against Stripe directly — the browser's claim that setup
@@ -287,7 +339,7 @@ export async function submitBooking(
 
     const scheduledChargeAt = calculateScheduledChargeAt(
       booking.serviceDate,
-      booking.arrivalWindow,
+      { hour: Number(booking.serviceStartTime.slice(0, 2)), minute: 0 },
       pricing.estimatedDurationMinutes,
       settings.timezone,
     );
@@ -310,24 +362,26 @@ export async function submitBooking(
     // Immediate re-check right before the append: the first check above
     // could be seconds stale by the time pricing/ID generation finish, and
     // this is the last chance to catch a concurrent booking that filled
-    // the last slot in between (STEP 7's authoritative-at-write-time
-    // requirement). A residual, narrow race still exists between this
-    // check and the append itself — see docs/booking-backend.md.
-    let recheck;
+    // the last slot (or this exact interval) in between (STEP 7's
+    // authoritative-at-write-time requirement). A residual, narrow race
+    // still exists between this check and the append itself — see
+    // docs/booking-backend.md.
+    let exactRecheck;
     try {
-      recheck = await checkDateAvailability(booking.serviceDate);
+      exactRecheck = await checkExactTimeAvailability(booking.serviceDate, booking.serviceStartTime, pricing.estimatedDurationMinutes);
     } catch (error) {
-      logServerError("checkDateAvailability (recheck)", error);
+      logServerError("checkExactTimeAvailability (recheck)", error);
       return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
     }
-    if (!recheck.available) {
+    if (!exactRecheck.available) {
       return {
         ok: false,
         code: "date-unavailable",
-        message: "That date just became unavailable. Please choose another appointment date.",
+        message: "That appointment time just became unavailable. Please choose another.",
       };
     }
 
+    const manageToken = generateManageToken();
     const record = buildBookingRecord(
       booking,
       bookingId,
@@ -336,6 +390,7 @@ export async function submitBooking(
       new Date(),
       confirmedSetupIntent,
       scheduledChargeAt,
+      manageToken,
     );
     try {
       await repository.appendBooking(record);
@@ -348,15 +403,16 @@ export async function submitBooking(
     // best-effort. A notification failure is logged but never changes the
     // success result below (STEP 9): the booking must never appear to
     // "disappear" just because an email didn't go out.
-    await sendBookingNotifications(notificationService, repository, record);
+    await sendBookingNotifications(notificationService, repository, record, manageToken);
 
     return {
       ok: true,
       bookingId,
       serviceDate: booking.serviceDate,
-      arrivalWindow: getArrivalWindowOption(booking.arrivalWindow).label,
+      serviceStartTime: formatExactTime(booking.serviceStartTime),
       totalPrice: pricing.totalPrice,
       estimatedDurationMinutes: pricing.estimatedDurationMinutes,
+      manageToken,
     };
   });
 }

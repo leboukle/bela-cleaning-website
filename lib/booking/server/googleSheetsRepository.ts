@@ -2,6 +2,7 @@
 import "server-only";
 import { appendRow, batchGetRanges, batchUpdateRanges, getRange, updateRange } from "./sheetsClient";
 import {
+  BOOKING_STATUS,
   BOOKINGS_COLUMNS,
   BOOKINGS_FULL_RANGE,
   BOOKINGS_LAST_COLUMN_LETTER,
@@ -10,8 +11,18 @@ import {
   type BookingColumn,
 } from "./bookingsSheetSchema";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
-import type { BookingPaymentState, BookingRecord, PaymentAttemptUpdate } from "./types";
+import type {
+  AppointmentReminderUpdate,
+  BookingCancellationInitiateUpdate,
+  BookingPaymentState,
+  BookingRecord,
+  BookingReminderState,
+  BookingRescheduleUpdate,
+  CancellationFeeOutcomeUpdate,
+  PaymentAttemptUpdate,
+} from "./types";
 import type { NotificationStatusUpdate } from "./notificationStatus";
+import { manageTokenHashesMatch } from "./manageToken";
 
 // How many of the most recent Bookings rows to scan when looking for a
 // duplicate idempotency token. Google Sheets has no index/query
@@ -85,6 +96,17 @@ function recordToRow(record: BookingRecord): Array<string | number | boolean> {
     "Payment Failure Code": record.paymentFailureCode,
     "Manual Amount Override": record.manualAmountOverride,
     "Manual Amount Override At": record.manualAmountOverrideAt,
+    "Manage Booking Token Hash": record.manageBookingTokenHash,
+    "Cancellation Fee Amount": record.cancellationFeeAmount,
+    "Rescheduled At": record.rescheduledAt,
+    "Original Service Date": record.originalServiceDate,
+    "Original Arrival Window": record.originalArrivalWindow,
+    "Appointment Reminder Status": record.appointmentReminderStatus,
+    "Appointment Reminder Sent At": record.appointmentReminderSentAt,
+    "Service Start Time": record.serviceStartTime,
+    "Original Service Start Time": record.originalServiceStartTime,
+    "Appointment Reminder Attempts": record.appointmentReminderAttempts,
+    "Manage Booking Reminder Token Hash": record.manageBookingReminderTokenHash,
   };
 
   return BOOKINGS_COLUMNS.map((column) => {
@@ -178,6 +200,17 @@ function rowToRecord(row: string[]): BookingRecord {
     paymentFailureCode: get("Payment Failure Code"),
     manualAmountOverride: getBoolean("Manual Amount Override"),
     manualAmountOverrideAt: get("Manual Amount Override At"),
+    manageBookingTokenHash: get("Manage Booking Token Hash"),
+    cancellationFeeAmount: getNumber("Cancellation Fee Amount"),
+    rescheduledAt: get("Rescheduled At"),
+    originalServiceDate: get("Original Service Date"),
+    originalArrivalWindow: get("Original Arrival Window"),
+    appointmentReminderStatus: get("Appointment Reminder Status"),
+    appointmentReminderSentAt: get("Appointment Reminder Sent At"),
+    serviceStartTime: get("Service Start Time"),
+    originalServiceStartTime: get("Original Service Start Time"),
+    appointmentReminderAttempts: getNumber("Appointment Reminder Attempts"),
+    manageBookingReminderTokenHash: get("Manage Booking Reminder Token Hash"),
   };
 }
 
@@ -211,13 +244,14 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
 
   async findRecentBookingByIdempotencyToken(token: string): Promise<IdempotentBookingResult | null> {
     const marker = `idempotency_token:${token}`;
-    const [notes, ids, totals, durations, dates, windows] = await batchGetRanges([
+    const [notes, ids, totals, durations, dates, windows, startTimes] = await batchGetRanges([
       columnRange("Internal Notes"),
       columnRange("Booking ID"),
       columnRange("Total Price"),
       columnRange("Estimated Duration Minutes"),
       columnRange("Service Date"),
       columnRange("Arrival Window"),
+      columnRange("Service Start Time"),
     ]);
 
     const rowCount = notes.length;
@@ -233,6 +267,7 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
           estimatedDurationMinutes: Number(durations[i]?.[0] ?? 0),
           serviceDate: dates[i]?.[0] ?? "",
           arrivalWindow: windows[i]?.[0] ?? "",
+          serviceStartTime: startTimes[i]?.[0] ?? "",
         };
       }
     }
@@ -323,5 +358,154 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
     const row = rows[0];
     if (!row) return null;
     return rowToRecord(row);
+  }
+
+  /**
+   * Checks BOTH the original "Manage Booking Token Hash" and the
+   * reminder-issued "Manage Booking Reminder Token Hash" columns — either
+   * one resolving to a row is a valid match for that row's booking.
+   * Post-verification fix (see docs/manage-booking.md): the reminder
+   * email needs its own directly-usable link, and since the original
+   * token's raw value is never recoverable from its hash, a second,
+   * independent token is minted at reminder time instead of rotating the
+   * original — so both links must keep working, indefinitely, for the
+   * same booking.
+   */
+  async findBookingIdByManageTokenHash(tokenHash: string): Promise<string | null> {
+    const [originalHashes, reminderHashes, ids] = await batchGetRanges([
+      columnRange("Manage Booking Token Hash"),
+      columnRange("Manage Booking Reminder Token Hash"),
+      columnRange("Booking ID"),
+    ]);
+    const rowIndex = originalHashes.findIndex(
+      (row, i) => manageTokenHashesMatch(row[0] ?? "", tokenHash) || manageTokenHashesMatch(reminderHashes[i]?.[0] ?? "", tokenHash),
+    );
+    if (rowIndex === -1) return null;
+    return ids[rowIndex]?.[0] ?? null;
+  }
+
+  async markBookingCancelled(bookingId: string, update: BookingCancellationInitiateUpdate): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) {
+      throw new Error("Booking ID not found when marking booking cancelled.");
+    }
+    const sheetRow = rowIndex + 2;
+
+    const statusStartCol = columnLetter("Booking Status");
+    const statusEndCol = columnLetter("Payment Status");
+    const cancelledAtCol = columnLetter("Cancelled At");
+    const feeAmountCol = columnLetter("Cancellation Fee Amount");
+
+    await batchUpdateRanges([
+      {
+        range: `${BOOKINGS_SHEET_NAME}!${statusStartCol}${sheetRow}:${statusEndCol}${sheetRow}`,
+        row: [BOOKING_STATUS.CANCELLED, update.paymentStatus],
+      },
+      { range: `${BOOKINGS_SHEET_NAME}!${cancelledAtCol}${sheetRow}`, row: [update.cancelledAt] },
+      { range: `${BOOKINGS_SHEET_NAME}!${feeAmountCol}${sheetRow}`, row: [update.cancellationFeeAmount] },
+    ]);
+  }
+
+  async updateCancellationFeeOutcome(bookingId: string, update: CancellationFeeOutcomeUpdate): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) {
+      throw new Error("Booking ID not found when updating cancellation fee outcome.");
+    }
+    const sheetRow = rowIndex + 2;
+
+    const paymentStatusCol = columnLetter("Payment Status");
+    const intentStartCol = columnLetter("Stripe Payment Intent ID");
+    const intentEndCol = columnLetter("Paid At");
+
+    await batchUpdateRanges([
+      { range: `${BOOKINGS_SHEET_NAME}!${paymentStatusCol}${sheetRow}`, row: [update.paymentStatus] },
+      {
+        range: `${BOOKINGS_SHEET_NAME}!${intentStartCol}${sheetRow}:${intentEndCol}${sheetRow}`,
+        row: [update.stripePaymentIntentId, update.paidAt],
+      },
+    ]);
+  }
+
+  async updateBookingReschedule(bookingId: string, update: BookingRescheduleUpdate): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) {
+      throw new Error("Booking ID not found when updating booking reschedule.");
+    }
+    const sheetRow = rowIndex + 2;
+
+    const dateStartCol = columnLetter("Service Date");
+    const dateEndCol = columnLetter("Arrival Window");
+    const chargeAtCol = columnLetter("Scheduled Charge At");
+    const rescheduledAtCol = columnLetter("Rescheduled At");
+    const originalStartCol = columnLetter("Original Service Date");
+    const originalEndCol = columnLetter("Original Arrival Window");
+    const startTimeCol = columnLetter("Service Start Time");
+    const originalStartTimeCol = columnLetter("Original Service Start Time");
+
+    await batchUpdateRanges([
+      {
+        range: `${BOOKINGS_SHEET_NAME}!${dateStartCol}${sheetRow}:${dateEndCol}${sheetRow}`,
+        row: [update.serviceDate, update.arrivalWindow],
+      },
+      { range: `${BOOKINGS_SHEET_NAME}!${chargeAtCol}${sheetRow}`, row: [update.scheduledChargeAt] },
+      { range: `${BOOKINGS_SHEET_NAME}!${rescheduledAtCol}${sheetRow}`, row: [update.rescheduledAt] },
+      {
+        range: `${BOOKINGS_SHEET_NAME}!${originalStartCol}${sheetRow}:${originalEndCol}${sheetRow}`,
+        row: [update.originalServiceDate, update.originalArrivalWindow],
+      },
+      { range: `${BOOKINGS_SHEET_NAME}!${startTimeCol}${sheetRow}`, row: [update.serviceStartTime] },
+      { range: `${BOOKINGS_SHEET_NAME}!${originalStartTimeCol}${sheetRow}`, row: [update.originalServiceStartTime] },
+    ]);
+  }
+
+  async getBookingReminderState(bookingId: string): Promise<BookingReminderState | null> {
+    const [ids, bookingStatuses, reminderStatuses, reminderAttempts, scheduledChargeAts, durations] = await batchGetRanges([
+      columnRange("Booking ID"),
+      columnRange("Booking Status"),
+      columnRange("Appointment Reminder Status"),
+      columnRange("Appointment Reminder Attempts"),
+      columnRange("Scheduled Charge At"),
+      columnRange("Estimated Duration Minutes"),
+    ]);
+
+    const rowIndex = ids.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) return null;
+
+    return {
+      bookingId,
+      bookingStatus: bookingStatuses[rowIndex]?.[0] ?? "",
+      appointmentReminderStatus: reminderStatuses[rowIndex]?.[0] ?? "",
+      appointmentReminderAttempts: Number(reminderAttempts[rowIndex]?.[0] ?? 0),
+      scheduledChargeAt: scheduledChargeAts[rowIndex]?.[0] ?? "",
+      estimatedDurationMinutes: Number(durations[rowIndex]?.[0] ?? 0),
+    };
+  }
+
+  async updateAppointmentReminderStatus(bookingId: string, update: AppointmentReminderUpdate): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) {
+      throw new Error("Booking ID not found when updating appointment reminder status.");
+    }
+    const sheetRow = rowIndex + 2;
+
+    const statusStartCol = columnLetter("Appointment Reminder Status");
+    const statusEndCol = columnLetter("Appointment Reminder Sent At");
+    const attemptsStartCol = columnLetter("Appointment Reminder Attempts");
+    const attemptsEndCol = columnLetter("Manage Booking Reminder Token Hash");
+
+    await batchUpdateRanges([
+      {
+        range: `${BOOKINGS_SHEET_NAME}!${statusStartCol}${sheetRow}:${statusEndCol}${sheetRow}`,
+        row: [update.appointmentReminderStatus, update.appointmentReminderSentAt],
+      },
+      {
+        range: `${BOOKINGS_SHEET_NAME}!${attemptsStartCol}${sheetRow}:${attemptsEndCol}${sheetRow}`,
+        row: [update.appointmentReminderAttempts, update.manageBookingReminderTokenHash],
+      },
+    ]);
   }
 }
