@@ -27,6 +27,7 @@ import { CHARGE_DELAY_AFTER_END_MINUTES } from "./scheduledCharge";
 import { generateManageToken, hashManageToken } from "./manageToken";
 import type { NotificationService } from "./notificationService";
 import type { BookingRepository } from "./repository";
+import { formatOperationalTimestamp } from "./dateUtils";
 
 export type ReminderNotificationSender = Pick<
   NotificationService,
@@ -113,7 +114,7 @@ export async function processReminderForBooking(
     try {
       await repository.updateAppointmentReminderStatus(bookingId, {
         appointmentReminderStatus: APPOINTMENT_REMINDER_STATUS.SENT,
-        appointmentReminderSentAt: now.toISOString(),
+        appointmentReminderSentAt: formatOperationalTimestamp(now),
         appointmentReminderAttempts: attemptNumber,
         manageBookingReminderTokenHash: reminderTokenHash,
       });

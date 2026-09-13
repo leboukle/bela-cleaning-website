@@ -20,6 +20,7 @@ import { BOOKING_STATUS, PAYMENT_STATUS, SUBMISSION_SOURCE } from "./bookingsShe
 import { verifySucceededSetupIntent, type ConfirmedSetupIntent } from "./stripe/setupIntent";
 import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { generateManageToken, hashManageToken } from "./manageToken";
+import { formatOperationalTimestamp } from "./dateUtils";
 import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
@@ -129,7 +130,7 @@ async function sendBookingNotifications(
     await repository.updateNotificationStatus(record.bookingId, {
       customerConfirmationStatus: customerOutcome.ok ? NOTIFICATION_STATUS.SENT : NOTIFICATION_STATUS.FAILED,
       internalNotificationStatus: internalOutcome.ok ? NOTIFICATION_STATUS.SENT : NOTIFICATION_STATUS.FAILED,
-      notificationAttemptAt: new Date().toISOString(),
+      notificationAttemptAt: formatOperationalTimestamp(new Date()),
     });
   } catch (error) {
     logServerError("updateNotificationStatus", error);
@@ -151,7 +152,7 @@ function buildBookingRecord(
 
   return {
     bookingId,
-    submittedAt: now.toISOString(),
+    submittedAt: formatOperationalTimestamp(now),
     bookingStatus: BOOKING_STATUS.PENDING_PAYMENT,
     paymentStatus: PAYMENT_STATUS.SCHEDULED,
     firstName: sanitizeForSheets(booking.firstName),

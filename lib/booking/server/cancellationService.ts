@@ -27,6 +27,7 @@ import { hashManageToken, isPlausibleManageToken } from "./manageToken";
 import { getBookingTimingStatus, calculateLateCancellationFeeCents } from "./cancellationPolicy";
 import { createOffSessionPaymentIntent, type PaymentIntentFailureDetail } from "./stripe/paymentIntent";
 import { getBookingSettings } from "./settings";
+import { formatOperationalTimestamp } from "./dateUtils";
 import type { NotificationService } from "./notificationService";
 import type { BookingRepository } from "./repository";
 import type { BookingRecord } from "./types";
@@ -96,7 +97,7 @@ export async function cancelBookingByToken(
       try {
         await repository.markBookingCancelled(bookingId, {
           paymentStatus: PAYMENT_STATUS.CANCELLED_NO_CHARGE,
-          cancelledAt: now.toISOString(),
+          cancelledAt: formatOperationalTimestamp(now),
           cancellationFeeAmount: 0,
         });
       } catch (error) {
@@ -127,7 +128,7 @@ export async function cancelBookingByToken(
     try {
       await repository.markBookingCancelled(bookingId, {
         paymentStatus: PAYMENT_STATUS.CANCELLATION_FEE_PROCESSING,
-        cancelledAt: now.toISOString(),
+        cancelledAt: formatOperationalTimestamp(now),
         cancellationFeeAmount: feeCents / 100,
       });
     } catch (error) {

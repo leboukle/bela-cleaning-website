@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type Stripe from "stripe";
 import { handlePaymentIntentFailed, handlePaymentIntentSucceeded, type PaymentWebhookNotificationSender } from "./paymentWebhookService";
 import { PAYMENT_STATUS } from "./bookingsSheetSchema";
+import { formatOperationalTimestamp } from "./dateUtils";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type {
   AppointmentReminderUpdate,
@@ -144,7 +145,7 @@ describe("handlePaymentIntentSucceeded", () => {
     await handlePaymentIntentSucceeded(fakePaymentIntent(), repo, notifications, NOW);
 
     expect(repo.updates[0].update.paymentStatus).toBe(PAYMENT_STATUS.PAID);
-    expect(repo.updates[0].update.paidAt).toBe(NOW.toISOString());
+    expect(repo.updates[0].update.paidAt).toBe(formatOperationalTimestamp(NOW));
     expect(notifications.sendPaymentReceipt).toHaveBeenCalledTimes(1);
     expect(notifications.sendInternalPaymentSucceeded).toHaveBeenCalledTimes(1);
   });
@@ -231,7 +232,7 @@ describe("handlePaymentIntentSucceeded — cancellation fee", () => {
     await handlePaymentIntentSucceeded(fakeCancellationFeeIntent(), repo, notifications, NOW);
 
     expect(repo.records.get("BELA-1")?.paymentStatus).toBe(PAYMENT_STATUS.CANCELLATION_FEE_PAID);
-    expect(repo.records.get("BELA-1")?.paidAt).toBe(NOW.toISOString());
+    expect(repo.records.get("BELA-1")?.paidAt).toBe(formatOperationalTimestamp(NOW));
     // Never routed through the normal-charge receipt/success notifications.
     expect(notifications.sendPaymentReceipt).not.toHaveBeenCalled();
     expect(notifications.sendInternalPaymentSucceeded).not.toHaveBeenCalled();

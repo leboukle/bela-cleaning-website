@@ -21,7 +21,7 @@ import { getBookingTimingStatus } from "./cancellationPolicy";
 import { checkExactTimeAvailability } from "./availability";
 import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { getBookingSettings } from "./settings";
-import { isValidDateKey } from "./dateUtils";
+import { isValidDateKey, formatOperationalTimestamp } from "./dateUtils";
 import { getAllExactStartTimeCandidates, isPlausibleExactTimeFormat } from "@/lib/booking/schedule";
 import type { NotificationService } from "./notificationService";
 import type { BookingRepository } from "./repository";
@@ -131,7 +131,7 @@ export async function rescheduleBookingByToken(
       arrivalWindow: "",
       serviceStartTime: newServiceStartTime,
       scheduledChargeAt: newScheduledChargeAt.toISOString(),
-      rescheduledAt: now.toISOString(),
+      rescheduledAt: formatOperationalTimestamp(now),
       originalServiceDate,
       originalArrivalWindow,
       originalServiceStartTime,

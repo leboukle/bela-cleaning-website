@@ -61,3 +61,26 @@ export const MINIMUM_LEAD_TIME_HOURS = 24;
 export function isLessThanMinimumLeadTime(serviceStart: Date, now: Date = new Date()): boolean {
   return serviceStart.getTime() - now.getTime() < MINIMUM_LEAD_TIME_HOURS * 60 * 60 * 1000;
 }
+
+// Human-readable operational-timestamp formatting (BeLa operates in New
+// Jersey). This is a *display* concern only — the underlying instant is
+// never altered, and this must never be used for any field the app or
+// Apps Script re-parses for scheduling (Scheduled Charge At, Next Payment
+// Attempt At — see paymentProcessingService.ts/reminderService.ts and
+// both apps-script/*.gs files), only for pure audit-trail fields like
+// Cancelled At/Paid At/Rescheduled At/Submitted At/Appointment Reminder
+// Sent At. `timeZoneName: "short"` combined with the IANA zone resolves
+// EST vs. EDT automatically for the given date — no manual DST handling.
+export function formatOperationalTimestamp(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  }).format(date);
+}

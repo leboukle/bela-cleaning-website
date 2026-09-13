@@ -13,6 +13,7 @@ import { getNextRetryAt, MAX_PAYMENT_ATTEMPTS } from "./paymentRetryCadence";
 import type { NotificationService } from "./notificationService";
 import type { BookingRepository } from "./repository";
 import type Stripe from "stripe";
+import { formatOperationalTimestamp } from "./dateUtils";
 
 export type PaymentWebhookNotificationSender = Pick<
   NotificationService,
@@ -64,9 +65,9 @@ export async function handlePaymentIntentSucceeded(
     await repository.updatePaymentAttempt(bookingId, {
       paymentStatus: PAYMENT_STATUS.PAID,
       stripePaymentIntentId: paymentIntent.id,
-      paidAt: now.toISOString(),
+      paidAt: formatOperationalTimestamp(now),
       paymentAttemptCount: state.paymentAttemptCount,
-      lastPaymentAttemptAt: now.toISOString(),
+      lastPaymentAttemptAt: formatOperationalTimestamp(now),
       nextPaymentAttemptAt: "",
       paymentFailureCode: "",
     });
@@ -136,7 +137,7 @@ export async function handlePaymentIntentFailed(
       stripePaymentIntentId: paymentIntent.id,
       paidAt: "",
       paymentAttemptCount: state.paymentAttemptCount,
-      lastPaymentAttemptAt: now.toISOString(),
+      lastPaymentAttemptAt: formatOperationalTimestamp(now),
       nextPaymentAttemptAt,
       paymentFailureCode: failure.code ?? failure.type ?? "unknown_error",
     });
@@ -186,7 +187,7 @@ async function handleCancellationFeeSucceeded(
     await repository.updateCancellationFeeOutcome(bookingId, {
       paymentStatus: PAYMENT_STATUS.CANCELLATION_FEE_PAID,
       stripePaymentIntentId: paymentIntent.id,
-      paidAt: now.toISOString(),
+      paidAt: formatOperationalTimestamp(now),
     });
   } catch (error) {
     logError("updateCancellationFeeOutcome (paid)", bookingId, error);

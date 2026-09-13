@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { processReminderForBooking, MAX_REMINDER_ATTEMPTS, type ReminderNotificationSender } from "./reminderService";
 import { BOOKING_STATUS, APPOINTMENT_REMINDER_STATUS } from "./bookingsSheetSchema";
 import { hashManageToken, isPlausibleManageToken } from "./manageToken";
+import { formatOperationalTimestamp } from "./dateUtils";
 import { sampleBookingRecord } from "./testFixtures";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type {
@@ -192,7 +193,7 @@ describe("processReminderForBooking — successful send", () => {
     const record = repo.records.get("BELA-1");
     expect(record?.appointmentReminderStatus).toBe("Sent");
     expect(record?.appointmentReminderAttempts).toBe(1);
-    expect(record?.appointmentReminderSentAt).toBe(WITHIN_WINDOW.toISOString());
+    expect(record?.appointmentReminderSentAt).toBe(formatOperationalTimestamp(WITHIN_WINDOW));
   });
 
   it("Milestone 6 amendment: ensures a successful send immediately makes subsequent scheduler runs ineligible", async () => {

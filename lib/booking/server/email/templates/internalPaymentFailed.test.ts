@@ -49,4 +49,25 @@ describe("buildInternalPaymentFailedEmail", () => {
     });
     expect(email.text).toContain("insufficient_funds");
   });
+
+  it("displays 'Next attempt at' as America/New_York local time, not the stored raw UTC value", () => {
+    const record = sampleBookingRecord({ paymentStatus: "Retry Scheduled", nextPaymentAttemptAt: "2026-06-14T16:00:00.000Z" });
+    const email = buildInternalPaymentFailedEmail(record, {
+      classification: "retryable",
+      failure: { type: "card_error", code: "card_declined", declineCode: "generic_decline" },
+    });
+    expect(email.text).toContain("Next attempt at: 06/14/2026, 12:00:00 PM EDT");
+    expect(email.text).not.toContain("2026-06-14T16:00:00.000Z");
+    // The stored field itself must remain untouched — only the email display is reformatted.
+    expect(record.nextPaymentAttemptAt).toBe("2026-06-14T16:00:00.000Z");
+  });
+
+  it("falls back to '(none scheduled)' when no retry is scheduled", () => {
+    const record = sampleBookingRecord({ paymentStatus: "Final Failure", nextPaymentAttemptAt: "" });
+    const email = buildInternalPaymentFailedEmail(record, {
+      classification: "non-retryable",
+      failure: { type: "card_error", code: "card_declined", declineCode: "stolen_card" },
+    });
+    expect(email.text).toContain("Next attempt at: (none scheduled)");
+  });
 });
