@@ -297,6 +297,10 @@ export type BookingPaymentState = {
   serviceDate: string;
   stripeCustomerId: string;
   stripePaymentMethodId: string;
+  /** The most recent PaymentIntent recorded for this booking, if any — used to
+   * verify against Stripe directly before ever initiating a new charge (see
+   * paymentProcessingService.ts's idempotency guard), never trusted on its own. */
+  stripePaymentIntentId: string;
   scheduledChargeAt: string;
   originalBookingTotal: number;
   chargeAmount: number;

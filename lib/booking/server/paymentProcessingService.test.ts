@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./stripe/paymentIntent", () => ({ createOffSessionPaymentIntent: vi.fn() }));
+vi.mock("./stripe/paymentIntent", () => ({ createOffSessionPaymentIntent: vi.fn(), retrievePaymentIntent: vi.fn() }));
 
-import { createOffSessionPaymentIntent } from "./stripe/paymentIntent";
+import { createOffSessionPaymentIntent, retrievePaymentIntent } from "./stripe/paymentIntent";
 import { processDueBooking, type PaymentAttemptNotificationSender } from "./paymentProcessingService";
 import { BOOKING_STATUS, PAYMENT_STATUS } from "./bookingsSheetSchema";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
@@ -19,6 +19,7 @@ import type {
 import { sampleBookingRecord } from "./testFixtures";
 
 const mockedCreatePaymentIntent = vi.mocked(createOffSessionPaymentIntent);
+const mockedRetrievePaymentIntent = vi.mocked(retrievePaymentIntent);
 
 class FakeRepository implements BookingRepository {
   states = new Map<string, BookingPaymentState>();
@@ -101,6 +102,7 @@ function baseState(overrides: Partial<BookingPaymentState> = {}): BookingPayment
     serviceDate: "2026-02-15",
     stripeCustomerId: "cus_123",
     stripePaymentMethodId: "pm_456",
+    stripePaymentIntentId: "",
     scheduledChargeAt: "2026-02-15T18:00:00.000Z",
     originalBookingTotal: 190.5,
     chargeAmount: 190.5,
@@ -126,6 +128,7 @@ const NOW = new Date("2026-02-15T19:00:00.000Z"); // after the 18:00Z Scheduled 
 
 beforeEach(() => {
   mockedCreatePaymentIntent.mockReset();
+  mockedRetrievePaymentIntent.mockReset();
 });
 
 describe("processDueBooking", () => {
@@ -209,5 +212,257 @@ describe("processDueBooking", () => {
     expect(finalUpdate.paymentStatus).toBe(PAYMENT_STATUS.RETRY_SCHEDULED);
     expect(finalUpdate.nextPaymentAttemptAt).not.toBe("");
     expect(notifications.sendInternalPaymentFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips a stale Next Payment Attempt At on a booking whose Payment Status is already Paid — never touches Stripe", async () => {
+    // Belt-and-suspenders regression test for the case where the Payment
+    // Status field itself is correct (Paid) but Next Payment Attempt At
+    // was never cleared for some other reason — the very first gate
+    // (Scheduled/Retry Scheduled only) must reject this before ever
+    // reaching the idempotency guard or Stripe.
+    const repo = new FakeRepository();
+    repo.states.set(
+      "BELA-1",
+      baseState({ bookingId: "BELA-1", paymentStatus: PAYMENT_STATUS.PAID, nextPaymentAttemptAt: "2020-01-01T00:00:00.000Z" }),
+    );
+    const result = await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+    expect(result).toEqual({ bookingId: "BELA-1", outcome: "skipped-not-due", paymentStatus: PAYMENT_STATUS.PAID });
+    expect(mockedRetrievePaymentIntent).not.toHaveBeenCalled();
+    expect(mockedCreatePaymentIntent).not.toHaveBeenCalled();
+  });
+
+  describe("idempotency guard — already-succeeded PaymentIntent on file", () => {
+    it("skips without charging Stripe again, and self-heals the Sheet to Paid, when the recorded PaymentIntent already succeeded", async () => {
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_already_paid",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_already_paid", status: "succeeded" } as never);
+
+      const result = await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      expect(result).toEqual({ bookingId: "BELA-1", outcome: "skipped-already-paid", paymentIntentId: "pi_already_paid" });
+      expect(mockedRetrievePaymentIntent).toHaveBeenCalledWith("pi_already_paid");
+      expect(mockedCreatePaymentIntent).not.toHaveBeenCalled();
+      const update = repo.updates[repo.updates.length - 1].update;
+      expect(update.paymentStatus).toBe(PAYMENT_STATUS.PAID);
+      expect(update.nextPaymentAttemptAt).toBe("");
+    });
+
+    it("clears stale failure/retry fields on self-heal and never sends a failed-payment email, even with stale error metadata on file", async () => {
+      // Simulates the exact reported scenario: a booking that previously
+      // failed (leaving retry/error fields populated) subsequently
+      // succeeded at Stripe, but the Sheet's Payment Status was never
+      // updated past Retry Scheduled — e.g. a missed webhook delivery.
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          paymentAttemptCount: 2,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z", // stale — already due
+          stripePaymentIntentId: "pi_now_succeeded",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_now_succeeded", status: "succeeded" } as never);
+      const notifications = fakeNotifications();
+
+      const result = await processDueBooking("BELA-1", repo, notifications, NOW);
+
+      expect(result.outcome).toBe("skipped-already-paid");
+      expect(mockedCreatePaymentIntent).not.toHaveBeenCalled();
+      expect(notifications.sendInternalPaymentFailed).not.toHaveBeenCalled();
+      const update = repo.updates[repo.updates.length - 1].update;
+      expect(update.paymentStatus).toBe(PAYMENT_STATUS.PAID);
+      expect(update.nextPaymentAttemptAt).toBe("");
+      expect(update.paymentFailureCode).toBe("");
+    });
+
+    it("converges Payment Status to the app's one canonical Paid value and leaves Booking Status alone (there is no separate 'Confirmed' status)", async () => {
+      // This codebase's Booking Status column only ever distinguishes
+      // "Pending Payment" from "Cancelled" (see BOOKING_STATUS) — there is
+      // no third "Paid"/"Confirmed" value anywhere in the app, and the
+      // authoritative webhook happy path (paymentWebhookService.ts) never
+      // touches bookingStatus on success either. So a booking staying
+      // "Pending Payment" alongside Payment Status: Paid is the existing,
+      // correct converged state, not a bug — this self-heal path must
+      // match that exactly rather than inventing a new status.
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          bookingStatus: BOOKING_STATUS.PENDING_PAYMENT,
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_now_succeeded",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_now_succeeded", status: "succeeded" } as never);
+
+      await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      const finalState = repo.states.get("BELA-1")!;
+      expect(finalState.paymentStatus).toBe(PAYMENT_STATUS.PAID);
+      expect(finalState.bookingStatus).toBe(BOOKING_STATUS.PENDING_PAYMENT);
+    });
+
+    it("processes the same already-paid booking more than once without ever creating a second Stripe charge", async () => {
+      const staleState = () =>
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_already_paid",
+        });
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_already_paid", status: "succeeded" } as never);
+
+      const repoRunOne = new FakeRepository();
+      repoRunOne.states.set("BELA-1", staleState());
+      const resultOne = await processDueBooking("BELA-1", repoRunOne, fakeNotifications(), NOW);
+
+      const repoRunTwo = new FakeRepository();
+      repoRunTwo.states.set("BELA-1", staleState());
+      const resultTwo = await processDueBooking("BELA-1", repoRunTwo, fakeNotifications(), NOW);
+
+      expect(resultOne.outcome).toBe("skipped-already-paid");
+      expect(resultTwo.outcome).toBe("skipped-already-paid");
+      expect(mockedCreatePaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it("proceeds with a normal retry attempt when Stripe has positively confirmed the existing PaymentIntent is a dead-end (requires_payment_method)", async () => {
+      // "requires_payment_method" is Stripe's terminal status for a
+      // PaymentIntent whose last attempt definitively failed and will
+      // never succeed on its own — the one non-succeeded status (besides
+      // "canceled") that positively clears the way for a brand-new
+      // charge attempt.
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_declined_before",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_declined_before", status: "requires_payment_method" } as never);
+      mockedCreatePaymentIntent.mockResolvedValue({ outcome: "succeeded", paymentIntentId: "pi_new" });
+
+      const result = await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      expect(mockedRetrievePaymentIntent).toHaveBeenCalledWith("pi_declined_before");
+      expect(mockedCreatePaymentIntent).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ bookingId: "BELA-1", outcome: "charge-initiated", paymentIntentId: "pi_new", stripeOutcome: "succeeded" });
+    });
+
+    it("proceeds with a normal retry attempt when Stripe reports the existing PaymentIntent as canceled", async () => {
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_canceled_before",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_canceled_before", status: "canceled" } as never);
+      mockedCreatePaymentIntent.mockResolvedValue({ outcome: "succeeded", paymentIntentId: "pi_new" });
+
+      const result = await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      expect(mockedCreatePaymentIntent).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ bookingId: "BELA-1", outcome: "charge-initiated", paymentIntentId: "pi_new", stripeOutcome: "succeeded" });
+    });
+
+    it("does NOT create another charge when the existing PaymentIntent is still in progress at Stripe (e.g. processing)", async () => {
+      // A non-terminal status means the existing PaymentIntent could
+      // still independently resolve to succeeded — creating a second one
+      // here risks a real double charge. Must defer, not retry.
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_still_processing",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_still_processing", status: "processing" } as never);
+
+      const result = await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      expect(result).toEqual({
+        bookingId: "BELA-1",
+        outcome: "skipped-payment-intent-in-progress",
+        paymentIntentId: "pi_still_processing",
+        stripeStatus: "processing",
+      });
+      expect(mockedCreatePaymentIntent).not.toHaveBeenCalled();
+      expect(repo.updates.length).toBe(0);
+    });
+
+    it("does NOT create another charge when the existing PaymentIntent requires customer action (requires_action)", async () => {
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_requires_action",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue({ id: "pi_requires_action", status: "requires_action" } as never);
+
+      const result = await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      expect(result.outcome).toBe("skipped-payment-intent-in-progress");
+      expect(mockedCreatePaymentIntent).not.toHaveBeenCalled();
+      expect(repo.updates.length).toBe(0);
+    });
+
+    it("fails CLOSED — does NOT create another charge — when the Stripe lookup itself throws/errors", async () => {
+      // A transient Stripe/API/network error must never be treated as
+      // "safe to charge again": that would turn a temporary outage into a
+      // duplicate-charge opportunity. Must defer to a later scheduler run
+      // that re-checks Stripe from scratch, not fall through to charging.
+      const repo = new FakeRepository();
+      repo.states.set(
+        "BELA-1",
+        baseState({
+          bookingId: "BELA-1",
+          paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+          nextPaymentAttemptAt: "2026-02-15T18:30:00.000Z",
+          stripePaymentIntentId: "pi_lookup_error",
+        }),
+      );
+      mockedRetrievePaymentIntent.mockResolvedValue(null);
+
+      const result = await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      expect(result).toEqual({ bookingId: "BELA-1", outcome: "skipped-payment-intent-lookup-failed", paymentIntentId: "pi_lookup_error" });
+      expect(mockedCreatePaymentIntent).not.toHaveBeenCalled();
+      expect(repo.updates.length).toBe(0);
+    });
+
+    it("never consults Stripe when no PaymentIntent has been recorded yet (first attempt)", async () => {
+      const repo = new FakeRepository();
+      repo.states.set("BELA-1", baseState({ bookingId: "BELA-1" })); // stripePaymentIntentId: ""
+      mockedCreatePaymentIntent.mockResolvedValue({ outcome: "succeeded", paymentIntentId: "pi_first" });
+
+      await processDueBooking("BELA-1", repo, fakeNotifications(), NOW);
+
+      expect(mockedRetrievePaymentIntent).not.toHaveBeenCalled();
+    });
   });
 });
