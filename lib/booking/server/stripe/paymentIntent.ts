@@ -6,6 +6,7 @@
 // sourced directly from an untrusted request.
 import "server-only";
 import { getStripeClient } from "./stripeConfig";
+import type Stripe from "stripe";
 
 export type CreateOffSessionPaymentIntentInput = {
   customerId: string;
@@ -85,6 +86,24 @@ export async function createOffSessionPaymentIntent(
     };
   } catch (error) {
     return { outcome: "failed", paymentIntentId: extractPaymentIntentId(error), error: extractFailureDetail(error) };
+  }
+}
+
+/**
+ * Fetches a PaymentIntent's current status directly from Stripe — the
+ * idempotency guard in paymentProcessingService.ts uses this to verify a
+ * booking's last recorded PaymentIntent before ever initiating a new
+ * charge, rather than trusting the Sheet's cached Payment Status alone
+ * (which can go stale if a webhook delivery is ever missed). Returns null
+ * on any lookup failure so the caller can fail safe (treat as unverified,
+ * not as "definitely not paid").
+ */
+export async function retrievePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent | null> {
+  const stripe = getStripeClient();
+  try {
+    return await stripe.paymentIntents.retrieve(paymentIntentId);
+  } catch {
+    return null;
   }
 }
 

@@ -96,6 +96,7 @@ function baseState(overrides: Partial<BookingPaymentState> = {}): BookingPayment
     serviceDate: "2026-02-15",
     stripeCustomerId: "cus_123",
     stripePaymentMethodId: "pm_456",
+    stripePaymentIntentId: "",
     scheduledChargeAt: "2026-02-15T18:00:00.000Z",
     originalBookingTotal: 190.5,
     chargeAmount: 190.5,
@@ -167,6 +168,54 @@ describe("handlePaymentIntentSucceeded", () => {
     const notifications = fakeNotifications();
     await handlePaymentIntentSucceeded(fakePaymentIntent({ metadata: {} }), repo, notifications, NOW);
     expect(repo.updates.length).toBe(0);
+  });
+
+  it("settles a booking that previously failed and was retry-scheduled: clears the old retry/failure state and becomes non-retryable", async () => {
+    // Simulates a real failed-then-succeeded lifecycle: an earlier
+    // payment_intent.payment_failed left the booking Retry Scheduled with
+    // a populated Next Payment Attempt At and a stale PaymentIntent ID
+    // from the failed attempt. A later attempt's payment_intent.succeeded
+    // must fully settle the row, not merely flip Payment Status.
+    const repo = new FakeRepository();
+    repo.states.set(
+      "BELA-1",
+      baseState({
+        paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED,
+        paymentAttemptCount: 2,
+        nextPaymentAttemptAt: "2026-02-16T18:00:00.000Z",
+      }),
+    );
+    repo.records.set("BELA-1", sampleBookingRecord({ bookingId: "BELA-1" }));
+    const notifications = fakeNotifications();
+
+    const succeededIntent = fakePaymentIntent({ id: "pi_second_attempt" });
+    await handlePaymentIntentSucceeded(succeededIntent, repo, notifications, NOW);
+
+    const update = repo.updates[0].update;
+    expect(update.paymentStatus).toBe(PAYMENT_STATUS.PAID);
+    expect(update.stripePaymentIntentId).toBe("pi_second_attempt");
+    expect(update.nextPaymentAttemptAt).toBe("");
+    expect(update.paymentFailureCode).toBe("");
+    expect(notifications.sendPaymentReceipt).toHaveBeenCalledTimes(1);
+    expect(notifications.sendInternalPaymentFailed).not.toHaveBeenCalled();
+  });
+
+  it("converges to the app's one canonical Paid value and never invents a new Booking Status", async () => {
+    // Booking Status in this app only ever distinguishes "Pending Payment"
+    // from "Cancelled" (see BOOKING_STATUS in bookingsSheetSchema.ts) —
+    // there is no separate "Confirmed"/"Paid" booking status anywhere.
+    // Successful settlement must converge to Payment Status: Paid with
+    // Booking Status left exactly as-is, not a new value.
+    const repo = new FakeRepository();
+    repo.states.set("BELA-1", baseState({ paymentStatus: PAYMENT_STATUS.RETRY_SCHEDULED, nextPaymentAttemptAt: "2026-02-16T18:00:00.000Z" }));
+    const record = sampleBookingRecord({ bookingId: "BELA-1", bookingStatus: "Pending Payment" });
+    repo.records.set("BELA-1", record);
+    const notifications = fakeNotifications();
+
+    await handlePaymentIntentSucceeded(fakePaymentIntent(), repo, notifications, NOW);
+
+    expect(repo.updates[0].update.paymentStatus).toBe(PAYMENT_STATUS.PAID);
+    expect(repo.records.get("BELA-1")?.bookingStatus).toBe("Pending Payment");
   });
 });
 

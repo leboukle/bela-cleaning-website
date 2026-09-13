@@ -94,6 +94,7 @@ class InMemoryBookingRepository implements BookingRepository {
       serviceDate: record.serviceDate,
       stripeCustomerId: record.stripeCustomerId,
       stripePaymentMethodId: record.stripePaymentMethodId,
+      stripePaymentIntentId: record.stripePaymentIntentId,
       scheduledChargeAt: record.scheduledChargeAt,
       originalBookingTotal: record.originalBookingTotal,
       chargeAmount: record.chargeAmount,
