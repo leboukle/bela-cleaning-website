@@ -87,4 +87,58 @@ describe("buildCustomerBookingReceivedEmail", () => {
     expect(email.html).not.toContain("<script>alert");
     expect(email.html).toContain("&lt;script&gt;");
   });
+
+  describe("service scope (includes/excludes/add-ons)", () => {
+    it("includes the service's includes and excludes, sourced from the centralized service definition", () => {
+      const record = sampleBookingRecord({ cleaningType: "Standard cleaning", extras: "none" });
+      const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+      expect(email.text).toContain("Your Standard Cleaning includes:");
+      expect(email.text).toContain("- Kitchen surfaces and countertops");
+      expect(email.text).toContain("Your service does not include:");
+      expect(email.text).toContain("- Interior windows");
+      expect(email.html).toContain("Your Standard Cleaning includes");
+      expect(email.html).toContain("Kitchen surfaces and countertops");
+    });
+
+    it("never tells the customer an add-on they purchased is not included", () => {
+      // Regression guard for the exact scenario this feature exists to
+      // prevent: buying "Interior windows" must not leave "Interior
+      // windows" sitting in the "does not include" list.
+      const record = sampleBookingRecord({ cleaningType: "Standard cleaning", extras: "interiorWindows:2" });
+      const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+      expect(email.text).not.toContain("- Interior windows");
+      expect(email.text).toContain("Your selected add-ons:");
+      expect(email.text).toContain("- Interior Windows");
+    });
+
+    it("removes only the specific exclusion for the add-on purchased, leaving its sibling exclusion in place", () => {
+      // Oven and refrigerator are independent exclusions — buying only
+      // the oven add-on must not silently imply refrigerator cleaning is
+      // included too.
+      const record = sampleBookingRecord({ cleaningType: "Standard cleaning", extras: "oven" });
+      const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+      expect(email.text).not.toContain("Inside oven unless selected as an add-on");
+      expect(email.text).toContain("Inside refrigerator unless selected as an add-on");
+    });
+
+    it("omits the selected add-ons section when there are none", () => {
+      const record = sampleBookingRecord({ cleaningType: "Standard cleaning", extras: "none" });
+      const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+      expect(email.text).not.toContain("Your selected add-ons:");
+    });
+
+    it("uses the Move-In-specific name and shared move-in/out scope for a Move-in cleaning booking", () => {
+      const record = sampleBookingRecord({ cleaningType: "Move-in cleaning", extras: "none" });
+      const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+      expect(email.text).toContain("Your Move-In Cleaning includes:");
+      expect(email.text).toContain("- Inside empty cabinets and drawers");
+    });
+
+    it("omits the scope section entirely rather than crashing when the cleaning type label is unrecognized", () => {
+      const record = sampleBookingRecord({ cleaningType: "Some legacy label", extras: "none" });
+      const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+      expect(email.text).not.toContain("includes:");
+      expect(email.text).not.toContain("does not include");
+    });
+  });
 });

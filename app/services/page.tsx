@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { buildPageMetadata } from "@/lib/seo";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -10,6 +10,7 @@ import CTASection from "@/components/CTASection";
 import Reveal from "@/components/Reveal";
 import { businessConfig, CTA_LABEL } from "@/lib/config";
 import { services, addOns } from "@/lib/services";
+import { getServiceScope } from "@/lib/serviceDefinitions";
 import { faqs } from "@/lib/faqs";
 
 export const metadata: Metadata = buildPageMetadata({
@@ -37,7 +38,7 @@ const servicesJsonLd = {
       itemOffered: {
         "@type": "Service",
         name: service.name,
-        description: service.description,
+        description: getServiceScope(service.serviceType).description,
       },
     })),
   },
@@ -100,6 +101,7 @@ export default function ServicesPage() {
       {/* B-D. Service detail sections */}
       {services.map((service, index) => {
         const imageFirst = index % 2 === 1;
+        const scope = getServiceScope(service.serviceType);
         return (
           <section key={service.slug} className="py-16 sm:py-20 border-t border-soft-gray">
             <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
@@ -113,21 +115,35 @@ export default function ServicesPage() {
                 <h2 className="font-heading text-4xl sm:text-5xl leading-[1.05] text-charcoal">
                   {service.name}
                 </h2>
-                <p className="mt-4 text-warm-text leading-relaxed">{service.description}</p>
+                <p className="mt-4 text-warm-text leading-relaxed">{scope.description}</p>
 
                 <h3 className="mt-6 text-sm font-semibold uppercase tracking-wide text-deep-green">
-                  Typical focus areas
+                  What&rsquo;s included
                 </h3>
                 <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                  {service.focusAreas.map((area) => (
-                    <li key={area} className="flex items-start gap-2 text-charcoal">
+                  {scope.includes.map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-charcoal">
                       <Check size={16} className="mt-1 shrink-0 text-deep-green" aria-hidden="true" />
-                      <span>{area}</span>
+                      <span>{item}</span>
                     </li>
                   ))}
                 </ul>
 
-                <p className="mt-5 text-sm text-warm-text">{service.note}</p>
+                <h3 className="mt-6 text-sm font-semibold uppercase tracking-wide text-deep-green">
+                  What&rsquo;s not included
+                </h3>
+                <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                  {scope.excludes.map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-warm-text">
+                      <X size={16} className="mt-1 shrink-0 text-warm-text" aria-hidden="true" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="mt-5 text-sm text-warm-text">
+                  Selected add-ons are shown separately during booking.
+                </p>
 
                 <div className="mt-7">
                   <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>

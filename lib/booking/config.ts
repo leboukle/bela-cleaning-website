@@ -240,6 +240,18 @@ export function getCleaningTypeOption(id: CleaningTypeId): CleaningTypeOption {
   return option;
 }
 
+// Reverse lookup for the label persisted in a BookingRecord's "Cleaning
+// Type" column (see bookingService.ts, which stores getCleaningTypeOption(id).label,
+// not the raw id) back to its CleaningTypeId/ServiceType — used by the
+// confirmation and reminder email templates to resolve a booking's service
+// scope from serviceDefinitions.ts. Returns null rather than throwing: a
+// booking's persisted label always matches one of these options in normal
+// operation, but an email template must never crash the send over it.
+export function getCleaningTypeIdForLabel(label: string): CleaningTypeId | null {
+  const option = CLEANING_TYPE_OPTIONS.find((o) => o.label === label);
+  return option ? option.id : null;
+}
+
 export function getFrequencyOption(id: FrequencyId): FrequencyOption {
   const option = FREQUENCY_OPTIONS.find((o) => o.id === id);
   if (!option) throw new Error(`Unknown frequency option: ${id}`);

@@ -11,11 +11,29 @@ import "server-only";
 import { businessConfig } from "@/lib/config";
 import { formatCurrency, formatDuration } from "@/lib/booking/calculate";
 import { formatReadableDate, getScheduleDisplayLabel } from "@/lib/booking/schedule";
+import { getCleaningTypeIdForLabel } from "@/lib/booking/config";
+import { getServiceScope, isAddOnType } from "@/lib/serviceDefinitions";
 import { describeExtras } from "../../extrasDescription";
+import { parseExtrasKeys } from "../../extras";
 import { buildManageBookingUrl } from "../../manageToken";
 import type { BookingRecord } from "../../types";
 import type { EmailMessage } from "../emailTransport";
 import { escapeHtml } from "../emailHtml";
+
+/**
+ * Resolves this booking's service-scope (includes/excludes/selected
+ * add-ons) from the one centralized definition in serviceDefinitions.ts —
+ * see getServiceScope. Returns null only if the persisted Cleaning Type
+ * label doesn't match any known service (should not happen for a booking
+ * written by this app's current code); the email simply omits the scope
+ * section rather than failing to send.
+ */
+function resolveServiceScope(record: BookingRecord) {
+  const serviceType = getCleaningTypeIdForLabel(record.cleaningType);
+  if (!serviceType) return null;
+  const addOnKeys = parseExtrasKeys(record.extras).filter(isAddOnType);
+  return getServiceScope(serviceType, addOnKeys);
+}
 
 export function buildAppointmentReminderEmail(record: BookingRecord, manageToken: string): Omit<EmailMessage, "to"> {
   const subject = `BeLa Cleaning — Reminder: your cleaning is coming up (${record.bookingId})`;
@@ -23,8 +41,9 @@ export function buildAppointmentReminderEmail(record: BookingRecord, manageToken
   const extras = describeExtras(record.extras);
   const address = [record.streetAddress, record.apartmentOrUnit].filter(Boolean).join(", ");
   const manageUrl = buildManageBookingUrl(manageToken);
+  const scope = resolveServiceScope(record);
 
-  const text = [
+  const lines: string[] = [
     `Hi ${record.firstName},`,
     "",
     `This is a reminder that your BeLa Cleaning appointment is coming up.`,
@@ -43,12 +62,51 @@ export function buildAppointmentReminderEmail(record: BookingRecord, manageToken
     "Cancellation and rescheduling policy:",
     "- More than 24 hours before your appointment: free cancellation or rescheduling.",
     "- Within 24 hours of your appointment: cancellations are subject to a late-cancellation fee equal to 50% of the booking total, and self-service rescheduling is unavailable — please contact us directly.",
+  ];
+
+  if (scope) {
+    lines.push(
+      "",
+      `Your ${scope.serviceName} includes:`,
+      ...scope.includes.map((item) => `- ${item}`),
+      "",
+      "Your service does not include:",
+      ...scope.excludes.map((item) => `- ${item}`),
+    );
+    if (scope.selectedAddOns.length > 0) {
+      lines.push("", "Your selected add-ons:", ...scope.selectedAddOns.map((addOn) => `- ${addOn.name}`));
+    }
+  }
+
+  lines.push(
     "",
     "Questions? We're happy to help.",
     `${businessConfig.email}  •  ${businessConfig.phoneDisplay}`,
     "",
     "— The BeLa Cleaning Team",
-  ].join("\n");
+  );
+
+  const text = lines.join("\n");
+
+  const scopeSectionHtml = scope
+    ? `
+  <p style="font-size:14px;color:#8A7A6B;margin:20px 0 4px;">Your ${escapeHtml(scope.serviceName)} includes</p>
+  <ul style="margin:0 0 16px;padding-left:20px;font-size:14px;">
+    ${scope.includes.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+  </ul>
+  <p style="font-size:14px;color:#8A7A6B;margin:0 0 4px;">Your service does not include</p>
+  <ul style="margin:0 0 16px;padding-left:20px;font-size:14px;">
+    ${scope.excludes.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+  </ul>
+  ${
+    scope.selectedAddOns.length > 0
+      ? `<p style="font-size:14px;color:#8A7A6B;margin:0 0 4px;">Your selected add-ons</p>
+  <ul style="margin:0 0 16px;padding-left:20px;font-size:14px;">
+    ${scope.selectedAddOns.map((addOn) => `<li>${escapeHtml(addOn.name)}</li>`).join("")}
+  </ul>`
+      : ""
+  }`
+    : "";
 
   const html = `
 <div style="font-family:Georgia,'Times New Roman',serif;max-width:560px;margin:0 auto;color:#3B2F27;">
@@ -73,6 +131,7 @@ export function buildAppointmentReminderEmail(record: BookingRecord, manageToken
     rescheduling is free. Within 24 hours, cancellations are subject to a late-cancellation fee equal to 50% of the
     booking total, and self-service rescheduling is unavailable — please contact us directly.
   </p>
+  ${scopeSectionHtml}
   <p style="font-size:14px;">
     Questions? We're happy to help.<br/>
     ${escapeHtml(businessConfig.email)} &bull; ${escapeHtml(businessConfig.phoneDisplay)}

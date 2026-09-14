@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { serializeExtras } from "./extras";
+import { serializeExtras, parseExtrasKeys } from "./extras";
 import { initialExtrasState } from "@/lib/booking/types";
 
 describe("serializeExtras", () => {
@@ -24,5 +24,28 @@ describe("serializeExtras", () => {
   it("combines booleans and quantities in the fixed canonical order", () => {
     const extras = { ...initialExtrasState, oven: true, blindsQty: 2, kitchenCabinets: true };
     expect(serializeExtras(extras)).toBe("kitchenCabinets;oven;blinds:2");
+  });
+});
+
+describe("parseExtrasKeys", () => {
+  it('returns [] for "none"', () => {
+    expect(parseExtrasKeys("none")).toEqual([]);
+  });
+
+  it('returns [] for ""', () => {
+    expect(parseExtrasKeys("")).toEqual([]);
+  });
+
+  it("returns bare keys for boolean extras", () => {
+    expect(parseExtrasKeys("kitchenCabinets;oven")).toEqual(["kitchenCabinets", "oven"]);
+  });
+
+  it("drops the :quantity suffix for quantity extras", () => {
+    expect(parseExtrasKeys("interiorWindows:3;blinds:2")).toEqual(["interiorWindows", "blinds"]);
+  });
+
+  it("round-trips serializeExtras' own output", () => {
+    const extras = { ...initialExtrasState, oven: true, kitchenCabinets: true, interiorWindowsQty: 2 };
+    expect(parseExtrasKeys(serializeExtras(extras))).toEqual(["kitchenCabinets", "oven", "interiorWindows"]);
   });
 });

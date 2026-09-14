@@ -31,3 +31,16 @@ export function serializeExtras(extras: ExtrasState): string {
 
   return tokens.length > 0 ? tokens.join(";") : "none";
 }
+
+/**
+ * Inverse of serializeExtras, keys only: returns each selected extra's bare
+ * key, dropping any ":quantity" suffix, or [] for "none"/"". Used wherever
+ * a consumer needs to know WHICH extras were selected rather than a
+ * human-readable description of them — see serviceDefinitions.ts's
+ * getServiceScope(), which uses this to avoid telling a customer an
+ * exclusion applies when they've already paid for that exact add-on.
+ */
+export function parseExtrasKeys(serializedExtras: string): string[] {
+  if (serializedExtras === "none" || serializedExtras.trim().length === 0) return [];
+  return serializedExtras.split(";").map((token) => token.split(":")[0]);
+}

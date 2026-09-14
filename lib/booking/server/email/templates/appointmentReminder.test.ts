@@ -91,4 +91,35 @@ describe("buildAppointmentReminderEmail", () => {
     expect(email.html).not.toContain("<script>alert");
     expect(email.html).toContain("&lt;script&gt;");
   });
+
+  describe("service scope (includes/excludes/add-ons)", () => {
+    it("includes the service's includes and excludes, sourced from the centralized service definition", () => {
+      const record = sampleBookingRecord({ cleaningType: "Deep cleaning", extras: "none" });
+      const email = buildAppointmentReminderEmail(record, MANAGE_TOKEN);
+      expect(email.text).toContain("Your Deep Cleaning includes:");
+      expect(email.text).toContain("- Everything included in Standard Cleaning");
+      expect(email.text).toContain("Your service does not include:");
+      expect(email.html).toContain("Your Deep Cleaning includes");
+    });
+
+    it("never tells the customer an add-on they purchased is not included", () => {
+      const record = sampleBookingRecord({ cleaningType: "Deep cleaning", extras: "kitchenCabinets" });
+      const email = buildAppointmentReminderEmail(record, MANAGE_TOKEN);
+      expect(email.text).not.toContain("Inside cabinets or drawers unless separately selected");
+      expect(email.text).toContain("Your selected add-ons:");
+      expect(email.text).toContain("- Inside Kitchen Cabinets");
+    });
+
+    it("uses the Move-Out-specific name for a Move-out cleaning booking", () => {
+      const record = sampleBookingRecord({ cleaningType: "Move-out cleaning", extras: "none" });
+      const email = buildAppointmentReminderEmail(record, MANAGE_TOKEN);
+      expect(email.text).toContain("Your Move-Out Cleaning includes:");
+    });
+
+    it("omits the scope section entirely rather than crashing when the cleaning type label is unrecognized", () => {
+      const record = sampleBookingRecord({ cleaningType: "Some legacy label", extras: "none" });
+      const email = buildAppointmentReminderEmail(record, MANAGE_TOKEN);
+      expect(email.text).not.toContain("does not include");
+    });
+  });
 });
