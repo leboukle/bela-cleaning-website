@@ -40,6 +40,8 @@ function messageFor(result: CreateAssignmentOutcome): string {
       return `This appointment starts in about ${result.hoursUntilServiceStart.toFixed(1)} hours — too soon for an automated assignment. Please contact the cleaner directly.`;
     case "created":
       return `Assignment created. Response deadline: ${result.responseDeadline}.`;
+    case "created-email-failed":
+      return `Assignment created (response deadline: ${result.responseDeadline}), but the notification email to the cleaner could not be sent. Please contact them directly.`;
   }
 }
 
@@ -51,6 +53,7 @@ const STATUS_BY_OUTCOME: Record<CreateAssignmentOutcome["outcome"], number> = {
   "already-assigned": 409,
   "too-close-to-service-start": 422,
   created: 200,
+  "created-email-failed": 200,
 };
 
 export async function POST(request: Request) {
@@ -78,8 +81,13 @@ export async function POST(request: Request) {
 
   try {
     const result = await createAssignment(bookingId, cleanerId, bookingRepository, assignmentRepository, notifications);
+    // "created-email-failed" is still ok:true — the assignment itself
+    // (the primary action) succeeded and its history is preserved; the
+    // distinct `outcome` value is what lets the UI flag the email
+    // problem separately, see AssignCleanerForm.tsx.
+    const ok = result.outcome === "created" || result.outcome === "created-email-failed";
     return NextResponse.json(
-      { ok: result.outcome === "created", outcome: result.outcome, message: messageFor(result) },
+      { ok, outcome: result.outcome, message: messageFor(result) },
       { status: STATUS_BY_OUTCOME[result.outcome] },
     );
   } catch (error) {

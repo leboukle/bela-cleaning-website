@@ -22,6 +22,7 @@ import { STANDARD_CLEANER_PAYOUT_PERCENTAGE } from "@/lib/booking/cleanerPayout"
 import { sampleBookingRecord } from "./testFixtures";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type { CleanerAssignmentRepository } from "./cleanerRepository";
+import type { CleanerAssignmentNotificationSender, CleanerNotificationResult } from "./cleanerNotificationService";
 import type {
   AssignmentResolutionUpdate,
   AssignmentRecord,
@@ -135,12 +136,12 @@ function fakeCleaner(overrides: Partial<CleanerRecord> = {}): CleanerRecord {
   };
 }
 
-function fakeNotifications() {
+function fakeNotifications(): CleanerAssignmentNotificationSender {
   return {
-    sendCleanerAssignmentOffer: vi.fn(async () => ({ ok: true as const })),
-    sendInternalAssignmentAccepted: vi.fn(async () => ({ ok: true as const })),
-    sendInternalAssignmentDeclined: vi.fn(async () => ({ ok: true as const })),
-    sendInternalAssignmentExpired: vi.fn(async () => ({ ok: true as const })),
+    sendCleanerAssignmentOffer: vi.fn(async (): Promise<CleanerNotificationResult> => ({ ok: true })),
+    sendInternalAssignmentAccepted: vi.fn(async (): Promise<CleanerNotificationResult> => ({ ok: true })),
+    sendInternalAssignmentDeclined: vi.fn(async (): Promise<CleanerNotificationResult> => ({ ok: true })),
+    sendInternalAssignmentExpired: vi.fn(async (): Promise<CleanerNotificationResult> => ({ ok: true })),
   };
 }
 
@@ -286,6 +287,71 @@ describe("createAssignment", () => {
     expect(created.payoutAmountSnapshot).toBe(120);
     expect(created.assignmentTokenHash).not.toBe("");
     expect(notifications.sendCleanerAssignmentOffer).toHaveBeenCalledTimes(1);
+  });
+
+  it("still creates the assignment (never rolled back) when the offer email fails to send, and reports created-email-failed", async () => {
+    const bookingRepo = new FakeBookingRepository();
+    bookingRepo.records.set("BELA-1", sampleBookingRecord({ bookingId: "BELA-1", chargeAmount: 200 }));
+    const assignmentRepo = new FakeAssignmentRepository();
+    assignmentRepo.cleaners.set("CLNR-AAAAAA", fakeCleaner());
+    mockedCalculateServiceStart.mockReturnValue(new Date(NOW.getTime() + 72 * HOUR_MS));
+    const notifications = fakeNotifications();
+    // The real shape every notification-sender method in this codebase
+    // uses for a provider-level failure: a non-throwing { ok: false }
+    // result, never a rejected promise. This is exactly the case that
+    // was previously silently swallowed.
+    notifications.sendCleanerAssignmentOffer = vi.fn(async () => ({ ok: false as const, error: "Gmail API error: quota exceeded" }));
+
+    const result = await createAssignment("BELA-1", "CLNR-AAAAAA", bookingRepo, assignmentRepo, notifications, NOW);
+
+    expect(result).toEqual(
+      expect.objectContaining({ outcome: "created-email-failed", payoutAmount: 120 }),
+    );
+    // History is preserved exactly as on a successful send — same row,
+    // same Pending status, same snapshots. The assignment is never rolled
+    // back or deleted because its email failed.
+    expect(assignmentRepo.assignments).toHaveLength(1);
+    const created = assignmentRepo.assignments[0];
+    expect(created.status).toBe(ASSIGNMENT_STATUS.PENDING);
+    expect(created.assignmentTokenHash).not.toBe("");
+  });
+
+  it("logs a send failure without the cleaner's email address or name", async () => {
+    const bookingRepo = new FakeBookingRepository();
+    bookingRepo.records.set("BELA-1", sampleBookingRecord({ bookingId: "BELA-1" }));
+    const assignmentRepo = new FakeAssignmentRepository();
+    assignmentRepo.cleaners.set("CLNR-AAAAAA", fakeCleaner({ firstName: "Susie", lastName: "Smith", email: "susie@example.com" }));
+    mockedCalculateServiceStart.mockReturnValue(new Date(NOW.getTime() + 72 * HOUR_MS));
+    const notifications = fakeNotifications();
+    notifications.sendCleanerAssignmentOffer = vi.fn(async () => ({ ok: false as const, error: "Gmail API error: quota exceeded" }));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await createAssignment("BELA-1", "CLNR-AAAAAA", bookingRepo, assignmentRepo, notifications, NOW);
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    const loggedText = consoleErrorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(loggedText).not.toContain("susie@example.com");
+    expect(loggedText).not.toContain("Susie");
+    expect(loggedText).not.toContain("Smith");
+    expect(loggedText).toContain("Gmail API error: quota exceeded");
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("does NOT log an error when the offer email sends successfully", async () => {
+    const bookingRepo = new FakeBookingRepository();
+    bookingRepo.records.set("BELA-1", sampleBookingRecord({ bookingId: "BELA-1" }));
+    const assignmentRepo = new FakeAssignmentRepository();
+    assignmentRepo.cleaners.set("CLNR-AAAAAA", fakeCleaner());
+    mockedCalculateServiceStart.mockReturnValue(new Date(NOW.getTime() + 72 * HOUR_MS));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await createAssignment("BELA-1", "CLNR-AAAAAA", bookingRepo, assignmentRepo, fakeNotifications(), NOW);
+
+    expect(result.outcome).toBe("created");
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("gives a 24-hour deadline when offered more than 48 hours before service start", async () => {

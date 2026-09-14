@@ -16,7 +16,7 @@ export default function AssignCleanerForm({ bookings, cleaners }: AssignCleanerF
   const [bookingId, setBookingId] = useState("");
   const [cleanerId, setCleanerId] = useState("");
   const [assigning, setAssigning] = useState(false);
-  const [assignBanner, setAssignBanner] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const [assignBanner, setAssignBanner] = useState<{ kind: "success" | "warning" | "error"; message: string } | null>(null);
 
   const [completeBookingId, setCompleteBookingId] = useState("");
   const [completing, setCompleting] = useState(false);
@@ -48,7 +48,13 @@ export default function AssignCleanerForm({ bookings, cleaners }: AssignCleanerF
         body: JSON.stringify({ bookingId, cleanerId }),
       });
       const body = await res.json();
-      setAssignBanner({ kind: body.ok ? "success" : "error", message: body.message ?? "Something went wrong." });
+      // "created-email-failed": the assignment itself succeeded (still
+      // ok:true from the API, and the form still clears — there's
+      // nothing more for BeLa to retry here) but the cleaner was never
+      // actually notified, so this gets its own amber "needs follow-up"
+      // treatment rather than looking identical to a clean success.
+      const kind = !body.ok ? "error" : body.outcome === "created-email-failed" ? "warning" : "success";
+      setAssignBanner({ kind, message: body.message ?? "Something went wrong." });
       if (body.ok) {
         setBookingId("");
         setCleanerId("");
@@ -97,7 +103,11 @@ export default function AssignCleanerForm({ bookings, cleaners }: AssignCleanerF
         {assignBanner && (
           <div
             className={`mt-3 rounded-xl border p-3 text-sm ${
-              assignBanner.kind === "success" ? "border-[#C9BCA6] bg-[#F1E9DC] text-[#3B2F27]" : "border-[#E3B7A6] bg-[#FBEEE8] text-[#B14A2E]"
+              assignBanner.kind === "success"
+                ? "border-[#C9BCA6] bg-[#F1E9DC] text-[#3B2F27]"
+                : assignBanner.kind === "warning"
+                  ? "border-[#E3C77E] bg-[#FBF3DC] text-[#8A6A1E]"
+                  : "border-[#E3B7A6] bg-[#FBEEE8] text-[#B14A2E]"
             }`}
           >
             {assignBanner.message}

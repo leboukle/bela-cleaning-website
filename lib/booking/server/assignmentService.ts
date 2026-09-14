@@ -35,7 +35,12 @@ export type CreateAssignmentOutcome =
   | { outcome: "cleaner-inactive" }
   | { outcome: "already-assigned"; existingStatus: string }
   | { outcome: "too-close-to-service-start"; hoursUntilServiceStart: number }
-  | { outcome: "created"; assignmentId: string; responseDeadline: string; payoutAmount: number };
+  | { outcome: "created"; assignmentId: string; responseDeadline: string; payoutAmount: number }
+  // The assignment row was created (Pending, token hash written) exactly
+  // as in "created" — never rolled back — but the offer email itself did
+  // not send. Distinct from "created" so the internal UI can flag that
+  // BeLa needs to follow up with the cleaner directly.
+  | { outcome: "created-email-failed"; assignmentId: string; responseDeadline: string; payoutAmount: number };
 
 export type RespondOutcome =
   | { outcome: "invalid-token" }
@@ -137,17 +142,39 @@ export async function createAssignment(
     assignmentTokenHash: tokenHash,
   });
 
+  // The assignment row above is never rolled back based on what happens
+  // here — history (who was offered what, and when) must be preserved
+  // regardless of whether the notification email itself succeeds. This
+  // inspects BOTH failure paths: a thrown exception (network/transport
+  // error) and a normal, non-throwing `{ ok: false }` result (the shape
+  // every notification-sender method in this codebase actually uses for
+  // a provider-level send failure — see CleanerNotificationResult) —
+  // the latter was previously never checked here, which meant a genuine
+  // send failure was silently reported as success.
+  let emailSent = false;
   try {
-    await notifications.sendCleanerAssignmentOffer(record, cleaner, {
+    const sendResult = await notifications.sendCleanerAssignmentOffer(record, cleaner, {
       assignmentId,
       payoutAmount,
       payoutPercentage: STANDARD_CLEANER_PAYOUT_PERCENTAGE,
       token,
     });
+    if (sendResult.ok) {
+      emailSent = true;
+    } else {
+      // Never log the cleaner's email address or name here — only the
+      // assignment/booking IDs and the transport's own error string
+      // (which describes the failure, e.g. a provider error code, not
+      // any PII).
+      logError("sendCleanerAssignmentOffer", assignmentId, new Error(sendResult.error));
+    }
   } catch (error) {
     logError("sendCleanerAssignmentOffer", assignmentId, error);
   }
 
+  if (!emailSent) {
+    return { outcome: "created-email-failed", assignmentId, responseDeadline: deadlineResult.responseDeadline.toISOString(), payoutAmount };
+  }
   return { outcome: "created", assignmentId, responseDeadline: deadlineResult.responseDeadline.toISOString(), payoutAmount };
 }
 
