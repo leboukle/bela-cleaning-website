@@ -7,6 +7,7 @@
 import "server-only";
 import type {
   AppointmentReminderUpdate,
+  AssignableBookingSummary,
   BookingCancellationInitiateUpdate,
   BookingPaymentState,
   BookingRecord,
@@ -131,4 +132,24 @@ export interface BookingRepository {
    * failure. Never touches any other column.
    */
   updateAppointmentReminderStatus(bookingId: string, update: AppointmentReminderUpdate): Promise<void>;
+
+  /**
+   * Milestone 7: non-cancelled bookings with a Service Date today or
+   * later, for the internal cleaner-assignment UI's booking picker only —
+   * not used by any customer-facing or payment/scheduling path. Purely
+   * additive; every other method above is unchanged by this milestone.
+   */
+  listAssignableBookings(todayDateKey: string): Promise<AssignableBookingSummary[]>;
+
+  /**
+   * Milestone 7: writes the "Completed At" column — a Milestone 3-era
+   * column that has existed since the very first version of this schema
+   * but was never read or written by any code path until now (confirmed
+   * by inspection before this milestone began). This is the one explicit,
+   * human-confirmed signal that gates the post-cleaning payout statement
+   * (see completionService.ts) — deliberately never inferred from elapsed
+   * time. Only ever called once per booking; the caller (completionService.ts)
+   * checks `completedAt` is still blank before calling this.
+   */
+  markBookingCompleted(bookingId: string, completedAt: string): Promise<void>;
 }

@@ -21,6 +21,7 @@ import { resetIdempotencyFastPathForTests } from "./idempotency";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type {
   AppointmentReminderUpdate,
+  AssignableBookingSummary,
   BookingCancellationInitiateUpdate,
   BookingPaymentState,
   BookingRecord,
@@ -173,6 +174,14 @@ class InMemoryBookingRepository implements BookingRepository {
     record.appointmentReminderStatus = update.appointmentReminderStatus;
     record.appointmentReminderSentAt = update.appointmentReminderSentAt;
     record.appointmentReminderAttempts = update.appointmentReminderAttempts;
+  }
+
+  async listAssignableBookings(): Promise<AssignableBookingSummary[]> {
+    return [];
+  }
+  async markBookingCompleted(bookingId: string, completedAt: string): Promise<void> {
+    const record = this.appended.find((r) => r.bookingId === bookingId);
+    if (record) record.completedAt = completedAt;
   }
 }
 

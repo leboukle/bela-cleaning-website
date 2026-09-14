@@ -6,6 +6,7 @@ import { formatOperationalTimestamp } from "./dateUtils";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type {
   AppointmentReminderUpdate,
+  AssignableBookingSummary,
   BookingCancellationInitiateUpdate,
   BookingPaymentState,
   BookingRecord,
@@ -86,6 +87,10 @@ class FakeRepository implements BookingRepository {
     return null;
   }
   async updateAppointmentReminderStatus(_bookingId: string, _update: AppointmentReminderUpdate): Promise<void> {}
+  async listAssignableBookings(): Promise<AssignableBookingSummary[]> {
+    return [];
+  }
+  async markBookingCompleted(): Promise<void> {}
 }
 
 function baseState(overrides: Partial<BookingPaymentState> = {}): BookingPaymentState {

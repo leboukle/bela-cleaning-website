@@ -309,6 +309,30 @@ export type BookingPaymentState = {
   manualAmountOverride: boolean;
 };
 
+/**
+ * Milestone 7: a lightweight, non-cancelled/upcoming-booking summary for
+ * the internal cleaner-assignment UI's booking picker — deliberately
+ * narrow (never customer email/phone/Stripe fields) since this powers a
+ * page BeLa uses to pick which booking to assign a cleaner to, not a
+ * general booking-data export. See assignmentService.ts's
+ * listAssignableBookings.
+ */
+export type AssignableBookingSummary = {
+  bookingId: string;
+  bookingStatus: string;
+  firstName: string;
+  streetAddress: string;
+  apartmentOrUnit: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  serviceDate: string;
+  arrivalWindow: string;
+  serviceStartTime: string;
+  cleaningType: string;
+  chargeAmount: number;
+};
+
 /** Written back by the payment-processing endpoint after every attempt. */
 export type PaymentAttemptUpdate = {
   paymentStatus: string;

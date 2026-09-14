@@ -45,16 +45,25 @@ export type ProcessReminderOutcome =
 
 // Approved bounded-retry policy: an initial attempt ~72h before service,
 // up to 2 more retries on later hourly scheduler runs, 3 total customer-
-// send attempts before giving up and alerting BeLa.
-const REMINDER_WINDOW_MS = 72 * 60 * 60 * 1000;
+// send attempts before giving up and alerting BeLa. Exported (Milestone 7)
+// so cleanerReminderService.ts's separate 72-hour cleaner reminder uses
+// the identical window/attempt policy rather than a second constant that
+// could drift out of sync.
+export const REMINDER_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const MAX_REMINDER_ATTEMPTS = 3;
 
 function logError(step: string, bookingId: string, error: unknown): void {
   console.error(`[reminderService] ${step} failed: bookingId=${bookingId}`, error instanceof Error ? error.message : "unknown error");
 }
 
-/** Derives a booking's real service start from Scheduled Charge At + duration — see module docstring. */
-function deriveServiceStartAt(scheduledChargeAtIso: string, estimatedDurationMinutes: number): Date | null {
+/**
+ * Derives a booking's real service start from Scheduled Charge At +
+ * duration — see module docstring. Exported (Milestone 7) so
+ * cleanerReminderService.ts's separate 72-hour cleaner reminder can reuse
+ * the identical arithmetic instead of a second, potentially-drifting
+ * implementation; this function's own behavior is unchanged.
+ */
+export function deriveServiceStartAt(scheduledChargeAtIso: string, estimatedDurationMinutes: number): Date | null {
   if (!scheduledChargeAtIso || !Number.isFinite(estimatedDurationMinutes) || estimatedDurationMinutes <= 0) return null;
   const chargeAt = new Date(scheduledChargeAtIso);
   if (Number.isNaN(chargeAt.getTime())) return null;

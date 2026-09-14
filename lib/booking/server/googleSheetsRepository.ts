@@ -13,6 +13,7 @@ import {
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type {
   AppointmentReminderUpdate,
+  AssignableBookingSummary,
   BookingCancellationInitiateUpdate,
   BookingPaymentState,
   BookingRecord,
@@ -510,5 +511,75 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
         row: [update.appointmentReminderAttempts, update.manageBookingReminderTokenHash],
       },
     ]);
+  }
+
+  async listAssignableBookings(todayDateKey: string): Promise<AssignableBookingSummary[]> {
+    const [
+      ids,
+      bookingStatuses,
+      firstNames,
+      streetAddresses,
+      apartmentOrUnits,
+      cities,
+      states,
+      zipCodes,
+      serviceDates,
+      arrivalWindows,
+      serviceStartTimes,
+      cleaningTypes,
+      chargeAmounts,
+    ] = await batchGetRanges([
+      columnRange("Booking ID"),
+      columnRange("Booking Status"),
+      columnRange("First Name"),
+      columnRange("Street Address"),
+      columnRange("Apartment or Unit"),
+      columnRange("City"),
+      columnRange("State"),
+      columnRange("ZIP Code"),
+      columnRange("Service Date"),
+      columnRange("Arrival Window"),
+      columnRange("Service Start Time"),
+      columnRange("Cleaning Type"),
+      columnRange("Charge Amount"),
+    ]);
+
+    const summaries: AssignableBookingSummary[] = [];
+    for (let i = 0; i < ids.length; i++) {
+      const bookingId = ids[i]?.[0];
+      if (!bookingId) continue;
+      const bookingStatus = bookingStatuses[i]?.[0] ?? "";
+      if (bookingStatus === BOOKING_STATUS.CANCELLED) continue;
+      const serviceDate = serviceDates[i]?.[0] ?? "";
+      if (serviceDate < todayDateKey) continue;
+
+      summaries.push({
+        bookingId,
+        bookingStatus,
+        firstName: firstNames[i]?.[0] ?? "",
+        streetAddress: streetAddresses[i]?.[0] ?? "",
+        apartmentOrUnit: apartmentOrUnits[i]?.[0] ?? "",
+        city: cities[i]?.[0] ?? "",
+        state: states[i]?.[0] ?? "",
+        zipCode: zipCodes[i]?.[0] ?? "",
+        serviceDate,
+        arrivalWindow: arrivalWindows[i]?.[0] ?? "",
+        serviceStartTime: serviceStartTimes[i]?.[0] ?? "",
+        cleaningType: cleaningTypes[i]?.[0] ?? "",
+        chargeAmount: Number(chargeAmounts[i]?.[0] ?? 0),
+      });
+    }
+    return summaries.sort((a, b) => a.serviceDate.localeCompare(b.serviceDate));
+  }
+
+  async markBookingCompleted(bookingId: string, completedAt: string): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) {
+      throw new Error("Booking ID not found when marking booking completed.");
+    }
+    const sheetRow = rowIndex + 2;
+    const col = columnLetter("Completed At");
+    await updateRange(`${BOOKINGS_SHEET_NAME}!${col}${sheetRow}`, [completedAt]);
   }
 }
