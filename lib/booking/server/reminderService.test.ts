@@ -7,6 +7,7 @@ import { sampleBookingRecord } from "./testFixtures";
 import type { BookingRepository, IdempotentBookingResult } from "./repository";
 import type {
   AppointmentReminderUpdate,
+  AssignableBookingSummary,
   BookingCancellationInitiateUpdate,
   BookingPaymentState,
   BookingRecord,
@@ -66,6 +67,11 @@ class FakeRepository implements BookingRepository {
     record.appointmentReminderAttempts = update.appointmentReminderAttempts;
     record.manageBookingReminderTokenHash = update.manageBookingReminderTokenHash;
   }
+
+  async listAssignableBookings(): Promise<AssignableBookingSummary[]> {
+    return [];
+  }
+  async markBookingCompleted(): Promise<void> {}
 }
 
 function fakeNotifications(sendResult: { ok: true } | { ok: false; error: string } = { ok: true }) {
