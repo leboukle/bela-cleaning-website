@@ -5,13 +5,13 @@
 import type { ArrivalWindowId } from "./types";
 
 // Standing minimum-lead-time rule: an appointment must start at least
-// this many hours from the moment of booking (exactly 24h is eligible).
+// this many hours from the moment of booking (exactly 120h is eligible).
 // This mirrors the authoritative server-side rule in
 // lib/booking/server/dateUtils.ts (MINIMUM_LEAD_TIME_HOURS) — kept as a
 // separate constant here since this file is client-facing UX only and the
 // server never trusts anything computed in this module. Replaces the old
 // day-granular MIN_LEAD_DAYS constant.
-export const MINIMUM_LEAD_HOURS = 24;
+export const MINIMUM_LEAD_HOURS = 120;
 export const MAX_MONTHS_AHEAD = 6;
 
 export type ArrivalWindowOption = {
@@ -146,11 +146,11 @@ function isAtLeastLeadHoursAway(day: Date, startHour: number, now: Date): boolea
 
 /**
  * Earliest calendar date on which at least one exact start time could
- * still satisfy the 24-hour minimum lead time, using the latest possible
+ * still satisfy the 120-hour minimum lead time, using the latest possible
  * offered start (OPERATING_LATEST_START_HOUR, 4:00 PM) as the permissive
  * per-date gate — the customer picks the specific exact time in the next
  * step (StartTimeStep.tsx), which fetches the real, authoritative,
- * already-24h-filtered list from /api/booking/available-times
+ * already-120h-filtered list from /api/booking/available-times
  * (availability.ts's getAvailableStartTimes); this is only a calendar-
  * level hint so the customer isn't invited to pick a date that would show
  * zero available times.

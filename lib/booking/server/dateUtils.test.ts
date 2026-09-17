@@ -45,27 +45,27 @@ describe("isPastOrWithinLeadWindow", () => {
 });
 
 describe("isLessThanMinimumLeadTime", () => {
-  it("is true for a service start under 24 hours from now", () => {
+  it("is true for a service start under 120 hours from now", () => {
     const now = new Date("2026-06-14T12:00:00Z");
-    const serviceStart = new Date(now.getTime() + 23 * 60 * 60 * 1000);
+    const serviceStart = new Date(now.getTime() + 119 * 60 * 60 * 1000);
     expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(true);
   });
 
-  it("is false at exactly the 24-hour boundary (inclusive-eligible)", () => {
+  it("is true at 119 hours 59 minutes from now (one minute short of the boundary)", () => {
     const now = new Date("2026-06-14T12:00:00Z");
-    const serviceStart = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const serviceStart = new Date(now.getTime() + (119 * 60 + 59) * 60 * 1000);
+    expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(true);
+  });
+
+  it("is false at exactly the 120-hour boundary (inclusive-eligible)", () => {
+    const now = new Date("2026-06-14T12:00:00Z");
+    const serviceStart = new Date(now.getTime() + 120 * 60 * 60 * 1000);
     expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(false);
   });
 
-  it("is true one minute short of the 24-hour boundary", () => {
+  it("is false for a service start safely beyond 120 hours", () => {
     const now = new Date("2026-06-14T12:00:00Z");
-    const serviceStart = new Date(now.getTime() + 24 * 60 * 60 * 1000 - 60 * 1000);
-    expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(true);
-  });
-
-  it("is false for a service start safely beyond 24 hours", () => {
-    const now = new Date("2026-06-14T12:00:00Z");
-    const serviceStart = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const serviceStart = new Date(now.getTime() + 144 * 60 * 60 * 1000); // 6 days
     expect(isLessThanMinimumLeadTime(serviceStart, now)).toBe(false);
   });
 });

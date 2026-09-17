@@ -20,10 +20,10 @@ const SETTINGS = { minimumLeadDays: 7, defaultDailyCapacity: 2, timezone: "Ameri
 
 // Fixed reference "now" safely before every hardcoded fixture date below
 // (2026-09-10 through 2026-09-23) — those dates exist only to exercise
-// blackout/capacity/operating-hours logic unrelated to the 24-hour
+// blackout/capacity/operating-hours logic unrelated to the 120-hour
 // minimum-lead-time rule, so they're pinned against this fixed clock
 // rather than the real one to stay deterministic regardless of when the
-// suite actually runs. The 24-hour rule itself has its own dedicated
+// suite actually runs. The 120-hour rule itself has its own dedicated
 // describe blocks below, with their own precisely-chosen `now` values.
 const FAR_BEFORE_FIXTURES = new Date("2026-01-01T00:00:00-05:00");
 
@@ -274,39 +274,39 @@ describe("getAvailableStartTimes", () => {
   });
 });
 
-// Reconciliation with the Production 24-hour minimum-lead-time hotfix:
+// Reconciliation with the Production 120-hour minimum-lead-time rule:
 // applied against the customer's exact selected start time (not a
 // calendar-day granularity), replacing the old minimumLeadDays check for
 // both new bookings and rescheduling — see dateUtils.ts's
 // isLessThanMinimumLeadTime and this module's own docstrings.
-describe("checkExactTimeAvailability — 24-hour minimum lead time", () => {
-  it("rejects a candidate less than 24 hours away with reason 'too-soon'", async () => {
+describe("checkExactTimeAvailability — 120-hour minimum lead time", () => {
+  it("rejects a candidate less than 120 hours away with reason 'too-soon'", async () => {
     setupExactTimeData({});
     // 2:00 PM EDT June 15 = 2026-06-15T18:00:00Z. One minute after the
-    // 24h-before instant (2026-06-14T18:00:00Z) is one minute short of 24h.
-    const now = new Date("2026-06-14T18:01:00.000Z");
+    // 120h-before instant (2026-06-10T18:00:00Z) is one minute short of 120h.
+    const now = new Date("2026-06-10T18:01:00.000Z");
     const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
     expect(result.available).toBe(false);
     expect(result.reason).toBe("too-soon");
   });
 
-  it("accepts a candidate exactly 24 hours away", async () => {
+  it("accepts a candidate exactly 120 hours away", async () => {
     setupExactTimeData({});
-    const now = new Date("2026-06-14T18:00:00.000Z"); // exactly 24h before 2026-06-15T18:00:00Z
+    const now = new Date("2026-06-10T18:00:00.000Z"); // exactly 120h before 2026-06-15T18:00:00Z
     const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
     expect(result.available).toBe(true);
   });
 
-  it("rejects a candidate one minute inside the 24-hour boundary", async () => {
+  it("rejects a candidate one minute inside the 120-hour boundary", async () => {
     setupExactTimeData({});
-    const now = new Date("2026-06-14T18:01:00.000Z");
+    const now = new Date("2026-06-10T18:01:00.000Z");
     const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
     expect(result.available).toBe(false);
   });
 
-  it("accepts a candidate safely beyond 24 hours away", async () => {
+  it("accepts a candidate safely beyond 120 hours away", async () => {
     setupExactTimeData({});
-    const now = new Date("2026-06-13T18:00:00.000Z"); // 48h before
+    const now = new Date("2026-06-08T18:00:00.000Z"); // 168h (7 days) before
     const result = await checkExactTimeAvailability("2026-06-15", "14:00", 60, now);
     expect(result.available).toBe(true);
   });
@@ -318,14 +318,14 @@ describe("checkExactTimeAvailability — 24-hour minimum lead time", () => {
     expect(result.reason).toBe("blackout");
   });
 
-  it("resolves the 24-hour boundary correctly across the spring-forward DST transition (2026-03-08)", async () => {
+  it("resolves the 120-hour boundary correctly across the spring-forward DST transition (2026-03-08)", async () => {
     setupExactTimeData({});
     // 1:00 PM EDT March 8 (already past the 2am transition) = 2026-03-08T17:00:00Z.
-    // The real 24h-before instant is 2026-03-07T17:00:00Z, regardless of
-    // the lost hour — pure UTC-instant arithmetic, no naive calendar-day
-    // subtraction.
-    const exactlyOnBoundary = new Date("2026-03-07T17:00:00.000Z");
-    const oneMinuteShort = new Date("2026-03-07T17:01:00.000Z");
+    // The real 120h-before instant is 2026-03-03T17:00:00Z, regardless of
+    // the lost hour in between — pure UTC-instant arithmetic, no naive
+    // calendar-day subtraction.
+    const exactlyOnBoundary = new Date("2026-03-03T17:00:00.000Z");
+    const oneMinuteShort = new Date("2026-03-03T17:01:00.000Z");
     const onBoundaryResult = await checkExactTimeAvailability("2026-03-08", "13:00", 60, exactlyOnBoundary);
     const shortResult = await checkExactTimeAvailability("2026-03-08", "13:00", 60, oneMinuteShort);
     expect(onBoundaryResult.available).toBe(true);
@@ -333,11 +333,12 @@ describe("checkExactTimeAvailability — 24-hour minimum lead time", () => {
     expect(shortResult.reason).toBe("too-soon");
   });
 
-  it("resolves the 24-hour boundary correctly across the fall-back DST transition (2026-11-01)", async () => {
+  it("resolves the 120-hour boundary correctly across the fall-back DST transition (2026-11-01)", async () => {
     setupExactTimeData({});
     // 1:00 PM EST November 1 (already past the 2am transition) = 2026-11-01T18:00:00Z.
-    const exactlyOnBoundary = new Date("2026-10-31T18:00:00.000Z");
-    const oneMinuteShort = new Date("2026-10-31T18:01:00.000Z");
+    // The real 120h-before instant is 2026-10-27T18:00:00Z.
+    const exactlyOnBoundary = new Date("2026-10-27T18:00:00.000Z");
+    const oneMinuteShort = new Date("2026-10-27T18:01:00.000Z");
     const onBoundaryResult = await checkExactTimeAvailability("2026-11-01", "13:00", 60, exactlyOnBoundary);
     const shortResult = await checkExactTimeAvailability("2026-11-01", "13:00", 60, oneMinuteShort);
     expect(onBoundaryResult.available).toBe(true);
@@ -345,14 +346,14 @@ describe("checkExactTimeAvailability — 24-hour minimum lead time", () => {
   });
 });
 
-describe("getAvailableStartTimes — 24-hour minimum lead time", () => {
-  it("excludes only the candidates less than 24 hours away, keeping later ones on the same date", async () => {
+describe("getAvailableStartTimes — 120-hour minimum lead time", () => {
+  it("excludes only the candidates less than 120 hours away, keeping later ones on the same date", async () => {
     setupExactTimeData({});
-    // 10:00 AM EDT June 14 = 2026-06-14T14:00:00Z. On 2026-06-15 (EDT,
-    // UTC-4): 08:00/09:00 local are <24h away (22h/23h); 10:00 local is
-    // exactly 24h away; 11:00 onward are safely beyond.
+    // 10:00 AM EDT June 14 = 2026-06-14T14:00:00Z. On 2026-06-19 (5 days
+    // later, EDT UTC-4): 08:00/09:00 local are <120h away (118h/119h);
+    // 10:00 local is exactly 120h away; 11:00 onward are safely beyond.
     const now = new Date("2026-06-14T14:00:00.000Z");
-    const result = await getAvailableStartTimes("2026-06-15", 60, now);
+    const result = await getAvailableStartTimes("2026-06-19", 60, now);
     expect(result).not.toContain("08:00");
     expect(result).not.toContain("09:00");
     expect(result).toContain("10:00");
@@ -360,12 +361,13 @@ describe("getAvailableStartTimes — 24-hour minimum lead time", () => {
     expect(result).toContain("16:00");
   });
 
-  it("returns an empty list when every candidate on the date is less than 24 hours away", async () => {
+  it("returns an empty list when every candidate on the date is less than 120 hours away", async () => {
     setupExactTimeData({});
-    // Same instant as "now" as the earliest possible candidate start on
-    // the very next calendar day is still well under 24h for every hour.
-    const now = new Date("2026-06-15T23:00:00.000Z"); // 7:00 PM EDT June 15
-    const result = await getAvailableStartTimes("2026-06-16", 60, now);
+    // 7:00 PM EDT June 14 = 2026-06-14T23:00:00Z. Even the latest offered
+    // start (4:00 PM local) on 2026-06-19 — 5 days later — is only 117h
+    // away, still under the 120h minimum for every hour that day.
+    const now = new Date("2026-06-14T23:00:00.000Z");
+    const result = await getAvailableStartTimes("2026-06-19", 60, now);
     expect(result).toEqual([]);
   });
 });

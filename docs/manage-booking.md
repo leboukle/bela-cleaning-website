@@ -58,11 +58,11 @@ notification status, internal notes, or any other operational-only field —
 enforced by construction (the view type simply has no such fields), not by
 redaction.
 
-## 4. The 24-hour rule(s)
+## 4. The 24-hour and 120-hour rules
 
-Two related but distinct 24-hour rules, both computed server-side only,
-both built on the same DST-safe wall-clock-to-UTC conversion Milestone 5
-established for Scheduled Charge At — extracted to a shared
+Two related but distinct minimum-time rules, both computed server-side
+only, both built on the same DST-safe wall-clock-to-UTC conversion
+Milestone 5 established for Scheduled Charge At — extracted to a shared
 [`timezone.ts`](../lib/booking/server/timezone.ts) /
 [`serviceTime.ts`](../lib/booking/server/serviceTime.ts) so every
 timing-sensitive module calls the identical conversion rather than
@@ -84,20 +84,27 @@ even be offered/accepted, in
 `checkExactTimeAvailability`/`getAvailableStartTimes`:
 
 ```
-candidateStart >= now + 24 hours  -> eligible, subject to blackout/capacity
-candidateStart <  now + 24 hours  -> unavailable ("too-soon")
+candidateStart >= now + 120 hours  -> eligible, subject to blackout/capacity
+candidateStart <  now + 120 hours  -> unavailable ("too-soon")
 ```
 
 This replaces the original, day-granular `minimumLeadDays` (Settings
 Sheet) check that used to gate new bookings — that setting is no longer
 consulted anywhere in the booking or rescheduling path.
 
-Note the two rules resolve the exact 24-hour boundary in opposite
+Note the two rules resolve their own exact boundary in opposite
 directions, per their respective specs: cancellation/reschedule
 eligibility treats an appointment *exactly* 24 hours out as still late
 (strictly more than 24h is required to be free), while booking minimum
-lead time treats a candidate *exactly* 24 hours out as already eligible
-(24 hours or more qualifies).
+lead time treats a candidate *exactly* 120 hours out as already eligible
+(120 hours or more qualifies). An existing appointment already inside the
+120-hour window is entirely unaffected by this rule — `isLessThanMinimumLeadTime`
+has exactly two call sites, both in `availability.ts`, both exclusively
+evaluating a *candidate* start time (a new booking, or a reschedule's new
+target slot). It is never invoked against an already-persisted booking's
+own start time, so this rule can never retroactively cancel, alter, or
+invalidate an existing appointment — only the 24-hour cancellation/
+reschedule rule above governs what can still be done with one of those.
 
 ## 5. Cancellation flow
 
