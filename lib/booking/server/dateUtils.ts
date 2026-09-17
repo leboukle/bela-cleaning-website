@@ -55,7 +55,7 @@ export function isPastOrWithinLeadWindow(dateKey: string, timezone: string, mini
 // calendar date. `serviceStart` must already be the real, DST-safe UTC
 // instant — see serviceTime.ts's calculateServiceStart — never
 // recomputed here.
-export const MINIMUM_LEAD_TIME_HOURS = 24;
+export const MINIMUM_LEAD_TIME_HOURS = 120;
 
 /** True when `serviceStart` is less than MINIMUM_LEAD_TIME_HOURS from `now`. */
 export function isLessThanMinimumLeadTime(serviceStart: Date, now: Date = new Date()): boolean {
