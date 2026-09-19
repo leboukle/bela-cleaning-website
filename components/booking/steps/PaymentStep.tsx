@@ -241,8 +241,11 @@ function PaymentForm({ totalPrice, onSetupComplete, onBack }: PaymentFormProps) 
             <li>Your card is saved securely with Stripe — BeLa Cleaning never sees or stores your card details.</li>
             <li>You are not charged today.</li>
             <li>
-              {totalPrice != null ? `The total shown (${formatCurrency(totalPrice)})` : "Your booking total"} will be
-              charged automatically to this card starting 1 hour after your cleaning&rsquo;s scheduled end time.
+              {totalPrice != null
+                ? `Your final confirmed booking total (currently ${formatCurrency(totalPrice)})`
+                : "Your final confirmed booking total"}{" "}
+              will be charged automatically to this card starting 1 hour after your cleaning&rsquo;s scheduled end
+              time. You&rsquo;ll review the final total before you submit.
             </li>
             <li>This automatic charge may occur even if you&rsquo;re not present or don&rsquo;t return to this site.</li>
             <li>
@@ -261,8 +264,9 @@ function PaymentForm({ totalPrice, onSetupComplete, onBack }: PaymentFormProps) 
             className="mt-0.5 h-5 w-5 shrink-0 rounded border-[#C9BCA6] text-[#3B2F27] accent-[#3B2F27] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B2F27]"
           />
           <span className="text-sm text-[#3B2F27]">
-            I agree that BeLa Cleaning will securely save this payment method and automatically charge it
-            {totalPrice != null ? ` ${formatCurrency(totalPrice)} ` : " the total shown "}
+            I agree that BeLa Cleaning will securely save this payment method and automatically charge it my final
+            confirmed booking total
+            {totalPrice != null ? ` (currently ${formatCurrency(totalPrice)}) ` : " "}
             starting 1 hour after my cleaning&rsquo;s scheduled end time, without further action from me. I
             understand this card may also be charged a late-cancellation fee equal to 50% of the booking total if
             I cancel within 24 hours of the scheduled start time.

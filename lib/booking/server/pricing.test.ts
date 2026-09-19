@@ -42,18 +42,40 @@ function sampleBooking(overrides: Partial<ValidatedBooking> = {}): ValidatedBook
 }
 
 describe("calculateAuthoritativePricing", () => {
-  it("computes the known totals for a standard booking (2BR/2BA, kitchen cabinets + 2 windows, weekly)", () => {
+  it("computes the known totals for a standard booking (2BR/2BA, 1,001–2,000 sq ft, kitchen cabinets + 2 windows, weekly)", () => {
     const pricing = calculateAuthoritativePricing(sampleBooking());
     expect(pricing).toEqual({
       baseCleaningPrice: 130,
       bathroomPrice: 20,
+      squareFootagePrice: 15,
       cleaningTypePrice: 0,
       extrasPrice: 60,
-      subtotal: 210,
+      subtotal: 225,
+      // Weekly 15% applies to the bedroom base only (130 * 0.15), never to
+      // the new square-footage component.
       frequencyDiscount: 19.5,
-      totalPrice: 190.5,
-      estimatedDurationMinutes: 270,
+      totalPrice: 205.5,
+      // 150 bedroom + 60 bathrooms + 15 square footage + 60 extras
+      estimatedDurationMinutes: 285,
     });
+  });
+
+  it("persists each square-footage tier's price and feeds its duration into the authoritative estimate", () => {
+    const tiers = [
+      { squareFootage: "up-to-1000", price: 0, minutes: 0 },
+      { squareFootage: "1001-2000", price: 15, minutes: 15 },
+      { squareFootage: "2001-3000", price: 25, minutes: 20 },
+      { squareFootage: "3001-4000", price: 35, minutes: 25 },
+    ] as const;
+    const noExtras = { kitchenCabinets: false, refrigerator: false, oven: false, interiorWindowsQty: 0, blindsQty: 0, noExtras: true };
+    const base = calculateAuthoritativePricing(sampleBooking({ squareFootage: "up-to-1000", frequency: "one-time", extras: noExtras }));
+    for (const tier of tiers) {
+      const pricing = calculateAuthoritativePricing(sampleBooking({ squareFootage: tier.squareFootage, frequency: "one-time", extras: noExtras }));
+      expect(pricing.squareFootagePrice).toBe(tier.price);
+      expect(pricing.totalPrice).toBe(base.totalPrice + tier.price);
+      expect(pricing.subtotal).toBe(base.subtotal + tier.price);
+      expect(pricing.estimatedDurationMinutes).toBe(base.estimatedDurationMinutes + tier.minutes);
+    }
   });
 
   it("keeps subtotal minus discount consistent with total for every frequency", () => {
@@ -76,11 +98,13 @@ describe("calculateAuthoritativePricing internal-consistency guard", () => {
         bedroomBasePrice: 100,
         discountedBedroomBasePrice: 100,
         bathroomAddition: 0,
+        squareFootageAddition: 0,
         extrasTotal: 0,
         cleaningTypeAddition: 0,
         totalPrice: 999, // deliberately inconsistent with subtotal - discount
         bedroomBaseDurationMinutes: 0,
         bathroomDurationMinutes: 0,
+        squareFootageDurationMinutes: 0,
         extrasDurationMinutes: 0,
         cleaningTypeDurationMinutes: 0,
         totalDurationMinutes: 0,

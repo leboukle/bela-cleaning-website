@@ -34,11 +34,13 @@ export type ArrivalWindowId = "morning" | "midday" | "early-afternoon" | "aftern
 export type AccessId = "home" | "not-home";
 
 // The linear question sequence. Note: "cleaning-type" is asked before
-// "extras" here so the visible progress stages (Property / Service /
-// Extras / Frequency / Location / Schedule / Details / Review) advance in
-// one direction only — see STEP_STAGE in config.ts and the Milestone 1
-// report for why this differs from the extras-before-cleaning-type order
-// the questions were originally listed in.
+// "extras" here so the visible progress stages advance in one direction
+// only — see STEP_STAGE in config.ts and the Milestone 1 report for why
+// this differs from the extras-before-cleaning-type order the questions
+// were originally listed in. "square-footage" is asked after "extras" and
+// before "frequency": it is a price + duration modifier (see
+// SQUARE_FOOTAGE_OPTIONS in config.ts and calculate.ts), not a property
+// descriptor, so it sits with the other sizing/price questions.
 //
 // Milestone 2A extends the flow past "frequency" with fine-grained steps
 // grouped under four new coarse stages (Location, Schedule, Details x6).
@@ -48,11 +50,11 @@ export type AccessId = "home" | "not-home";
 export const STEP_ORDER = [
   "intro",
   "property-type",
-  "square-footage",
   "bedrooms",
   "bathrooms",
   "cleaning-type",
   "extras",
+  "square-footage",
   "frequency",
   "location",
   "schedule-date",

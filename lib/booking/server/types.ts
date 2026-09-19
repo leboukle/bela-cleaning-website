@@ -215,6 +215,11 @@ export type BookingRecord = {
   // attempt; re-minted (hash overwritten) on every attempt thereafter.
   // Owned exclusively by reminderService.ts. See docs/manage-booking.md.
   manageBookingReminderTokenHash: string;
+  // Square-footage price modifier (see SQUARE_FOOTAGE_OPTIONS in config.ts).
+  // Appended as the last Bookings column; blank/0 on every row created
+  // before it existed, which is correct — those bookings were priced
+  // without it, and their Subtotal/Total/Charge Amount are never recomputed.
+  squareFootagePrice: number;
 };
 
 /** Written by cancellationService.ts the moment a cancellation is confirmed — before any Stripe call. */

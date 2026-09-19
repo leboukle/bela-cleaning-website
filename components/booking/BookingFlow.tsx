@@ -9,6 +9,7 @@ import {
   STEP_STAGE,
 } from "@/lib/booking/config";
 import { calculateEstimate } from "@/lib/booking/calculate";
+import { withAppointmentDate } from "@/lib/booking/appointmentSelection";
 import {
   initialBookingState,
   STEP_ORDER,
@@ -27,6 +28,9 @@ import ProgressIndicator from "@/components/booking/ProgressIndicator";
 import BookingSummary from "@/components/booking/BookingSummary";
 import MobileSummaryBar from "@/components/booking/MobileSummaryBar";
 import CustomEstimateNotice from "@/components/booking/CustomEstimateNotice";
+import DeepCleaningNoticeDialog from "@/components/booking/DeepCleaningNoticeDialog";
+import { useDeepCleaningNotice } from "@/components/booking/useDeepCleaningNotice";
+import { useAppointmentRevalidation } from "@/components/booking/useAppointmentRevalidation";
 import StepTransition from "@/components/booking/StepTransition";
 import IntroStep from "@/components/booking/steps/IntroStep";
 import PropertyTypeStep from "@/components/booking/steps/PropertyTypeStep";
@@ -75,9 +79,30 @@ export default function BookingFlow() {
   // submission as spam server-side.
   const [honeypot, setHoneypot] = useState("");
   const [submission, setSubmission] = useState<BookingSubmissionUiState>({ status: "idle" });
+  // True right after the customer accepts the Standard -> Deep Cleaning
+  // switch offered by the notes safeguard, so Review can call out that the
+  // total/duration just changed. Cleared on any subsequent edit.
+  const [switchedToDeepCleaning, setSwitchedToDeepCleaning] = useState(false);
 
   const currentStepId = STEP_ORDER[state.stepIndex];
   const estimate = useMemo(() => calculateEstimate(state), [state]);
+
+  // Any selection that lengthens the estimated duration (square footage,
+  // cleaning type, extras, the Standard -> Deep switch, ...) re-checks an
+  // ALREADY-selected appointment time against the new duration. If it no
+  // longer fits, the time is cleared (never silently swapped) and the
+  // customer is told to pick a new one — see useAppointmentRevalidation.
+  // The server's own availability check at submission stays authoritative.
+  const [appointmentNoLongerFits, setAppointmentNoLongerFits] = useState(false);
+  const appointmentRevalidation = useAppointmentRevalidation({
+    appointmentDate: state.appointmentDate,
+    serviceStartTime: state.serviceStartTime,
+    durationMinutes: estimate?.totalDurationMinutes ?? null,
+    onInvalidated: () => {
+      setState((s) => ({ ...s, serviceStartTime: null }));
+      setAppointmentNoLongerFits(true);
+    },
+  });
 
   const goBack = () => setState((s) => ({ ...s, stepIndex: Math.max(s.stepIndex - 1, 0) }));
 
@@ -107,6 +132,7 @@ export default function BookingFlow() {
   // back rather than a stale success/error message.
   const editSection = (stepId: StepId) => {
     setSubmission({ status: "idle" });
+    setSwitchedToDeepCleaning(false);
     setState((s) => ({
       ...s,
       stepIndex: STEP_ORDER.indexOf(stepId),
@@ -142,6 +168,14 @@ export default function BookingFlow() {
   };
 
   const selectCleaningType = (id: CleaningTypeId) => {
+    // Any real change of cleaning type invalidates a prior "Keep Standard"
+    // acknowledgement (see useDeepCleaningNotice), so the notes safeguard
+    // re-evaluates from scratch — including a Standard -> Deep -> Standard
+    // round trip. Re-selecting the same type changes nothing.
+    if (id !== state.cleaningType) {
+      noticeGate.resetAcknowledgement();
+      setSwitchedToDeepCleaning(false);
+    }
     setState((s) => ({ ...s, cleaningType: id }));
     advance();
   };
@@ -162,10 +196,13 @@ export default function BookingFlow() {
 
   // --- Schedule ---
   const selectAppointmentDate = (dateKey: string) => {
-    setState((s) => ({ ...s, appointmentDate: dateKey }));
+    // A different date clears the previously selected start time (see
+    // withAppointmentDate); re-selecting the same date keeps it.
+    setState((s) => withAppointmentDate(s, dateKey));
     advance();
   };
   const selectServiceStartTime = (time: string) => {
+    setAppointmentNoLongerFits(false);
     setState((s) => ({ ...s, serviceStartTime: time }));
     advance();
   };
@@ -330,6 +367,22 @@ export default function BookingFlow() {
 
   const pickNewDate = () => editSection("schedule-date");
 
+  // Deterministic Standard-vs-Deep notes safeguard (no AI): Review's Submit
+  // goes through `requestSubmit`, which either submits immediately or opens
+  // the notice. "Switch" only changes cleaningType — the existing
+  // centralized estimate (calculate.ts) then reprices/re-times it, so the
+  // Deep surcharge and duration are applied exactly once, by the engine.
+  const noticeGate = useDeepCleaningNotice({
+    cleaningType: state.cleaningType,
+    notes: state.specialInstructions,
+    onSubmit: submitBooking,
+    onSwitchToDeep: () => {
+      setSubmission({ status: "idle" });
+      setSwitchedToDeepCleaning(true);
+      setState((s) => ({ ...s, cleaningType: "deep" }));
+    },
+  });
+
   const stage = STEP_STAGE[currentStepId];
 
   // Keep the customer oriented at the top of each new question, especially
@@ -400,6 +453,7 @@ export default function BookingFlow() {
             value={state.serviceStartTime}
             appointmentDate={state.appointmentDate}
             estimatedDurationMinutes={estimate?.totalDurationMinutes ?? null}
+            timeNoLongerFits={appointmentNoLongerFits}
             onSelect={selectServiceStartTime}
             onBack={goBack}
           />
@@ -469,7 +523,11 @@ export default function BookingFlow() {
             onEdit={editSection}
             onAgreedChange={setAgreedToPolicy}
             submission={submission}
-            onSubmit={submitBooking}
+            onSubmit={noticeGate.requestSubmit}
+            switchedToDeepCleaning={switchedToDeepCleaning}
+            appointmentNoLongerFits={appointmentNoLongerFits && !state.serviceStartTime}
+            appointmentCheckPending={appointmentRevalidation.isChecking}
+            onChooseNewTime={() => editSection("arrival-window")}
             onPickNewDate={pickNewDate}
             onRedoPayment={redoPayment}
             honeypot={honeypot}
@@ -503,6 +561,13 @@ export default function BookingFlow() {
         {currentStepId !== "intro" && !isConfirmed && <BookingSummary state={state} estimate={estimate} />}
       </div>
       {currentStepId !== "intro" && !isConfirmed && <MobileSummaryBar state={state} estimate={estimate} />}
+      {noticeGate.isOpen && currentStepId === "review" && !isConfirmed && (
+        <DeepCleaningNoticeDialog
+          onSwitchToDeep={noticeGate.switchToDeep}
+          onKeepStandard={noticeGate.keepStandard}
+          onDismiss={noticeGate.dismiss}
+        />
+      )}
     </div>
   );
 }

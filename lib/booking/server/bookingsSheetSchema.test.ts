@@ -8,9 +8,9 @@ import {
 } from "./bookingsSheetSchema";
 
 describe("bookingsSheetSchema", () => {
-  it("has exactly 67 columns with no duplicates (41 M3 + 3 M4 + 12 M5 + 5 M6 + 5 M6-amendment + 1 post-verification-fix column)", () => {
-    expect(BOOKINGS_COLUMNS.length).toBe(67);
-    expect(new Set(BOOKINGS_COLUMNS).size).toBe(67);
+  it("has exactly 68 columns with no duplicates (41 M3 + 3 M4 + 12 M5 + 5 M6 + 5 M6-amendment + 1 post-verification-fix column + 1 square-footage-price column)", () => {
+    expect(BOOKINGS_COLUMNS.length).toBe(68);
+    expect(new Set(BOOKINGS_COLUMNS).size).toBe(68);
   });
 
   it("places the 3 notification-status columns right after Schema Version", () => {
@@ -81,9 +81,20 @@ describe("bookingsSheetSchema", () => {
     expect(columnLetter("Appointment Reminder Attempts")).toBe("BN");
   });
 
-  it("places the post-verification-fix reminder-token-hash column at the very end, after Appointment Reminder Attempts", () => {
-    expect(BOOKINGS_COLUMNS.slice(-1)).toEqual(["Manage Booking Reminder Token Hash"]);
+  it("places the post-verification-fix reminder-token-hash column right after Appointment Reminder Attempts, unmoved (BO)", () => {
+    expect(BOOKINGS_COLUMNS[66]).toBe("Manage Booking Reminder Token Hash");
     expect(columnLetter("Manage Booking Reminder Token Hash")).toBe("BO");
+  });
+
+  it("appends 'Square Footage Price' as the very last column (BP), leaving every existing column's position unchanged", () => {
+    expect(BOOKINGS_COLUMNS.slice(-1)).toEqual(["Square Footage Price"]);
+    expect(columnLetter("Square Footage Price")).toBe("BP");
+    // Spot-check that pre-existing columns kept their exact letters.
+    expect(columnLetter("Square Footage")).toBe("R");
+    expect(columnLetter("Total Price")).toBe("AD");
+    expect(columnLetter("Estimated Duration Minutes")).toBe("AE");
+    expect(columnLetter("Scheduled Charge At")).toBe("AV");
+    expect(columnLetter("Charge Amount")).toBe("AX");
   });
 
   it("maps the first column to A", () => {

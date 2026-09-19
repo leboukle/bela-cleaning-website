@@ -10,6 +10,8 @@ vi.mock("./settings", () => ({
 
 import { getRange, batchGetRanges } from "./sheetsClient";
 import { getBookingSettings } from "./settings";
+import { calculateEstimate } from "@/lib/booking/calculate";
+import { initialExtrasState } from "@/lib/booking/types";
 import { checkDateAvailability, checkExactTimeAvailability, getAvailableStartTimes, getUnavailableDateKeysInWindow } from "./availability";
 
 const mockedGetRange = vi.mocked(getRange);
@@ -164,6 +166,34 @@ describe("checkExactTimeAvailability", () => {
     expect(result.reason).toBe("outside-operating-hours");
   });
 
+  it("no longer accepts an 8:00 AM start for a new booking (earliest start is 9:00 AM)", async () => {
+    setupExactTimeData({});
+    const result = await checkExactTimeAvailability("2026-09-12", "08:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("outside-operating-hours");
+  });
+
+  it("accepts 9:00 AM when otherwise available", async () => {
+    setupExactTimeData({});
+    const result = await checkExactTimeAvailability("2026-09-12", "09:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(true);
+  });
+
+  it("still counts an EXISTING 8:00 AM booking toward overlap/capacity (existing bookings stay valid and unchanged)", async () => {
+    // Two pre-existing 8:00 AM exact-time bookings run 8-10am. A new 9:00 AM
+    // candidate overlaps both, pushing concurrency to 3 > default capacity 2.
+    setupExactTimeData({
+      bookings: [
+        { serviceDate: "2026-09-24", serviceStartTime: "08:00", durationMinutes: 120 },
+        { serviceDate: "2026-09-24", serviceStartTime: "08:00", durationMinutes: 120 },
+      ],
+    });
+    const result = await checkExactTimeAvailability("2026-09-24", "09:00", 60, FAR_BEFORE_FIXTURES);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe("at-capacity");
+    expect(result.peakConcurrentCount).toBe(3);
+  });
+
   it("is unavailable when the duration would push the cleaning past 8:00 PM close", async () => {
     // A 5-hour cleaning cannot start at 4:00 PM — it would end at 9:00 PM.
     setupExactTimeData({});
@@ -239,7 +269,63 @@ describe("getAvailableStartTimes", () => {
   it("returns every hourly candidate whose duration fits before close, when nothing else is booked", async () => {
     setupExactTimeData({});
     const result = await getAvailableStartTimes("2026-09-19", 60, FAR_BEFORE_FIXTURES);
-    expect(result).toEqual(["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"]);
+    expect(result).toEqual(["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"]);
+  });
+
+  it("never offers a start earlier than 9:00 AM, and offers 9:00 AM itself when available", async () => {
+    setupExactTimeData({});
+    const result = await getAvailableStartTimes("2026-09-19", 60, FAR_BEFORE_FIXTURES);
+    expect(result[0]).toBe("09:00");
+    expect(result).not.toContain("08:00");
+    expect(result.every((time) => time >= "09:00")).toBe(true);
+  });
+
+  it("never offers a start whose cleaning would end after 8:00 PM, across a range of durations", async () => {
+    setupExactTimeData({});
+    for (const duration of [60, 150, 210, 240, 300, 360, 480, 660]) {
+      const result = await getAvailableStartTimes("2026-09-19", duration, FAR_BEFORE_FIXTURES);
+      for (const time of result) {
+        const startMinutes = Number(time.slice(0, 2)) * 60;
+        expect(startMinutes).toBeGreaterThanOrEqual(9 * 60);
+        expect(startMinutes + duration).toBeLessThanOrEqual(20 * 60);
+      }
+    }
+  });
+
+  it("a longer duration removes later starts that can no longer finish by 8:00 PM, while keeping the 9:00 AM start", async () => {
+    setupExactTimeData({});
+    // 3 BR + 2 BA Standard, no extras: 180 + 60 = 240 minutes — a 4:00 PM
+    // start finishes exactly at 8:00 PM.
+    const smallHome = calculateEstimate({
+      customEstimateTrigger: null,
+      bedrooms: "3",
+      bathrooms: "2",
+      squareFootage: "up-to-1000",
+      cleaningType: "standard",
+      extras: { ...initialExtrasState, noExtras: true },
+      frequency: "one-time",
+    });
+    // Same home at 3,001–4,000 sq ft: +25 minutes -> 265 minutes.
+    const largeHome = calculateEstimate({
+      customEstimateTrigger: null,
+      bedrooms: "3",
+      bathrooms: "2",
+      squareFootage: "3001-4000",
+      cleaningType: "standard",
+      extras: { ...initialExtrasState, noExtras: true },
+      frequency: "one-time",
+    });
+    expect(smallHome?.totalDurationMinutes).toBe(240);
+    expect(largeHome?.totalDurationMinutes).toBe(265);
+
+    const smallTimes = await getAvailableStartTimes("2026-09-19", smallHome!.totalDurationMinutes, FAR_BEFORE_FIXTURES);
+    const largeTimes = await getAvailableStartTimes("2026-09-19", largeHome!.totalDurationMinutes, FAR_BEFORE_FIXTURES);
+
+    // 240 min: 16:00 ends 20:00 exactly — allowed. 265 min: 16:00 would end 20:25 — gone; 15:00 ends 19:25 — kept.
+    expect(smallTimes).toContain("16:00");
+    expect(largeTimes).not.toContain("16:00");
+    expect(largeTimes).toContain("15:00");
+    expect(largeTimes[0]).toBe("09:00");
   });
 
   it("excludes start times whose duration would finish after 8:00 PM close", async () => {
@@ -350,11 +436,11 @@ describe("getAvailableStartTimes — 120-hour minimum lead time", () => {
   it("excludes only the candidates less than 120 hours away, keeping later ones on the same date", async () => {
     setupExactTimeData({});
     // 10:00 AM EDT June 14 = 2026-06-14T14:00:00Z. On 2026-06-19 (5 days
-    // later, EDT UTC-4): 08:00/09:00 local are <120h away (118h/119h);
-    // 10:00 local is exactly 120h away; 11:00 onward are safely beyond.
+    // later, EDT UTC-4): 09:00 local is <120h away (119h); 10:00 local is
+    // exactly 120h away; 11:00 onward are safely beyond. (8:00 AM is no
+    // longer an offered start at all — earliest start is 9:00 AM.)
     const now = new Date("2026-06-14T14:00:00.000Z");
     const result = await getAvailableStartTimes("2026-06-19", 60, now);
-    expect(result).not.toContain("08:00");
     expect(result).not.toContain("09:00");
     expect(result).toContain("10:00");
     expect(result).toContain("11:00");

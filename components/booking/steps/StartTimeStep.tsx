@@ -9,6 +9,8 @@ type StartTimeStepProps = {
   value: string | null;
   appointmentDate: string | null;
   estimatedDurationMinutes: number | null;
+  /** True when a duration-lengthening change cleared the customer's previously selected time. */
+  timeNoLongerFits?: boolean;
   onSelect: (time: string) => void;
   onBack: () => void;
 };
@@ -20,7 +22,14 @@ type StartTimeStepProps = {
 // Sheets data the server re-validates at submission time (see
 // availability.ts's getAvailableStartTimes). This is purely a UX
 // convenience; the server never trusts this list back.
-export default function StartTimeStep({ value, appointmentDate, estimatedDurationMinutes, onSelect, onBack }: StartTimeStepProps) {
+export default function StartTimeStep({
+  value,
+  appointmentDate,
+  estimatedDurationMinutes,
+  timeNoLongerFits = false,
+  onSelect,
+  onBack,
+}: StartTimeStepProps) {
   const [availableStartTimes, setAvailableStartTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -68,6 +77,12 @@ export default function StartTimeStep({ value, appointmentDate, estimatedDuratio
       note="Choose an exact appointment start time — your cleaner will arrive then."
       onBack={onBack}
     >
+      {timeNoLongerFits && (
+        <p className="mb-5 rounded-xl border border-[#D9A05B] bg-[#FBF0DE] p-4 text-sm font-medium text-[#3B2F27]" role="status">
+          Your updated service needs a longer visit, so your previously selected time no longer works. Please choose a
+          new appointment time.
+        </p>
+      )}
       {loading && <p className="text-sm text-[#8A7A6B]">Loading available times…</p>}
       {!loading && loadError && (
         <p className="text-sm text-[#B14A2E]">

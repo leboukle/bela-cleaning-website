@@ -19,6 +19,7 @@ export class PricingError extends Error {
 export type AuthoritativePricing = {
   baseCleaningPrice: number;
   bathroomPrice: number;
+  squareFootagePrice: number;
   cleaningTypePrice: number;
   extrasPrice: number;
   subtotal: number;
@@ -39,6 +40,7 @@ export function calculateAuthoritativePricing(booking: ValidatedBooking): Author
     customEstimateTrigger: null,
     bedrooms: booking.bedrooms,
     bathrooms: booking.bathrooms,
+    squareFootage: booking.squareFootage,
     cleaningType: booking.cleaningType,
     extras: booking.extras,
     frequency: booking.frequency,
@@ -50,9 +52,10 @@ export function calculateAuthoritativePricing(booking: ValidatedBooking): Author
 
   const baseCleaningPrice = roundMoney(estimate.bedroomBasePrice);
   const bathroomPrice = roundMoney(estimate.bathroomAddition);
+  const squareFootagePrice = roundMoney(estimate.squareFootageAddition);
   const cleaningTypePrice = roundMoney(estimate.cleaningTypeAddition);
   const extrasPrice = roundMoney(estimate.extrasTotal);
-  const subtotal = roundMoney(baseCleaningPrice + bathroomPrice + cleaningTypePrice + extrasPrice);
+  const subtotal = roundMoney(baseCleaningPrice + bathroomPrice + squareFootagePrice + cleaningTypePrice + extrasPrice);
   const frequencyDiscount = roundMoney(estimate.bedroomBasePrice - estimate.discountedBedroomBasePrice);
   const totalPrice = roundMoney(estimate.totalPrice);
 
@@ -67,6 +70,7 @@ export function calculateAuthoritativePricing(booking: ValidatedBooking): Author
   return {
     baseCleaningPrice,
     bathroomPrice,
+    squareFootagePrice,
     cleaningTypePrice,
     extrasPrice,
     subtotal,

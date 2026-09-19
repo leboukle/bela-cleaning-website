@@ -277,6 +277,7 @@ function sampleRecordWithToken(token: string): BookingRecord {
     frequency: "One time",
     baseCleaningPrice: 130,
     bathroomPrice: 20,
+    squareFootagePrice: 0, // pre-existing booking, priced before the square-footage component existed
     cleaningTypePrice: 0,
     extrasPrice: 0,
     subtotal: 150,

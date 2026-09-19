@@ -152,6 +152,15 @@ export const BOOKINGS_COLUMNS = [
   // valid reminder-issued token at a time, never touching the original.
   // See reminderService.ts and docs/manage-booking.md.
   "Manage Booking Reminder Token Hash",
+  // Square-footage pricing addition (booking-flow update). Appended at the
+  // very end, same rationale as every prior addition: every existing
+  // column keeps its exact position. Rows created before this column
+  // existed leave it blank (read as 0) — correct, since those bookings
+  // were priced without a square-footage component and their stored
+  // Subtotal/Total Price/Charge Amount are never recomputed. The header
+  // "Square Footage Price" MUST be added to the live Bookings sheet(s)
+  // before code that writes this column is deployed.
+  "Square Footage Price",
 ] as const;
 
 export type BookingColumn = (typeof BOOKINGS_COLUMNS)[number];
