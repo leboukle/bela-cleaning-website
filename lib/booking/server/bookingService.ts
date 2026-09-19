@@ -183,6 +183,7 @@ function buildBookingRecord(
     frequency: getFrequencyOption(booking.frequency).label,
     baseCleaningPrice: pricing.baseCleaningPrice,
     bathroomPrice: pricing.bathroomPrice,
+    squareFootagePrice: pricing.squareFootagePrice,
     cleaningTypePrice: pricing.cleaningTypePrice,
     extrasPrice: pricing.extrasPrice,
     subtotal: pricing.subtotal,

@@ -46,14 +46,20 @@ export function getArrivalWindowIdByLabel(label: string): ArrivalWindowId | null
 // ---- Exact appointment start times (Milestone 6 amendment) ----
 // Replaces broad Arrival Window selection for new bookings going forward.
 // Business-approved operating rules: hourly increments, no lunch
-// exclusion, earliest start 8:00 AM, latest possible start 4:00 PM, and
+// exclusion, earliest start 9:00 AM, latest possible start 4:00 PM, and
 // every cleaning must finish by 8:00 PM — so a start time's actual
 // availability also depends on the booking's estimated duration (see
 // filterStartTimesByDuration below). These constants are the single
 // source of truth for both the client picker and the server's
 // authoritative validation (lib/booking/server/exactTime.ts,
 // lib/booking/server/availability.ts) — never duplicated.
-export const OPERATING_START_HOUR = 8; // 8:00 AM, earliest selectable start
+// Earliest start moved from 8:00 AM to 9:00 AM for NEW availability only.
+// Existing bookings keep whatever Service Start Time / Arrival Window they
+// were stored with — nothing re-validates a persisted booking against this
+// constant (it only gates getAllExactStartTimeCandidates(), which feeds new
+// bookings and a reschedule's new target slot). The legacy ARRIVAL_WINDOWS
+// above intentionally still describe the old 8:00 AM "Morning" window.
+export const OPERATING_START_HOUR = 9; // 9:00 AM, earliest selectable start
 export const OPERATING_LATEST_START_HOUR = 16; // 4:00 PM, latest possible start
 export const OPERATING_CLOSE_HOUR = 20; // 8:00 PM — every cleaning must finish by this time
 export const START_TIME_STEP_MINUTES = 60;

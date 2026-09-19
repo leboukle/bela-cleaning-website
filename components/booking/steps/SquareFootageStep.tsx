@@ -1,6 +1,7 @@
 "use client";
 
 import { SQUARE_FOOTAGE_OPTIONS } from "@/lib/booking/config";
+import { formatCurrency, formatDuration } from "@/lib/booking/calculate";
 import type { SquareFootageId } from "@/lib/booking/types";
 import SelectionCard from "@/components/booking/SelectionCard";
 import StepShell from "@/components/booking/StepShell";
@@ -19,6 +20,12 @@ export default function SquareFootageStep({ value, onSelect, onBack }: SquareFoo
           <SelectionCard
             key={option.id}
             label={option.label}
+            priceLabel={option.customEstimate ? undefined : option.priceAdd === 0 ? "Included" : `+${formatCurrency(option.priceAdd ?? 0)}`}
+            durationLabel={
+              option.customEstimate || option.durationMinutes === 0
+                ? undefined
+                : `+${formatDuration(option.durationMinutes ?? 0)}`
+            }
             selected={value === option.id}
             onSelect={() => onSelect(option.id)}
             role="radio"

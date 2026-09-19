@@ -104,18 +104,26 @@ export const FREQUENCY_OPTIONS: FrequencyOption[] = [
   { id: "monthly", label: "Monthly", discount: 0.05, discountLabel: "5% discount" },
 ];
 
+// Square footage is a flat price + duration modifier (like bathrooms): it is
+// added AFTER the frequency discount is applied to the bedroom base price,
+// so recurring discounts never apply to it. The single source of truth for
+// both the price and the duration adjustment — calculate.ts reads these
+// fields; nothing else hard-codes them. `null` = custom quote (no instant
+// price, standard online booking unavailable).
 export type SquareFootageOption = {
   id: SquareFootageId;
   label: string;
+  priceAdd: number | null;
+  durationMinutes: number | null;
   customEstimate?: true;
 };
 
 export const SQUARE_FOOTAGE_OPTIONS: SquareFootageOption[] = [
-  { id: "up-to-1000", label: "Up to 1,000 sq. ft." },
-  { id: "1001-2000", label: "1,001–2,000 sq. ft." },
-  { id: "2001-3000", label: "2,001–3,000 sq. ft." },
-  { id: "3001-4000", label: "3,001–4,000 sq. ft." },
-  { id: "more-than-4000", label: "More than 4,000 sq. ft.", customEstimate: true },
+  { id: "up-to-1000", label: "Up to 1,000 sq. ft.", priceAdd: 0, durationMinutes: 0 },
+  { id: "1001-2000", label: "1,001–2,000 sq. ft.", priceAdd: 25, durationMinutes: 30 },
+  { id: "2001-3000", label: "2,001–3,000 sq. ft.", priceAdd: 50, durationMinutes: 60 },
+  { id: "3001-4000", label: "3,001–4,000 sq. ft.", priceAdd: 75, durationMinutes: 90 },
+  { id: "more-than-4000", label: "More than 4,000 sq. ft.", priceAdd: null, durationMinutes: null, customEstimate: true },
 ];
 
 export type PropertyTypeOption = {
@@ -167,11 +175,11 @@ export const EXTRAS_CONFIG = {
 // itinerary-style section names one-to-one — see EDIT_GROUPS below.
 export const STEP_STAGE: Partial<Record<StepId, string>> = {
   "property-type": "Property",
-  "square-footage": "Property",
   bedrooms: "Cleaning",
   bathrooms: "Cleaning",
   "cleaning-type": "Cleaning",
   extras: "Extras",
+  "square-footage": "Size",
   frequency: "Frequency",
   location: "Appointment",
   "schedule-date": "Appointment",
@@ -186,7 +194,7 @@ export const STEP_STAGE: Partial<Record<StepId, string>> = {
   review: "Review",
 };
 
-export const PROGRESS_STAGES = ["Property", "Cleaning", "Extras", "Frequency", "Appointment", "Details", "Payment", "Review"] as const;
+export const PROGRESS_STAGES = ["Property", "Cleaning", "Extras", "Size", "Frequency", "Appointment", "Details", "Payment", "Review"] as const;
 
 // Groups of consecutive StepIds shown as one "Edit" action on the Review
 // screen. `endStep` is the step whose successful completion (advance())
@@ -203,9 +211,10 @@ export type EditGroup = {
 };
 
 export const EDIT_GROUPS: EditGroup[] = [
-  { id: "property", label: "Property", startStep: "property-type", endStep: "square-footage" },
+  { id: "property", label: "Property", startStep: "property-type", endStep: "property-type" },
   { id: "cleaning", label: "Cleaning", startStep: "bedrooms", endStep: "cleaning-type" },
   { id: "extras", label: "Extras", startStep: "extras", endStep: "extras" },
+  { id: "square-footage", label: "Square Footage", startStep: "square-footage", endStep: "square-footage" },
   { id: "frequency", label: "Frequency", startStep: "frequency", endStep: "frequency" },
   { id: "appointment", label: "Appointment", startStep: "location", endStep: "arrival-window" },
   { id: "contact", label: "Contact", startStep: "customer-name", endStep: "service-address" },

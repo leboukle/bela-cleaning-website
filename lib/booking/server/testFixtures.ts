@@ -29,6 +29,10 @@ export function sampleBookingRecord(overrides: Partial<BookingRecord> = {}): Boo
     frequency: "Weekly",
     baseCleaningPrice: 130,
     bathroomPrice: 20,
+    // 0 = a booking stored before the square-footage price component
+    // existed (its stored totals are never recomputed); tests that want the
+    // new component pass an override.
+    squareFootagePrice: 0,
     cleaningTypePrice: 0,
     extrasPrice: 60,
     subtotal: 210,

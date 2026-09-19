@@ -109,7 +109,18 @@ Customer Confirmation Status, Internal Notification Status,
 Notification Attempt At
 ```
 
-The last 3 columns were added in Milestone 4 — see
+> **Later additions (this listing is the original Milestone 3 contract):**
+> the live contract is `BOOKINGS_COLUMNS` in `bookingsSheetSchema.ts`.
+> The most recent addition is **`Square Footage Price`**, appended as the
+> very last column (currently BP) when square footage became a price +
+> duration modifier (`SQUARE_FOOTAGE_OPTIONS` in `lib/booking/config.ts`,
+> applied by `calculateEstimate`). It is *not* discounted by the recurring
+> frequency discount (which applies to the bedroom base only), and it is
+> blank/0 on every earlier row — those bookings were priced without it and
+> are never recomputed. The header must exist on the live sheet before code
+> that writes it is deployed.
+
+The last 3 columns of the original listing were added in Milestone 4 — see
 [`docs/notifications.md`](./notifications.md) §7 for the full detail
 (write sequencing, failure isolation, live-sheet header note). The
 Stripe/Paid/Cancelled/Completed columns are written as empty strings

@@ -243,9 +243,13 @@ token (remaining 6).
 | Manage Booking Reminder Token Hash | reminder scheduler (every attempt) | A second, independent token minted per reminder attempt — never a rotation of the original; both hashes remain valid indefinitely for the same booking |
 
 **Exact start times are the Production end state.** `StartTimeStep.tsx`
-(hourly, 8:00 AM–4:00 PM, must finish by 8:00 PM) fully replaces Arrival
+(hourly, 9:00 AM–4:00 PM — earliest start moved from 8:00 AM to 9:00 AM
+for new availability only; must finish by 8:00 PM) fully replaces Arrival
 Window selection for every new booking going forward — Arrival Window is
-written only by rows that predate this amendment. Both are read through
+written only by rows that predate this amendment. Existing bookings that
+were made for 8:00 AM stay valid and unchanged: the 9:00 AM constant
+(`OPERATING_START_HOUR` in `lib/booking/schedule.ts`) only gates which
+start times are *offered* for new bookings and reschedule target slots. Both are read through
 one chokepoint, [`serviceTime.ts`](../lib/booking/server/serviceTime.ts)'s
 `resolveRecordStartSpec()` (prefers Service Start Time when populated,
 falls back to the legacy Arrival Window label otherwise), so every

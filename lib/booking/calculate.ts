@@ -7,6 +7,7 @@ import {
   CLEANING_TYPE_OPTIONS,
   EXTRAS_CONFIG,
   FREQUENCY_OPTIONS,
+  SQUARE_FOOTAGE_OPTIONS,
 } from "./config";
 import type { BookingState, ExtrasState } from "./types";
 
@@ -20,19 +21,21 @@ import type { BookingState, ExtrasState } from "./types";
 // this type, so no existing call site needed to change.
 export type PricingInput = Pick<
   BookingState,
-  "customEstimateTrigger" | "bedrooms" | "bathrooms" | "cleaningType" | "extras" | "frequency"
+  "customEstimateTrigger" | "bedrooms" | "bathrooms" | "squareFootage" | "cleaningType" | "extras" | "frequency"
 >;
 
 export type EstimateBreakdown = {
   bedroomBasePrice: number;
   discountedBedroomBasePrice: number;
   bathroomAddition: number;
+  squareFootageAddition: number;
   extrasTotal: number;
   cleaningTypeAddition: number;
   totalPrice: number;
 
   bedroomBaseDurationMinutes: number;
   bathroomDurationMinutes: number;
+  squareFootageDurationMinutes: number;
   extrasDurationMinutes: number;
   cleaningTypeDurationMinutes: number;
   totalDurationMinutes: number;
@@ -77,6 +80,7 @@ function calculateExtrasDuration(extras: ExtrasState): number {
  * Pricing formula:
  *   discounted bedroom base price
  *   + bathroom addition
+ *   + square-footage addition
  *   + extras
  *   + cleaning-type addition
  *   = estimated total
@@ -84,12 +88,14 @@ function calculateExtrasDuration(extras: ExtrasState): number {
  * Duration formula:
  *   bedroom base duration
  *   + bathroom additional duration
+ *   + square-footage additional duration
  *   + extras duration
  *   + cleaning-type additional duration
  *   = estimated duration
  *
  * The frequency discount applies ONLY to the bedroom base price — never to
- * the bathroom addition, extras, or cleaning-type addition.
+ * the bathroom addition, square-footage addition, extras, or cleaning-type
+ * addition.
  */
 export function calculateEstimate(state: PricingInput): EstimateBreakdown | null {
   if (state.customEstimateTrigger) return null;
@@ -110,6 +116,14 @@ export function calculateEstimate(state: PricingInput): EstimateBreakdown | null
   const bathroomDurationMinutes =
     bathroomOption && !bathroomOption.customEstimate ? (bathroomOption.durationMinutes ?? 0) : 0;
 
+  const squareFootageOption = state.squareFootage
+    ? SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === state.squareFootage)
+    : null;
+  const squareFootageAddition =
+    squareFootageOption && !squareFootageOption.customEstimate ? (squareFootageOption.priceAdd ?? 0) : 0;
+  const squareFootageDurationMinutes =
+    squareFootageOption && !squareFootageOption.customEstimate ? (squareFootageOption.durationMinutes ?? 0) : 0;
+
   const extrasTotal = calculateExtrasPrice(state.extras);
   const extrasDurationMinutes = calculateExtrasDuration(state.extras);
 
@@ -119,19 +133,27 @@ export function calculateEstimate(state: PricingInput): EstimateBreakdown | null
   const cleaningTypeAddition = cleaningTypeOption?.priceAdd ?? 0;
   const cleaningTypeDurationMinutes = cleaningTypeOption?.durationMinutes ?? 0;
 
-  const totalPrice = round2(discountedBedroomBasePrice + bathroomAddition + extrasTotal + cleaningTypeAddition);
+  const totalPrice = round2(
+    discountedBedroomBasePrice + bathroomAddition + squareFootageAddition + extrasTotal + cleaningTypeAddition,
+  );
   const totalDurationMinutes =
-    bedroomBaseDurationMinutes + bathroomDurationMinutes + extrasDurationMinutes + cleaningTypeDurationMinutes;
+    bedroomBaseDurationMinutes +
+    bathroomDurationMinutes +
+    squareFootageDurationMinutes +
+    extrasDurationMinutes +
+    cleaningTypeDurationMinutes;
 
   return {
     bedroomBasePrice,
     discountedBedroomBasePrice,
     bathroomAddition,
+    squareFootageAddition,
     extrasTotal,
     cleaningTypeAddition,
     totalPrice,
     bedroomBaseDurationMinutes,
     bathroomDurationMinutes,
+    squareFootageDurationMinutes,
     extrasDurationMinutes,
     cleaningTypeDurationMinutes,
     totalDurationMinutes,

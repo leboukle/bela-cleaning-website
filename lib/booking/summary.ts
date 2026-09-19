@@ -31,11 +31,6 @@ export function getSummaryLines(state: BookingState): SummaryLine[] {
     lines.push({ label: "Property type", value });
   }
 
-  if (state.squareFootage) {
-    const option = SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === state.squareFootage);
-    if (option) lines.push({ label: "Square footage", value: option.label });
-  }
-
   if (state.bedrooms) {
     const option = BEDROOM_OPTIONS.find((o) => o.id === state.bedrooms);
     if (option) lines.push({ label: "Bedrooms", value: option.label });
@@ -67,6 +62,11 @@ export function getSummaryLines(state: BookingState): SummaryLine[] {
   }
   if (extraLabels.length > 0) {
     lines.push({ label: "Extras", value: extraLabels.join(", ") });
+  }
+
+  if (state.squareFootage) {
+    const option = SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === state.squareFootage);
+    if (option) lines.push({ label: "Square footage", value: option.label });
   }
 
   if (state.frequency) {

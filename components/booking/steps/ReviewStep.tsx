@@ -21,6 +21,14 @@ type ReviewStepProps = {
   onAgreedChange: (agreed: boolean) => void;
   submission: BookingSubmissionUiState;
   onSubmit: () => void;
+  /** True right after the customer accepted the Standard -> Deep Cleaning switch from the notes safeguard. */
+  switchedToDeepCleaning?: boolean;
+  /** True when a duration-lengthening change cleared the previously selected appointment time. */
+  appointmentNoLongerFits?: boolean;
+  /** True while a live availability re-check of the selected time is still in flight. */
+  appointmentCheckPending?: boolean;
+  /** Routes the customer to the existing appointment-time step. */
+  onChooseNewTime?: () => void;
   onPickNewDate: () => void;
   onRedoPayment: () => void;
   honeypot: string;
@@ -68,6 +76,10 @@ export default function ReviewStep({
   onAgreedChange,
   submission,
   onSubmit,
+  switchedToDeepCleaning = false,
+  appointmentNoLongerFits = false,
+  appointmentCheckPending = false,
+  onChooseNewTime,
   onPickNewDate,
   onRedoPayment,
   honeypot,
@@ -79,9 +91,10 @@ export default function ReviewStep({
   }
 
   const lines = getSummaryLines(state);
-  const propertyLines = lines.filter((l) => ["Property type", "Square footage"].includes(l.label));
+  const propertyLines = lines.filter((l) => l.label === "Property type");
   const cleaningLines = lines.filter((l) => ["Bedrooms", "Bathrooms", "Cleaning type"].includes(l.label));
   const extrasLine = lines.find((l) => l.label === "Extras");
+  const squareFootageLine = lines.find((l) => l.label === "Square footage");
   const frequencyOption = state.frequency ? getFrequencyOption(state.frequency) : null;
 
   const city = getCityForZip(state.zipCode);
@@ -142,6 +155,10 @@ export default function ReviewStep({
           <ReviewLine label="Extras" value={extrasLine?.value ?? "No extras"} />
         </ReviewSection>
 
+        <ReviewSection title="Square Footage" onEdit={() => onEdit("square-footage")}>
+          <ReviewLine label="Square footage" value={squareFootageLine?.value ?? "—"} />
+        </ReviewSection>
+
         <ReviewSection title="Frequency" onEdit={() => onEdit("frequency")}>
           <ReviewLine label="Frequency" value={frequencyOption?.label ?? "—"} />
           {frequencyOption && frequencyOption.discount > 0 && (
@@ -186,6 +203,11 @@ export default function ReviewStep({
           <p className="mt-4 text-sm text-[#6B5B4C]">
             {estimate ? `Estimated duration: ${formatDuration(estimate.totalDurationMinutes)}` : "Duration to be determined"}
           </p>
+          {switchedToDeepCleaning && (
+            <p className="mt-3 text-sm font-medium text-[#1E5B3A]" role="status">
+              Your service is now Deep Cleaning. Please review the updated total and duration, then submit your booking.
+            </p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-[#E7DECE] bg-[#FBF7EF] p-6">
@@ -243,6 +265,26 @@ export default function ReviewStep({
           />
         </div>
 
+        {appointmentNoLongerFits && (
+          <div className="flex items-start gap-3 rounded-2xl border border-[#D9A05B] bg-[#FBF0DE] p-5" role="alert">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#9C6B23]" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-[#3B2F27]">
+                Your updated service needs a longer visit, so your previously selected appointment time no longer
+                works. Please choose a new appointment time before you submit.
+              </p>
+              {onChooseNewTime && (
+                <button
+                  type="button"
+                  onClick={onChooseNewTime}
+                  className="mt-2 rounded text-sm font-medium text-[#3B2F27] underline underline-offset-2 hover:text-[#6B5B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
+                >
+                  Choose a new appointment time
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {submission.status === "date-unavailable" && (
           <div className="flex items-start gap-3 rounded-2xl border border-[#D9A05B] bg-[#FBF0DE] p-5">
             <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#9C6B23]" aria-hidden="true" />
@@ -282,11 +324,15 @@ export default function ReviewStep({
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!isComplete || submission.status === "submitting"}
+          disabled={!isComplete || submission.status === "submitting" || appointmentCheckPending}
           className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#3B2F27] px-8 py-4 text-base font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_32px_-12px_rgba(59,47,39,0.4)] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:w-auto"
         >
           {submission.status === "submitting" && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
-          {submission.status === "submitting" ? "Submitting…" : "Submit Booking Request"}
+          {submission.status === "submitting"
+            ? "Submitting…"
+            : appointmentCheckPending
+              ? "Checking your appointment…"
+              : "Submit Booking Request"}
         </button>
       </div>
     </StepShell>

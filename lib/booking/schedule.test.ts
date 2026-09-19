@@ -1,5 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { getMinSelectableDate, isDateSelectable, toDateKey, OPERATING_LATEST_START_HOUR } from "./schedule";
+import {
+  filterStartTimesByDuration,
+  getAllExactStartTimeCandidates,
+  getMinSelectableDate,
+  isDateSelectable,
+  toDateKey,
+  OPERATING_CLOSE_HOUR,
+  OPERATING_LATEST_START_HOUR,
+  OPERATING_START_HOUR,
+} from "./schedule";
+
+describe("operating hours (single source of truth)", () => {
+  it("the earliest appointment start is 9:00 AM, defined once as OPERATING_START_HOUR", () => {
+    expect(OPERATING_START_HOUR).toBe(9);
+    const candidates = getAllExactStartTimeCandidates();
+    expect(candidates[0]).toBe("09:00");
+    expect(candidates).not.toContain("08:00");
+  });
+
+  it("the latest start (4:00 PM) and 8:00 PM finish-by rule are unchanged", () => {
+    expect(OPERATING_LATEST_START_HOUR).toBe(16);
+    expect(OPERATING_CLOSE_HOUR).toBe(20);
+    expect(getAllExactStartTimeCandidates().at(-1)).toBe("16:00");
+  });
+
+  it("filterStartTimesByDuration still drops any start that would finish after 8:00 PM", () => {
+    const all = getAllExactStartTimeCandidates();
+    // 9:00 AM + 11 h = exactly 8:00 PM: only the 9:00 start survives.
+    expect(filterStartTimesByDuration(all, 660)).toEqual(["09:00"]);
+    // 12 h from 9:00 AM would end at 9:00 PM: nothing is offered.
+    expect(filterStartTimesByDuration(all, 720)).toEqual([]);
+  });
+});
 
 describe("getMinSelectableDate — 120-hour minimum lead time (exact-time model)", () => {
   it("returns 5 days out when now is well before that day's latest (4:00 PM) offered start", () => {
