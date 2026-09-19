@@ -47,25 +47,25 @@ describe("calculateAuthoritativePricing", () => {
     expect(pricing).toEqual({
       baseCleaningPrice: 130,
       bathroomPrice: 20,
-      squareFootagePrice: 25,
+      squareFootagePrice: 15,
       cleaningTypePrice: 0,
       extrasPrice: 60,
-      subtotal: 235,
+      subtotal: 225,
       // Weekly 15% applies to the bedroom base only (130 * 0.15), never to
       // the new square-footage component.
       frequencyDiscount: 19.5,
-      totalPrice: 215.5,
-      // 150 bedroom + 60 bathrooms + 30 square footage + 60 extras
-      estimatedDurationMinutes: 300,
+      totalPrice: 205.5,
+      // 150 bedroom + 60 bathrooms + 15 square footage + 60 extras
+      estimatedDurationMinutes: 285,
     });
   });
 
   it("persists each square-footage tier's price and feeds its duration into the authoritative estimate", () => {
     const tiers = [
       { squareFootage: "up-to-1000", price: 0, minutes: 0 },
-      { squareFootage: "1001-2000", price: 25, minutes: 30 },
-      { squareFootage: "2001-3000", price: 50, minutes: 60 },
-      { squareFootage: "3001-4000", price: 75, minutes: 90 },
+      { squareFootage: "1001-2000", price: 15, minutes: 15 },
+      { squareFootage: "2001-3000", price: 25, minutes: 20 },
+      { squareFootage: "3001-4000", price: 35, minutes: 25 },
     ] as const;
     const noExtras = { kitchenCabinets: false, refrigerator: false, oven: false, interiorWindowsQty: 0, blindsQty: 0, noExtras: true };
     const base = calculateAuthoritativePricing(sampleBooking({ squareFootage: "up-to-1000", frequency: "one-time", extras: noExtras }));

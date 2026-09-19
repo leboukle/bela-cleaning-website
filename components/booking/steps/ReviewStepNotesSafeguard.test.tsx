@@ -139,8 +139,8 @@ describe("Standard/Deep notes safeguard on the Review submit", () => {
   it("Keep Standard → submits, keeps Standard, price and duration unchanged, notes untouched", () => {
     const onSubmit = vi.fn();
     render(<Harness initial={completeState({ specialInstructions: "floors need deep cleaning" })} onSubmit={onSubmit} />);
-    expect(screen.getByText("$175")).toBeTruthy();
-    expect(screen.getByText("Estimated duration: 4 hr")).toBeTruthy(); // 150 + 60 + 30 = 240 min
+    expect(screen.getByText("$165")).toBeTruthy();
+    expect(screen.getByText("Estimated duration: 3 hr 45 min")).toBeTruthy(); // 150 + 60 + 15 = 225 min
 
     fireEvent.click(submitButton());
     fireEvent.click(screen.getByRole("button", { name: "Keep Standard Cleaning" }));
@@ -148,8 +148,8 @@ describe("Standard/Deep notes safeguard on the Review submit", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(dialog()).toBeNull();
     expect(screen.getByText("Standard cleaning")).toBeTruthy();
-    expect(screen.getByText("$175")).toBeTruthy();
-    expect(screen.getByText("Estimated duration: 4 hr")).toBeTruthy();
+    expect(screen.getByText("$165")).toBeTruthy();
+    expect(screen.getByText("Estimated duration: 3 hr 45 min")).toBeTruthy();
     expect(screen.getByText("floors need deep cleaning")).toBeTruthy();
   });
 
@@ -181,8 +181,8 @@ describe("Standard/Deep notes safeguard on the Review submit", () => {
   it("Switch to Deep → service becomes Deep, the existing +$100 and +90 min apply exactly once, nothing else changes, and the customer can then submit", () => {
     const onSubmit = vi.fn();
     render(<Harness initial={completeState({ specialInstructions: "floors need deep cleaning" })} onSubmit={onSubmit} />);
-    // Before: 130 + 20 + 25 = $175, 150 + 60 + 30 = 240 min.
-    expect(screen.getByText("$175")).toBeTruthy();
+    // Before: 130 + 20 + 15 = $165, 150 + 60 + 15 = 225 min.
+    expect(screen.getByText("$165")).toBeTruthy();
 
     fireEvent.click(submitButton());
     fireEvent.click(screen.getByRole("button", { name: "Switch to Deep Cleaning (+$100)" }));
@@ -191,10 +191,10 @@ describe("Standard/Deep notes safeguard on the Review submit", () => {
     expect(dialog()).toBeNull();
     expect(onSubmit).not.toHaveBeenCalled();
 
-    // After: 130 + 20 + 25 + 100 (Deep, once) = $275; 240 + 90 (Deep, once) = 330 min = 5 hr 30 min.
+    // After: 130 + 20 + 15 + 100 (Deep, once) = $265; 225 + 90 (Deep, once) = 315 min = 5 hr 15 min.
     expect(screen.getByText("Deep cleaning")).toBeTruthy();
-    expect(screen.getByText("$275")).toBeTruthy();
-    expect(screen.getByText("Estimated duration: 5 hr 30 min")).toBeTruthy();
+    expect(screen.getByText("$265")).toBeTruthy();
+    expect(screen.getByText("Estimated duration: 5 hr 15 min")).toBeTruthy();
     // Every other selection preserved.
     expect(screen.getByText("2 bedrooms")).toBeTruthy();
     expect(screen.getByText("2 bathrooms")).toBeTruthy();

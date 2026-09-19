@@ -25,9 +25,9 @@ function estimate(overrides: Partial<PricingInput> = {}) {
 describe("square-footage price modifier", () => {
   it.each([
     ["up-to-1000", 0],
-    ["1001-2000", 25],
-    ["2001-3000", 50],
-    ["3001-4000", 75],
+    ["1001-2000", 15],
+    ["2001-3000", 25],
+    ["3001-4000", 35],
   ] as const)("%s adds $%i to the total", (squareFootage, expectedAddition) => {
     const baseline = estimate({ squareFootage: "up-to-1000" });
     const result = estimate({ squareFootage });
@@ -41,22 +41,22 @@ describe("square-footage price modifier", () => {
     expect(result.squareFootageDurationMinutes).toBe(0);
   });
 
-  it("matches the approved example: 2 BR + 2 BA + Standard + 1,001–2,000 sq ft = $175", () => {
-    // $130 bedroom base + $20 bathrooms + $25 square footage + $0 Standard
-    expect(estimate().totalPrice).toBe(175);
+  it("matches the approved example: 2 BR + 2 BA + Standard + 1,001–2,000 sq ft = $165", () => {
+    // $130 bedroom base + $20 bathrooms + $15 square footage + $0 Standard
+    expect(estimate().totalPrice).toBe(165);
   });
 
-  it("matches the approved example: the same home as a Deep Cleaning = $275", () => {
-    // $130 + $20 + $25 + $100 Deep Cleaning
-    expect(estimate({ cleaningType: "deep" }).totalPrice).toBe(275);
+  it("matches the approved example: the same home as a Deep Cleaning = $265", () => {
+    // $130 + $20 + $15 + $100 Deep Cleaning
+    expect(estimate({ cleaningType: "deep" }).totalPrice).toBe(265);
   });
 
   it("never applies the recurring discount to the square-footage addition", () => {
     // Weekly = 15% off the BEDROOM BASE only: 130 * 0.85 = 110.50.
     const weekly = estimate({ frequency: "weekly", squareFootage: "3001-4000" });
     expect(weekly.discountedBedroomBasePrice).toBe(110.5);
-    // 110.50 + 20 bathrooms + 75 square footage, undiscounted.
-    expect(weekly.totalPrice).toBe(205.5);
+    // 110.50 + 20 bathrooms + 35 square footage, undiscounted.
+    expect(weekly.totalPrice).toBe(165.5);
 
     // Same discount amount regardless of which square-footage tier is chosen.
     const smallWeekly = estimate({ frequency: "weekly", squareFootage: "up-to-1000" });
@@ -80,9 +80,9 @@ describe("square-footage price modifier", () => {
 describe("square-footage duration modifier", () => {
   it.each([
     ["up-to-1000", 0],
-    ["1001-2000", 30],
-    ["2001-3000", 60],
-    ["3001-4000", 90],
+    ["1001-2000", 15],
+    ["2001-3000", 20],
+    ["3001-4000", 25],
   ] as const)("%s adds %i minutes to the estimated duration", (squareFootage, expectedMinutes) => {
     const baseline = estimate({ squareFootage: "up-to-1000" });
     const result = estimate({ squareFootage });
@@ -96,8 +96,8 @@ describe("square-footage duration modifier", () => {
       cleaningType: "deep",
       extras: { ...initialExtrasState, kitchenCabinets: true },
     });
-    // 150 (2 BR) + 60 (2 BA) + 60 (sq ft) + 30 (cabinets) + 90 (Deep)
-    expect(result.totalDurationMinutes).toBe(390);
+    // 150 (2 BR) + 60 (2 BA) + 20 (sq ft) + 30 (cabinets) + 90 (Deep)
+    expect(result.totalDurationMinutes).toBe(350);
   });
 });
 

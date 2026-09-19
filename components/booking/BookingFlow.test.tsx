@@ -240,16 +240,16 @@ describe("BookingFlow navigation", () => {
 
   it("re-answering square footage on the way back changes the running total but keeps every other selection", () => {
     startAndAnswerThrough("location");
-    // 2 BR ($130) + 2 BA ($20) + 1,001–2,000 sq ft ($25) + Standard ($0) = $175
-    expect(screen.getAllByText("$175").length).toBeGreaterThan(0);
+    // 2 BR ($130) + 2 BA ($20) + 1,001–2,000 sq ft ($15) + Standard ($0) = $165
+    expect(screen.getAllByText("$165").length).toBeGreaterThan(0);
 
     goBack(); // Frequency
     goBack(); // Square Footage
     pick(/^3,001–4,000 sq\. ft\./); // advances to Frequency
     expect(currentHeading()).toBe(H.frequency);
     pick(/^One time/);
-    // $130 + $20 + $75 = $225
-    expect(screen.getAllByText("$225").length).toBeGreaterThan(0);
+    // $130 + $20 + $35 = $185
+    expect(screen.getAllByText("$185").length).toBeGreaterThan(0);
 
     // Location -> Frequency -> Square Footage -> Extras -> Cleaning Type
     goBack();
@@ -263,13 +263,18 @@ describe("BookingFlow navigation", () => {
   it("shows each square-footage tier's price and duration on its card, and no instant price for >4,000 sq ft", () => {
     startAndAnswerThrough("squareFootage");
     const card = (name: RegExp) => screen.getByRole("radio", { name }).textContent ?? "";
+    // Up to 1,000: +$0 / +0 min (shown as "Included", no duration).
     expect(card(/^Up to 1,000/)).toContain("Included");
-    expect(card(/^1,001–2,000/)).toContain("+$25");
-    expect(card(/^1,001–2,000/)).toContain("+30 min");
-    expect(card(/^2,001–3,000/)).toContain("+$50");
-    expect(card(/^2,001–3,000/)).toContain("+1 hr");
-    expect(card(/^3,001–4,000/)).toContain("+$75");
-    expect(card(/^3,001–4,000/)).toContain("+1 hr 30 min");
+    expect(card(/^Up to 1,000/)).not.toContain("min");
+    // 1,001–2,000: +$15 / +15 min
+    expect(card(/^1,001–2,000/)).toContain("+$15");
+    expect(card(/^1,001–2,000/)).toContain("+15 min");
+    // 2,001–3,000: +$25 / +20 min
+    expect(card(/^2,001–3,000/)).toContain("+$25");
+    expect(card(/^2,001–3,000/)).toContain("+20 min");
+    // 3,001–4,000: +$35 / +25 min
+    expect(card(/^3,001–4,000/)).toContain("+$35");
+    expect(card(/^3,001–4,000/)).toContain("+25 min");
     expect(card(/^More than 4,000/)).not.toContain("$");
   });
 

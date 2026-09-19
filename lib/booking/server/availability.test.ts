@@ -294,33 +294,34 @@ describe("getAvailableStartTimes", () => {
 
   it("a longer duration removes later starts that can no longer finish by 8:00 PM, while keeping the 9:00 AM start", async () => {
     setupExactTimeData({});
-    // 2 BR + 2 BA Standard, no extras: 150 + 60 = 210 minutes.
+    // 3 BR + 2 BA Standard, no extras: 180 + 60 = 240 minutes — a 4:00 PM
+    // start finishes exactly at 8:00 PM.
     const smallHome = calculateEstimate({
       customEstimateTrigger: null,
-      bedrooms: "2",
+      bedrooms: "3",
       bathrooms: "2",
       squareFootage: "up-to-1000",
       cleaningType: "standard",
       extras: { ...initialExtrasState, noExtras: true },
       frequency: "one-time",
     });
-    // Same home at 3,001–4,000 sq ft: +90 minutes -> 300 minutes.
+    // Same home at 3,001–4,000 sq ft: +25 minutes -> 265 minutes.
     const largeHome = calculateEstimate({
       customEstimateTrigger: null,
-      bedrooms: "2",
+      bedrooms: "3",
       bathrooms: "2",
       squareFootage: "3001-4000",
       cleaningType: "standard",
       extras: { ...initialExtrasState, noExtras: true },
       frequency: "one-time",
     });
-    expect(smallHome?.totalDurationMinutes).toBe(210);
-    expect(largeHome?.totalDurationMinutes).toBe(300);
+    expect(smallHome?.totalDurationMinutes).toBe(240);
+    expect(largeHome?.totalDurationMinutes).toBe(265);
 
     const smallTimes = await getAvailableStartTimes("2026-09-19", smallHome!.totalDurationMinutes, FAR_BEFORE_FIXTURES);
     const largeTimes = await getAvailableStartTimes("2026-09-19", largeHome!.totalDurationMinutes, FAR_BEFORE_FIXTURES);
 
-    // 210 min: 16:00 ends 19:30 — allowed. 300 min: 16:00 would end 21:00 — gone; 15:00 ends 20:00 exactly — kept.
+    // 240 min: 16:00 ends 20:00 exactly — allowed. 265 min: 16:00 would end 20:25 — gone; 15:00 ends 19:25 — kept.
     expect(smallTimes).toContain("16:00");
     expect(largeTimes).not.toContain("16:00");
     expect(largeTimes).toContain("15:00");

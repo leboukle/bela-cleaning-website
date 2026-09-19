@@ -11,11 +11,11 @@ import { calculateEstimate } from "@/lib/booking/calculate";
 import { getAllExactStartTimeCandidates } from "@/lib/booking/schedule";
 import { initialBookingState, initialExtrasState, type BookingState } from "@/lib/booking/types";
 
-// Base home: 2 BR (150) + 2 BA (60) + 1,001–2,000 sq ft (30), Standard = 240 min.
-//   -> 2,001–3,000 sq ft = 270 min      -> 3,001–4,000 sq ft = 300 min
-//   -> Deep Cleaning (+90)  = 330 min
-// A start time fits when start + duration <= 20:00, so e.g.:
-//   16:00 fits 240 but not 270 | 15:00 fits 270 but not 300 | 13:00 fits 330 | 14:00 does not fit 330.
+// Base home: 2 BR (150) + 2 BA (60) + 1,001–2,000 sq ft (15), Standard = 225 min.
+//   sq ft: up to 1,000 = 210 | 1,001–2,000 = 225 | 2,001–3,000 = 230 | 3,001–4,000 = 235
+//   + oven (+30) = 255 | 3 BR instead of 2 BR (+30) | Deep Cleaning (+90) = 315
+// A start time fits when start + duration <= 20:00 (16:00 fits <= 240 min; 15:00 fits <= 300 min), so e.g.:
+//   16:00 fits 225 but not 255 | 15:00 fits 225 but not 315 | 9:00 AM fits everything here.
 const ALL_TIMES = getAllExactStartTimeCandidates();
 
 function baseState(overrides: Partial<BookingState> = {}): BookingState {
@@ -91,6 +91,7 @@ function Harness({ initial }: { initial: BookingState }) {
       <button type="button" onClick={() => setState((s) => ({ ...s, squareFootage: "1001-2000" }))}>set-sqft-1001</button>
       <button type="button" onClick={() => setState((s) => ({ ...s, squareFootage: "2001-3000" }))}>set-sqft-2001</button>
       <button type="button" onClick={() => setState((s) => ({ ...s, squareFootage: "3001-4000" }))}>set-sqft-3001</button>
+      <button type="button" onClick={() => setState((s) => ({ ...s, bedrooms: "3" }))}>set-bedrooms-3</button>
       <button type="button" onClick={() => setState((s) => ({ ...s, cleaningType: "deep" }))}>set-deep</button>
       <button type="button" onClick={() => setState((s) => ({ ...s, cleaningType: "standard" }))}>set-standard</button>
       <button type="button" onClick={() => setState((s) => ({ ...s, extras: { ...s.extras, noExtras: false, oven: true } }))}>add-oven</button>
@@ -129,7 +130,7 @@ describe("selected appointment vs. a duration increase", () => {
     render(<Harness initial={baseState({ serviceStartTime: "13:00" })} />);
     expect(appointmentTime()).toBe("1:00 PM");
 
-    click("set-sqft-3001"); // 240 -> 300 min; 13:00 + 5 h = 18:00
+    click("set-sqft-3001"); // 225 -> 235 min; 13:00 + 3 h 55 = 16:55
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1)); // best-effort live check ran…
     await waitFor(() => expect(submitButton().disabled).toBe(false)); // …and finished
     expect(appointmentTime()).toBe("1:00 PM");
@@ -137,10 +138,10 @@ describe("selected appointment vs. a duration increase", () => {
   });
 
   it("B. duration increases and the time would now finish after 8 PM → the appointment is invalidated and a new time is required", () => {
-    render(<Harness initial={baseState({ serviceStartTime: "16:00" })} />); // 16:00 + 240 = 20:00 (fits exactly)
+    render(<Harness initial={baseState({ serviceStartTime: "16:00" })} />); // 16:00 + 225 = 19:45, fits
     expect(appointmentTime()).toBe("4:00 PM");
 
-    click("set-sqft-2001"); // 270 min -> 16:00 + 4.5 h = 20:30
+    click("add-oven"); // +30 -> 255 min -> 16:00 + 4 h 15 = 20:15
     expect(appointmentTime()).toBe("—"); // cleared, not silently swapped
     expect(banner()).toBeTruthy();
     expect(submitButton().disabled).toBe(true);
@@ -148,10 +149,9 @@ describe("selected appointment vs. a duration increase", () => {
   });
 
   it("B. a time that ends exactly at 8:00 PM is still valid and is preserved", async () => {
-    render(<Harness initial={baseState({ serviceStartTime: "15:00" })} />);
-    click("set-sqft-2001"); // 270 min -> 15:00 + 4.5 h = 19:30, fits
-    click("set-sqft-3001"); // 300 min -> 15:00 + 5 h = 20:00 exactly, still fits
-    expect(appointmentTime()).toBe("3:00 PM");
+    render(<Harness initial={baseState({ serviceStartTime: "16:00", squareFootage: "up-to-1000" })} />); // 210 min: ends 19:30
+    click("set-bedrooms-3"); // +30 -> 240 min -> 16:00 + 4 h = 20:00 exactly, still fits
+    expect(appointmentTime()).toBe("4:00 PM");
     expect(banner()).toBeNull();
     await waitFor(() => expect(submitButton().disabled).toBe(false));
   });
@@ -159,7 +159,7 @@ describe("selected appointment vs. a duration increase", () => {
   it("C. Standard → Deep via the safeguard: a late time that can't finish by 8 PM is invalidated, the customer is told, and submit is blocked", () => {
     render(<Harness initial={baseState({ serviceStartTime: "15:00", specialInstructions: "floors need deep cleaning" })} />);
     click("Submit Booking Request");
-    click("Switch to Deep Cleaning (+$100)"); // 330 min -> 15:00 + 5.5 h = 20:30
+    click("Switch to Deep Cleaning (+$100)"); // 315 min -> 15:00 + 5 h 15 = 20:15
 
     expect(screen.getByText("Deep cleaning")).toBeTruthy(); // the service switched exactly as requested
     expect(appointmentTime()).toBe("—");
@@ -182,23 +182,24 @@ describe("selected appointment vs. a duration increase", () => {
   });
 
   it("D. a square-footage duration increase invalidates a time that no longer fits (and only that)", () => {
-    render(<Harness initial={baseState({ serviceStartTime: "16:00", squareFootage: "up-to-1000" })} />); // 210 min: fits
+    // 3 BR + 2 BA, up to 1,000 sq ft = 240 min: a 4:00 PM start ends exactly at 8:00 PM.
+    render(<Harness initial={baseState({ serviceStartTime: "16:00", squareFootage: "up-to-1000", bedrooms: "3" })} />);
     expect(appointmentTime()).toBe("4:00 PM");
-    click("set-sqft-3001"); // +90 min -> 300 -> 16:00 + 5 h = 21:00
+    click("set-sqft-3001"); // +25 min -> 265 -> 16:00 + 4 h 25 = 20:25
     expect(appointmentTime()).toBe("—");
     expect(banner()).toBeTruthy();
   });
 
-  it("an increase from another duration-affecting selection (Extras) is revalidated the same way", () => {
-    render(<Harness initial={baseState({ serviceStartTime: "16:00" })} />); // 240 min, ends 20:00
-    click("add-oven"); // +30 min -> 270 -> ends 20:30
+  it("an increase from another duration-affecting selection (Bedrooms) is revalidated the same way", () => {
+    render(<Harness initial={baseState({ serviceStartTime: "16:00", squareFootage: "3001-4000" })} />); // 235 min, ends 19:55
+    click("set-bedrooms-3"); // +30 -> 265 -> ends 20:25
     expect(appointmentTime()).toBe("—");
     expect(banner()).toBeTruthy();
   });
 
   it("E. a duration decrease never clears a still-valid appointment, and makes no availability request", async () => {
-    render(<Harness initial={baseState({ serviceStartTime: "15:00", squareFootage: "3001-4000" })} />); // 300 min, ends exactly 20:00
-    click("set-sqft-1001"); // 300 -> 240
+    render(<Harness initial={baseState({ serviceStartTime: "15:00", squareFootage: "3001-4000" })} />); // 235 min
+    click("set-sqft-1001"); // 235 -> 225
     expect(appointmentTime()).toBe("3:00 PM");
     expect(banner()).toBeNull();
     expect(submitButton().disabled).toBe(false);
@@ -208,9 +209,9 @@ describe("selected appointment vs. a duration increase", () => {
   });
 
   it("E. returning to a duration the appointment already fit makes no new request and keeps the appointment", async () => {
-    render(<Harness initial={baseState({ serviceStartTime: "15:00", squareFootage: "3001-4000" })} />); // verified at 300 min
-    click("set-sqft-1001"); // 240
-    click("set-sqft-3001"); // back to 300 — the appointment already fit that
+    render(<Harness initial={baseState({ serviceStartTime: "15:00", squareFootage: "3001-4000" })} />); // verified at 235 min
+    click("set-sqft-1001"); // 225
+    click("set-sqft-3001"); // back to 235 — the appointment already fit that
     expect(appointmentTime()).toBe("3:00 PM");
     expect(submitButton().disabled).toBe(false);
     await new Promise((resolve) => setTimeout(resolve, 450));
@@ -236,7 +237,7 @@ describe("best-effort live availability layer", () => {
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toContain("/api/booking/available-times");
     expect(url).toContain("date=2026-12-01");
-    expect(url).toContain("durationMinutes=300");
+    expect(url).toContain("durationMinutes=235");
   });
 
   it("keeps the selection when the check fails (server re-validation at submit stays the final authority)", async () => {
@@ -264,7 +265,7 @@ describe("best-effort live availability layer", () => {
     click("set-sqft-3001");
     click("add-oven");
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(String(fetchMock.mock.calls[0][0])).toContain("durationMinutes=330"); // 300 + oven 30
+    expect(String(fetchMock.mock.calls[0][0])).toContain("durationMinutes=265"); // 235 + oven 30
   });
 
   it("Submit is disabled with a 'Checking your appointment…' label only while the live re-check is pending", async () => {
@@ -280,7 +281,7 @@ describe("best-effort live availability layer", () => {
 describe("routing back to the existing time step", () => {
   it("StartTimeStep explains why the customer is choosing again, then offers the existing live list", async () => {
     vi.stubGlobal("fetch", vi.fn(() => availableTimesResponse(["09:00", "10:00"])));
-    render(<StartTimeStep value={null} appointmentDate="2026-12-01" estimatedDurationMinutes={330} timeNoLongerFits onSelect={() => {}} onBack={() => {}} />);
+    render(<StartTimeStep value={null} appointmentDate="2026-12-01" estimatedDurationMinutes={315} timeNoLongerFits onSelect={() => {}} onBack={() => {}} />);
     expect(screen.getByRole("status").textContent).toMatch(/needs a longer visit/i);
     await waitFor(() => expect(screen.getByRole("radio", { name: "9:00 AM" })).toBeTruthy());
     expect(screen.getByRole("radio", { name: "10:00 AM" })).toBeTruthy();
@@ -288,7 +289,7 @@ describe("routing back to the existing time step", () => {
 
   it("StartTimeStep shows no notice in the normal first-time path", () => {
     vi.stubGlobal("fetch", vi.fn(() => availableTimesResponse(["09:00"])));
-    render(<StartTimeStep value={null} appointmentDate="2026-12-01" estimatedDurationMinutes={240} onSelect={() => {}} onBack={() => {}} />);
+    render(<StartTimeStep value={null} appointmentDate="2026-12-01" estimatedDurationMinutes={225} onSelect={() => {}} onBack={() => {}} />);
     expect(screen.queryByRole("status")).toBeNull();
   });
 });

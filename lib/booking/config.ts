@@ -120,9 +120,9 @@ export type SquareFootageOption = {
 
 export const SQUARE_FOOTAGE_OPTIONS: SquareFootageOption[] = [
   { id: "up-to-1000", label: "Up to 1,000 sq. ft.", priceAdd: 0, durationMinutes: 0 },
-  { id: "1001-2000", label: "1,001–2,000 sq. ft.", priceAdd: 25, durationMinutes: 30 },
-  { id: "2001-3000", label: "2,001–3,000 sq. ft.", priceAdd: 50, durationMinutes: 60 },
-  { id: "3001-4000", label: "3,001–4,000 sq. ft.", priceAdd: 75, durationMinutes: 90 },
+  { id: "1001-2000", label: "1,001–2,000 sq. ft.", priceAdd: 15, durationMinutes: 15 },
+  { id: "2001-3000", label: "2,001–3,000 sq. ft.", priceAdd: 25, durationMinutes: 20 },
+  { id: "3001-4000", label: "3,001–4,000 sq. ft.", priceAdd: 35, durationMinutes: 25 },
   { id: "more-than-4000", label: "More than 4,000 sq. ft.", priceAdd: null, durationMinutes: null, customEstimate: true },
 ];
 
