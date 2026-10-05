@@ -11,8 +11,8 @@ export default function Footer() {
         <div>
           <span className="font-heading text-2xl text-pure-white">BeLa Cleaning</span>
           <p className="mt-3 text-sm leading-relaxed text-soft-gray/80 max-w-xs">
-            Residential cleaning for busy lives across Jersey City, Hoboken, Newark, and
-            nearby communities.
+            Residential cleaning for busy lives across Northern New Jersey, including
+            Jersey City, Hoboken, and Newark.
           </p>
         </div>
 

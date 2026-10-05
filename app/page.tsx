@@ -1,7 +1,7 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import { Check } from "lucide-react";
-import { buildPageMetadata } from "@/lib/seo";
+import { buildPageMetadata, HOME_SEO_DESCRIPTION, HOME_SEO_TITLE } from "@/lib/seo";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
 import TrustRow from "@/components/TrustRow";
@@ -17,9 +17,8 @@ import { services } from "@/lib/services";
 import { testimonials } from "@/lib/testimonials";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "BeLa Cleaning | House Cleaning in Jersey City & Hoboken",
-  description:
-    "Book residential house cleaning online in Jersey City, Hoboken, Newark, and surrounding areas. Transparent pricing, no contracts, easy online booking.",
+  title: HOME_SEO_TITLE,
+  description: HOME_SEO_DESCRIPTION,
   path: "/",
 });
 
@@ -155,7 +154,7 @@ export default function HomePage() {
             </div>
 
             <p className="mt-5 text-sm text-soft-gray/80">
-              Serving Jersey City, Hoboken, Newark, and nearby communities.
+              Serving communities across Northern New Jersey.
             </p>
             <div className="mt-8">
               <PrimaryButton href={businessConfig.bookingUrl}>{CTA_LABEL}</PrimaryButton>
@@ -343,8 +342,8 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-6 grid gap-12 lg:grid-cols-2 lg:items-center">
           <Reveal>
             <SectionHeading
-              title="Proudly serving our neighborhood."
-              supporting="BeLa Cleaning provides residential cleaning throughout Jersey City, Hoboken, Newark, and selected nearby communities."
+              title="Professional Home Cleaning Across Northern New Jersey"
+              supporting={businessConfig.serviceAreaSentence}
             />
             <ul className="mt-6 flex flex-wrap gap-3">
               {businessConfig.serviceAreas.map((area) => (

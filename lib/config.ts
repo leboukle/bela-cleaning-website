@@ -18,9 +18,11 @@ export const businessConfig = {
   customerServiceTime: "8:00 a.m. to 5:00 p.m.",
   onlineBookingHours: "Available 24 hours a day, 7 days a week.",
   onlineBookingHoursShort: "Available 24/7",
-  serviceAreas: ["Jersey City", "Hoboken", "Newark", "Nearby communities"],
+  // Marketing/display copy only. Which addresses can actually book online is
+  // decided exclusively by lib/booking/serviceArea.ts (ZIP eligibility).
+  serviceAreas: ["Jersey City", "Hoboken", "Bayonne", "Weehawken", "Newark", "Nearby communities"],
   serviceAreaSentence:
-    "Jersey City, Hoboken, Newark, and selected nearby communities.",
+    "Reliable residential cleaning throughout Jersey City, Hoboken, Bayonne, Weehawken, Newark and communities along the PATH and Hudson-Bergen Light Rail corridors.",
 } as const;
 
 export const CTA_LABEL = "Book Cleaning";

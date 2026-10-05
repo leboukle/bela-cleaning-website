@@ -47,7 +47,7 @@ export const faqs: FAQ[] = [
   {
     question: "What areas do you serve?",
     answer:
-      "BeLa Cleaning serves Jersey City, Hoboken, Newark, and selected surrounding communities.",
+      "BeLa Cleaning serves communities across Northern New Jersey, including Jersey City, Hoboken, Bayonne, Weehawken, and Newark, with a focus on communities along the PATH and Hudson-Bergen Light Rail corridors. Enter your ZIP code at the start of booking to confirm your address is in our online booking area.",
   },
   {
     question: "Do you clean homes with pets?",
