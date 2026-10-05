@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Check, X } from "lucide-react";
-import { buildPageMetadata } from "@/lib/seo";
+import { areaServedStructuredData, buildPageMetadata } from "@/lib/seo";
 import SectionHeading from "@/components/SectionHeading";
 import PrimaryButton from "@/components/PrimaryButton";
 import ResponsiveImageSection from "@/components/ResponsiveImageSection";
@@ -16,7 +16,7 @@ import { faqs } from "@/lib/faqs";
 export const metadata: Metadata = buildPageMetadata({
   title: "Residential Cleaning Services | BeLa Cleaning",
   description:
-    "Explore standard, deep, and move-in/move-out cleaning services in Jersey City, Hoboken, Newark, and surrounding areas. Transparent pricing, no contracts.",
+    "Standard, deep, and move-in/move-out cleaning across Northern New Jersey, including Jersey City, Hoboken, and Newark. Transparent pricing, no contracts.",
   path: "/services",
 });
 
@@ -29,7 +29,7 @@ const servicesJsonLd = {
     name: businessConfig.businessName,
     url: businessConfig.websiteUrl,
   },
-  areaServed: ["Jersey City", "Hoboken", "Newark"],
+  areaServed: areaServedStructuredData,
   hasOfferCatalog: {
     "@type": "OfferCatalog",
     name: "Residential Cleaning Services",

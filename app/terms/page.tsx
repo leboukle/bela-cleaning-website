@@ -8,7 +8,7 @@ import { legalConfig, termsLastUpdatedDisplay } from "@/lib/legal";
 export const metadata: Metadata = buildPageMetadata({
   title: "Terms of Service | BeLa Cleaning",
   description:
-    "Review BeLa Cleaning's Terms of Service, covering online booking and payment, service policies, and website use in Jersey City and beyond.",
+    "Review BeLa Cleaning's Terms of Service, covering online booking and payment, service policies, and website use across Northern New Jersey.",
   path: "/terms",
 });
 

@@ -67,6 +67,6 @@ export const images = {
   // with a similar script if the copy, colors, or wordmark ever change.
   ogImage: {
     src: "/og-image.png",
-    alt: "BeLa Cleaning — residential cleaning for busy lives. Transparent pricing, no contracts, online booking 24/7. Serving Jersey City, Hoboken, and Newark.",
+    alt: "BeLa Cleaning — residential cleaning for busy lives. Transparent pricing, no contracts, online booking 24/7. Northern New Jersey.",
   } satisfies SiteImage,
 } as const;

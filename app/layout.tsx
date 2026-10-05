@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { businessConfig } from "@/lib/config";
 import { images } from "@/lib/images";
+import { areaServedStructuredData, HOME_SEO_DESCRIPTION, HOME_SEO_TITLE } from "@/lib/seo";
 
 const dmSerifDisplay = DM_Serif_Display({
   weight: "400",
@@ -19,9 +20,8 @@ const inter = Inter({
   display: "swap",
 });
 
-const defaultTitle = "BeLa Cleaning | House Cleaning in Jersey City & Hoboken";
-const defaultDescription =
-  "Book residential house cleaning online in Jersey City, Hoboken, Newark, and surrounding areas. Transparent pricing, no contracts, easy online booking.";
+const defaultTitle = HOME_SEO_TITLE;
+const defaultDescription = HOME_SEO_DESCRIPTION;
 
 // DEVELOPER NOTE: This root layout provides sitewide metadata defaults
 // (used only as a fallback if a page doesn't set its own) plus the
@@ -107,12 +107,7 @@ const structuredData = {
       email: businessConfig.email,
       telephone: "+1-551-225-0276",
       image: images.homeHero.src,
-      areaServed: [
-        { "@type": "City", name: "Jersey City" },
-        { "@type": "City", name: "Hoboken" },
-        { "@type": "City", name: "Newark" },
-        "Nearby communities",
-      ],
+      areaServed: areaServedStructuredData,
       openingHoursSpecification: {
         "@type": "OpeningHoursSpecification",
         dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],

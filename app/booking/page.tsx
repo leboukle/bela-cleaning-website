@@ -5,7 +5,7 @@ import BookingFlow from "@/components/booking/BookingFlow";
 export const metadata: Metadata = buildPageMetadata({
   title: "Book a Cleaning | BeLa Cleaning",
   description:
-    "Book residential cleaning in Jersey City, Hoboken, Newark, and nearby communities. Get an instant price, choose your appointment, and reserve your visit online.",
+    "Book residential cleaning across Northern New Jersey, including Jersey City, Hoboken, and Newark. Get an instant price, choose your appointment, and reserve your visit online.",
   path: "/booking",
 });
 

@@ -7,7 +7,7 @@ import { legalConfig } from "@/lib/legal";
 // last generated/crawled — search engines treat a constantly-"now" date as
 // a signal to ignore. Update SITE_CONTENT_UPDATED when marketing page copy
 // changes; legal pages use their own lastUpdated values from lib/legal.ts.
-const SITE_CONTENT_UPDATED = "2026-07-20";
+const SITE_CONTENT_UPDATED = "2026-10-04";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const routes: Array<{ path: string; priority: number; lastModified: string }> = [
