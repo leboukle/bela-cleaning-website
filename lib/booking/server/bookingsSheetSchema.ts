@@ -161,6 +161,14 @@ export const BOOKINGS_COLUMNS = [
   // "Square Footage Price" MUST be added to the live Bookings sheet(s)
   // before code that writes this column is deployed.
   "Square Footage Price",
+  // First-cleaning-at-full-price policy. Appended last, same rationale as
+  // every prior addition: no existing column moves. Both are blank on every
+  // row created before the policy — which is how such rows are recognized
+  // and left on their original pricing. The headers "Pricing Policy" (BQ)
+  // and "Recurring Schedule ID" (BR) MUST exist on the live sheet before
+  // code that writes these columns is deployed.
+  "Pricing Policy",
+  "Recurring Schedule ID",
 ] as const;
 
 export type BookingColumn = (typeof BOOKINGS_COLUMNS)[number];

@@ -176,6 +176,21 @@ export default function ManageBookingActions({ token, initialBooking }: ManageBo
         </dl>
       </div>
 
+      {booking.canBookNextCleaning && (
+        <div className="rounded-2xl border border-[#E7DECE] bg-white p-6 shadow-[0_1px_3px_-1px_rgba(59,47,39,0.08)]">
+          <h2 className="font-heading text-lg text-[#3B2F27]">Your next cleaning</h2>
+          <p className="mt-2 text-sm text-[#6B5B4C]">
+            Book your next {booking.frequency.toLowerCase()} cleaning with your recurring discount applied.
+          </p>
+          <a
+            href={`/booking?next=${encodeURIComponent(token)}`}
+            className="mt-4 inline-block rounded-full bg-[#3B2F27] px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#2A211C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B2F27]"
+          >
+            Book your next cleaning
+          </a>
+        </div>
+      )}
+
       {(booking.eligibility.canCancel || booking.eligibility.canReschedule) && phase === "idle" && (
         <div className="rounded-2xl border border-[#E7DECE] bg-white p-6 shadow-[0_1px_3px_-1px_rgba(59,47,39,0.08)]">
           <h2 className="font-heading text-lg text-[#3B2F27]">Change your appointment</h2>

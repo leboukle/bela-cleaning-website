@@ -75,6 +75,9 @@ export function sampleBookingRecord(overrides: Partial<BookingRecord> = {}): Boo
     serviceStartTime: "",
     originalServiceStartTime: "",
     manageBookingReminderTokenHash: "",
+    // A pre-policy (legacy) row: priced under the original rule, never repriced.
+    pricingPolicy: "",
+    recurringScheduleId: "",
     ...overrides,
   };
 }

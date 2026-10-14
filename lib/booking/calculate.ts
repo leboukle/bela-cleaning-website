@@ -22,11 +22,30 @@ import type { BookingState, ExtrasState } from "./types";
 export type PricingInput = Pick<
   BookingState,
   "customEstimateTrigger" | "bedrooms" | "bathrooms" | "squareFootage" | "cleaningType" | "extras" | "frequency"
->;
+> & {
+  /**
+   * Whether the selected frequency's discount applies to THIS appointment.
+   * First-cleaning-at-full-price policy: false for the first cleaning of a
+   * recurring schedule, true only for a qualifying follow-up. The server
+   * derives it from authoritative records (followUpEligibility.ts); the
+   * browser only mirrors the server's answer for display. Defaults to
+   * false so an omitted value can never produce an unearned discount.
+   */
+  applyFrequencyDiscount?: boolean;
+};
 
 export type EstimateBreakdown = {
   bedroomBasePrice: number;
+  /** Bedroom base after the discount applied to THIS appointment (== bedroomBasePrice when none applies). */
   discountedBedroomBasePrice: number;
+  /**
+   * What the frequency's discount is worth per visit once it applies (the
+   * second cleaning onward), and the total those visits come to assuming
+   * the same cleaning details. 0 / equal to totalPrice for one-time.
+   * Informational — never the amount charged for this appointment.
+   */
+  ongoingVisitDiscount: number;
+  ongoingVisitTotal: number;
   bathroomAddition: number;
   squareFootageAddition: number;
   extrasTotal: number;
@@ -95,7 +114,10 @@ function calculateExtrasDuration(extras: ExtrasState): number {
  *
  * The frequency discount applies ONLY to the bedroom base price — never to
  * the bathroom addition, square-footage addition, extras, or cleaning-type
- * addition.
+ * addition. It is applied to this estimate only when
+ * `applyFrequencyDiscount` is true (a qualifying follow-up cleaning); the
+ * first cleaning of a recurring schedule is priced at the regular amount,
+ * and `ongoingVisitTotal` reports what later visits will cost.
  */
 export function calculateEstimate(state: PricingInput): EstimateBreakdown | null {
   if (state.customEstimateTrigger) return null;
@@ -109,7 +131,11 @@ export function calculateEstimate(state: PricingInput): EstimateBreakdown | null
     ? FREQUENCY_OPTIONS.find((o) => o.id === state.frequency)
     : FREQUENCY_OPTIONS[0]; // default to "One time" (0% discount) until chosen
   const discountRate = frequencyOption?.discount ?? 0;
-  const discountedBedroomBasePrice = round2(bedroomBasePrice * (1 - discountRate));
+  // The frequency's rate and its basis (the bedroom base) are unchanged;
+  // only WHETHER it applies to this appointment is now an explicit input.
+  const appliedRate = state.applyFrequencyDiscount === true ? discountRate : 0;
+  const discountedBedroomBasePrice = round2(bedroomBasePrice * (1 - appliedRate));
+  const ongoingDiscountedBedroomBase = round2(bedroomBasePrice * (1 - discountRate));
 
   const bathroomOption = state.bathrooms ? BATHROOM_OPTIONS.find((o) => o.id === state.bathrooms) : null;
   const bathroomAddition = bathroomOption && !bathroomOption.customEstimate ? (bathroomOption.priceAdd ?? 0) : 0;
@@ -133,9 +159,10 @@ export function calculateEstimate(state: PricingInput): EstimateBreakdown | null
   const cleaningTypeAddition = cleaningTypeOption?.priceAdd ?? 0;
   const cleaningTypeDurationMinutes = cleaningTypeOption?.durationMinutes ?? 0;
 
-  const totalPrice = round2(
-    discountedBedroomBasePrice + bathroomAddition + squareFootageAddition + extrasTotal + cleaningTypeAddition,
-  );
+  const nonBedroomTotal = bathroomAddition + squareFootageAddition + extrasTotal + cleaningTypeAddition;
+  const totalPrice = round2(discountedBedroomBasePrice + nonBedroomTotal);
+  const ongoingVisitTotal = round2(ongoingDiscountedBedroomBase + nonBedroomTotal);
+  const ongoingVisitDiscount = round2(bedroomBasePrice - ongoingDiscountedBedroomBase);
   const totalDurationMinutes =
     bedroomBaseDurationMinutes +
     bathroomDurationMinutes +
@@ -146,6 +173,8 @@ export function calculateEstimate(state: PricingInput): EstimateBreakdown | null
   return {
     bedroomBasePrice,
     discountedBedroomBasePrice,
+    ongoingVisitDiscount,
+    ongoingVisitTotal,
     bathroomAddition,
     squareFootageAddition,
     extrasTotal,

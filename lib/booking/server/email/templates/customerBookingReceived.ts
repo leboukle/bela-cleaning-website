@@ -10,6 +10,11 @@ import { businessConfig } from "@/lib/config";
 import { formatCurrency, formatDuration } from "@/lib/booking/calculate";
 import { formatReadableDate, getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import { getCleaningTypeIdForLabel } from "@/lib/booking/config";
+import {
+  BOOK_NEXT_CLEANING_INSTRUCTION,
+  FIRST_VISIT_PRICING_POLICY,
+  firstCleaningNoticeForLabel,
+} from "@/lib/booking/recurringPricing";
 import { getServiceScope, isAddOnType } from "@/lib/serviceDefinitions";
 import { describeExtras } from "../../extrasDescription";
 import { parseExtrasKeys } from "../../extras";
@@ -42,6 +47,15 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
   const extras = describeExtras(record.extras);
   const isRecurring = record.frequency !== "One time";
   const scope = resolveServiceScope(record);
+  // Bookings created under the first-cleaning-at-full-price policy: a
+  // recurring booking saved with no frequency discount IS the first
+  // cleaning, and the customer is told so. Older rows (blank policy) and
+  // discounted follow-ups keep the plain "Estimated total" wording.
+  const isFirstCleaning = isRecurring && record.pricingPolicy === FIRST_VISIT_PRICING_POLICY && record.frequencyDiscount === 0;
+  const totalLabel = isFirstCleaning ? "First cleaning total" : "Estimated total";
+  const firstCleaningLines = isFirstCleaning
+    ? [firstCleaningNoticeForLabel(record.frequency), BOOK_NEXT_CLEANING_INSTRUCTION]
+    : [];
 
   const lines: string[] = [
     `Hi ${record.firstName},`,
@@ -54,7 +68,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     `Appointment time: ${getScheduleDisplayLabel(record)}`,
     `Service address: ${address}`,
     `Estimated duration: ${formatDuration(record.estimatedDurationMinutes)}`,
-    `Estimated total: ${formatCurrency(record.totalPrice)}`,
+    `${totalLabel}: ${formatCurrency(record.totalPrice)}`,
   ];
   if (isRecurring) lines.push(`Frequency: ${record.frequency}`);
   if (extras.length > 0) lines.push(`Extras: ${extras.join(", ")}`);
@@ -64,6 +78,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     `Status: ${record.bookingStatus}. Your payment method has been saved securely — you have not been charged.`,
     `The estimated total above will be charged automatically starting 1 hour after your cleaning's scheduled`,
     "end time. Please keep your Booking ID for reference.",
+    ...(firstCleaningLines.length > 0 ? ["", ...firstCleaningLines] : []),
     "",
     "Need to change or cancel your appointment? Manage your booking here:",
     manageUrl,
@@ -138,7 +153,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     <tr><td style="padding:4px 0;color:#8A7A6B;">Appointment time</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(getScheduleDisplayLabel(record))}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">Service address</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(address)}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">Estimated duration</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatDuration(record.estimatedDurationMinutes))}</td></tr>
-    <tr><td style="padding:4px 0;color:#8A7A6B;">Estimated total</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatCurrency(record.totalPrice))}</td></tr>
+    <tr><td style="padding:4px 0;color:#8A7A6B;">${escapeHtml(totalLabel)}</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatCurrency(record.totalPrice))}</td></tr>
     ${frequencyRow}
     ${extrasRow}
   </table>
@@ -147,6 +162,11 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     you have not been charged. The estimated total above will be charged automatically starting 1 hour after your
     cleaning's scheduled end time. Please keep your Booking ID for reference.
   </p>
+  ${
+    isFirstCleaning
+      ? `<p style="font-size:14px;color:#6B5B4C;">${escapeHtml(firstCleaningLines.join(" "))}</p>`
+      : ""
+  }
   <p style="text-align:center;margin:24px 0;">
     <a href="${escapeHtml(manageUrl)}" style="display:inline-block;background:#3B2F27;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:999px;font-size:14px;font-weight:600;">Manage Booking</a>
   </p>

@@ -97,6 +97,8 @@ function sampleRecord(overrides: Partial<BookingRecord> = {}): BookingRecord {
     serviceStartTime: "",
     originalServiceStartTime: "",
     manageBookingReminderTokenHash: "",
+    pricingPolicy: "",
+    recurringScheduleId: "",
     ...overrides,
   };
 }
@@ -114,12 +116,38 @@ describe("GoogleSheetsBookingRepository", () => {
     expect(row[BOOKINGS_COLUMNS.indexOf("Total Price")]).toBe(record.totalPrice);
   });
 
-  it("appendBooking persists the square-footage price in the last ('Square Footage Price') column", async () => {
+  it("appendBooking persists the square-footage price in its 'Square Footage Price' column", async () => {
     const repo = new GoogleSheetsBookingRepository();
     await repo.appendBooking(sampleRecord({ squareFootagePrice: 50 }));
     const [, row] = mockedAppendRow.mock.calls[0];
-    expect(BOOKINGS_COLUMNS[BOOKINGS_COLUMNS.length - 1]).toBe("Square Footage Price");
     expect(row[BOOKINGS_COLUMNS.indexOf("Square Footage Price")]).toBe(50);
+  });
+
+  it("appendBooking persists the pricing policy and recurring schedule ID in the last two columns", async () => {
+    const repo = new GoogleSheetsBookingRepository();
+    await repo.appendBooking(sampleRecord({ pricingPolicy: "first-visit-full-price-v1", recurringScheduleId: "BELA-20260101-ABCDEF" }));
+    const [, row] = mockedAppendRow.mock.calls[0];
+    expect(row.length).toBe(BOOKINGS_COLUMNS.length);
+    expect(row[BOOKINGS_COLUMNS.indexOf("Pricing Policy")]).toBe("first-visit-full-price-v1");
+    expect(row[BOOKINGS_COLUMNS.indexOf("Recurring Schedule ID")]).toBe("BELA-20260101-ABCDEF");
+  });
+
+  it("reads a row that predates the policy columns as a legacy booking: blank policy/schedule, saved amounts and discount untouched", async () => {
+    // A 68-cell row (no Pricing Policy / Recurring Schedule ID cells at all) with a saved weekly discount.
+    const legacyRow = BOOKINGS_COLUMNS.slice(0, 68).map(() => "");
+    legacyRow[BOOKINGS_COLUMNS.indexOf("Booking ID")] = "BELA-LEGACY-WEEKLY";
+    legacyRow[BOOKINGS_COLUMNS.indexOf("Frequency")] = "Weekly";
+    legacyRow[BOOKINGS_COLUMNS.indexOf("Frequency Discount")] = "19.5";
+    legacyRow[BOOKINGS_COLUMNS.indexOf("Total Price")] = "190.5";
+    legacyRow[BOOKINGS_COLUMNS.indexOf("Charge Amount")] = "190.5";
+    mockedGetRange.mockResolvedValueOnce([["BELA-LEGACY-WEEKLY"]]).mockResolvedValueOnce([legacyRow]);
+    const repo = new GoogleSheetsBookingRepository();
+    const record = await repo.getFullBookingRecord("BELA-LEGACY-WEEKLY");
+    expect(record?.pricingPolicy).toBe("");
+    expect(record?.recurringScheduleId).toBe("");
+    expect(record?.frequencyDiscount).toBe(19.5);
+    expect(record?.totalPrice).toBe(190.5);
+    expect(record?.chargeAmount).toBe(190.5);
   });
 
   it("reads a historical row that predates the 'Square Footage Price' column as squareFootagePrice 0, leaving its stored totals as-is", async () => {

@@ -3,6 +3,7 @@
 import { Clock } from "lucide-react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getSummaryLines } from "@/lib/booking/summary";
+import { getQuoteKind, getTotalLabel } from "@/lib/booking/recurringPricing";
 import type { BookingState } from "@/lib/booking/types";
 import { usePulseClass } from "@/components/booking/usePulseClass";
 
@@ -11,6 +12,8 @@ const PULSE = "animate-[booking-value-pop_0.3s_ease-out]";
 type BookingSummaryProps = {
   state: BookingState;
   estimate: EstimateBreakdown | null;
+  /** True only when the server confirmed this is a qualifying follow-up cleaning. */
+  discountApplied?: boolean;
 };
 
 // Desktop sticky sidebar. Estimated total leads as the visual focal point
@@ -19,8 +22,9 @@ type BookingSummaryProps = {
 // type — closer to a checkout summary than a form recap. Intentionally
 // still no line-by-line dollar breakdown — individual prices stay on the
 // selection cards themselves while the customer is choosing.
-export default function BookingSummary({ state, estimate }: BookingSummaryProps) {
+export default function BookingSummary({ state, estimate, discountApplied = false }: BookingSummaryProps) {
   const lines = getSummaryLines(state);
+  const kind = getQuoteKind(state.frequency, discountApplied);
   const totalPulse = usePulseClass(estimate ? estimate.totalPrice : "custom", PULSE);
   const durationPulse = usePulseClass(estimate ? estimate.totalDurationMinutes : "custom-duration", PULSE);
 
@@ -32,7 +36,13 @@ export default function BookingSummary({ state, estimate }: BookingSummaryProps)
         <p className={`mt-3 font-heading text-5xl leading-none text-[#3B2F27] ${totalPulse}`}>
           {estimate ? formatCurrency(estimate.totalPrice) : "Custom estimate"}
         </p>
-        <p className="mt-2 text-xs uppercase tracking-wide text-[#B9AC9B]">Estimated total</p>
+        <p className="mt-2 text-xs uppercase tracking-wide text-[#B9AC9B]">{getTotalLabel(kind)}</p>
+        {estimate && kind === "first-cleaning" && estimate.ongoingVisitDiscount > 0 && (
+          <p className="mt-3 text-xs leading-relaxed text-[#8A7A6B]">
+            Cleanings after your first: about {formatCurrency(estimate.ongoingVisitTotal)} each, if your cleaning
+            details stay the same.
+          </p>
+        )}
 
         <div className={`mt-5 flex items-center gap-2 text-[15px] font-medium text-[#6B5B4C] ${durationPulse}`}>
           <Clock size={16} className="shrink-0 text-[#B9AC9B]" aria-hidden="true" />

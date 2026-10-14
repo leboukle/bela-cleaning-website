@@ -19,6 +19,7 @@ import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/s
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
 import type { AccessId, ExtrasState } from "@/lib/booking/types";
 import { isValidDateKey } from "./dateUtils";
+import { isPlausibleManageToken } from "./manageToken";
 import type { BookingSubmissionInput, ValidatedBooking, ValidationIssue, ValidationResult } from "./types";
 
 function asString(value: unknown): string {
@@ -210,6 +211,7 @@ export function validateSubmission(input: BookingSubmissionInput): ValidationRes
     addIssue("someoneHome", "Please let us know whether someone will be home.");
   }
   const specialInstructions = asString(input.specialInstructions).slice(0, SPECIAL_INSTRUCTIONS_MAX_LENGTH).trim();
+  const followUpToken = asTrimmedString(input.followUpToken);
 
   // --- Policy ---
   if (input.agreedToPolicy !== true) {
@@ -247,6 +249,10 @@ export function validateSubmission(input: BookingSubmissionInput): ValidationRes
     agreedToPolicy: true,
     idempotencyToken,
     setupIntentId,
+    // Shape-only: an implausible value is treated as "no link", so the
+    // booking simply prices as a first cleaning. Authenticity and
+    // eligibility are decided in followUpEligibility.ts.
+    followUpToken: isPlausibleManageToken(followUpToken) ? followUpToken : "",
   };
 
   return { ok: true, booking };

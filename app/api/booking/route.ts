@@ -25,6 +25,7 @@ const STATUS_BY_FAILURE_CODE = {
   validation: 422,
   "date-unavailable": 409,
   "payment-setup-invalid": 422,
+  "price-changed": 409,
   "server-error": 500,
 } as const;
 

@@ -320,6 +320,8 @@ function sampleRecordWithToken(token: string): BookingRecord {
     serviceStartTime: "",
     originalServiceStartTime: "",
     manageBookingReminderTokenHash: "",
+    pricingPolicy: "",
+    recurringScheduleId: "",
   };
 }
 

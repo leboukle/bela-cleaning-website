@@ -8,9 +8,9 @@ import {
 } from "./bookingsSheetSchema";
 
 describe("bookingsSheetSchema", () => {
-  it("has exactly 68 columns with no duplicates (41 M3 + 3 M4 + 12 M5 + 5 M6 + 5 M6-amendment + 1 post-verification-fix column + 1 square-footage-price column)", () => {
-    expect(BOOKINGS_COLUMNS.length).toBe(68);
-    expect(new Set(BOOKINGS_COLUMNS).size).toBe(68);
+  it("has exactly 70 columns with no duplicates (41 M3 + 3 M4 + 12 M5 + 5 M6 + 5 M6-amendment + 1 post-verification-fix + 1 square-footage-price + 2 pricing-policy columns)", () => {
+    expect(BOOKINGS_COLUMNS.length).toBe(70);
+    expect(new Set(BOOKINGS_COLUMNS).size).toBe(70);
   });
 
   it("places the 3 notification-status columns right after Schema Version", () => {
@@ -86,8 +86,8 @@ describe("bookingsSheetSchema", () => {
     expect(columnLetter("Manage Booking Reminder Token Hash")).toBe("BO");
   });
 
-  it("appends 'Square Footage Price' as the very last column (BP), leaving every existing column's position unchanged", () => {
-    expect(BOOKINGS_COLUMNS.slice(-1)).toEqual(["Square Footage Price"]);
+  it("keeps 'Square Footage Price' at BP, unmoved, and every earlier column's position unchanged", () => {
+    expect(BOOKINGS_COLUMNS[67]).toBe("Square Footage Price");
     expect(columnLetter("Square Footage Price")).toBe("BP");
     // Spot-check that pre-existing columns kept their exact letters.
     expect(columnLetter("Square Footage")).toBe("R");
@@ -95,6 +95,13 @@ describe("bookingsSheetSchema", () => {
     expect(columnLetter("Estimated Duration Minutes")).toBe("AE");
     expect(columnLetter("Scheduled Charge At")).toBe("AV");
     expect(columnLetter("Charge Amount")).toBe("AX");
+  });
+
+  it("appends 'Pricing Policy' (BQ) and 'Recurring Schedule ID' (BR) as the very last columns", () => {
+    expect(BOOKINGS_COLUMNS.slice(-2)).toEqual(["Pricing Policy", "Recurring Schedule ID"]);
+    expect(columnLetter("Pricing Policy")).toBe("BQ");
+    expect(columnLetter("Recurring Schedule ID")).toBe("BR");
+    expect(BOOKINGS_LAST_COLUMN_LETTER).toBe("BR");
   });
 
   it("maps the first column to A", () => {

@@ -35,8 +35,18 @@ export type AuthoritativePricing = {
  * footage option flagged `customEstimate` — those properties never reach
  * an instant-priced booking.
  */
-export function calculateAuthoritativePricing(booking: ValidatedBooking): AuthoritativePricing {
+export function calculateAuthoritativePricing(
+  booking: ValidatedBooking,
+  /**
+   * Whether the frequency discount applies to this appointment. Always the
+   * SERVER's own eligibility decision (followUpEligibility.ts), never
+   * anything from the request. Required (no default) so a caller cannot
+   * forget to decide.
+   */
+  options: { applyFrequencyDiscount: boolean },
+): AuthoritativePricing {
   const estimate = calculateEstimate({
+    applyFrequencyDiscount: options.applyFrequencyDiscount,
     customEstimateTrigger: null,
     bedrooms: booking.bedrooms,
     bathrooms: booking.bathrooms,

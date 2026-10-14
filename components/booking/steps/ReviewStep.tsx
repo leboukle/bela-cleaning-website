@@ -5,6 +5,7 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getFrequencyOption } from "@/lib/booking/config";
+import { firstCleaningNotice, followUpAppliedNotice, getQuoteKind, getTotalLabel } from "@/lib/booking/recurringPricing";
 import { getSummaryLines } from "@/lib/booking/summary";
 import { formatExactTime, formatReadableDate } from "@/lib/booking/schedule";
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
@@ -27,6 +28,10 @@ type ReviewStepProps = {
   appointmentNoLongerFits?: boolean;
   /** True while a live availability re-check of the selected time is still in flight. */
   appointmentCheckPending?: boolean;
+  /** True only when the server confirmed this is a qualifying follow-up cleaning (discount applied). */
+  followUpDiscountApplied?: boolean;
+  /** True while the follow-up link's eligibility — and therefore the quote — is still being confirmed. */
+  quoteCheckPending?: boolean;
   /** Routes the customer to the existing appointment-time step. */
   onChooseNewTime?: () => void;
   onPickNewDate: () => void;
@@ -79,6 +84,8 @@ export default function ReviewStep({
   switchedToDeepCleaning = false,
   appointmentNoLongerFits = false,
   appointmentCheckPending = false,
+  followUpDiscountApplied = false,
+  quoteCheckPending = false,
   onChooseNewTime,
   onPickNewDate,
   onRedoPayment,
@@ -87,7 +94,7 @@ export default function ReviewStep({
   onBack,
 }: ReviewStepProps) {
   if (submission.status === "success") {
-    return <BookingConfirmation state={state} submission={submission} />;
+    return <BookingConfirmation state={state} submission={submission} discountApplied={followUpDiscountApplied} />;
   }
 
   const lines = getSummaryLines(state);
@@ -96,6 +103,7 @@ export default function ReviewStep({
   const extrasLine = lines.find((l) => l.label === "Extras");
   const squareFootageLine = lines.find((l) => l.label === "Square footage");
   const frequencyOption = state.frequency ? getFrequencyOption(state.frequency) : null;
+  const quoteKind = getQuoteKind(state.frequency, followUpDiscountApplied);
 
   const city = getCityForZip(state.zipCode);
 
@@ -162,7 +170,14 @@ export default function ReviewStep({
         <ReviewSection title="Frequency" onEdit={() => onEdit("frequency")}>
           <ReviewLine label="Frequency" value={frequencyOption?.label ?? "—"} />
           {frequencyOption && frequencyOption.discount > 0 && (
-            <ReviewLine label="Recurring discount" value={frequencyOption.discountLabel} />
+            <ReviewLine
+              label="Recurring discount"
+              value={
+                followUpDiscountApplied
+                  ? `${frequencyOption.discountLabel} (applied to this cleaning)`
+                  : `${frequencyOption.discountLabel}, from your 2nd cleaning`
+              }
+            />
           )}
         </ReviewSection>
 
@@ -196,13 +211,27 @@ export default function ReviewStep({
         </ReviewSection>
 
         <div className="rounded-2xl border border-[#E7DECE] bg-white p-7 shadow-[0_4px_24px_-8px_rgba(59,47,39,0.12)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A9998A]">Estimated total</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A9998A]">{getTotalLabel(quoteKind)}</p>
           <p className="mt-2 font-heading text-5xl leading-none text-[#3B2F27]">
             {estimate ? formatCurrency(estimate.totalPrice) : "Custom estimate"}
           </p>
           <p className="mt-4 text-sm text-[#6B5B4C]">
             {estimate ? `Estimated duration: ${formatDuration(estimate.totalDurationMinutes)}` : "Duration to be determined"}
           </p>
+          {quoteKind === "first-cleaning" && state.frequency && (
+            <>
+              <p className="mt-3 text-sm font-medium text-[#3B2F27]">{firstCleaningNotice(state.frequency)}</p>
+              {estimate && estimate.ongoingVisitDiscount > 0 && (
+                <p className="mt-2 text-sm text-[#6B5B4C]">
+                  Estimated total for later cleanings: {formatCurrency(estimate.ongoingVisitTotal)} each, if your
+                  cleaning details stay the same.
+                </p>
+              )}
+            </>
+          )}
+          {quoteKind === "follow-up" && state.frequency && (
+            <p className="mt-3 text-sm font-medium text-[#1E5B3A]">{followUpAppliedNotice(state.frequency)}</p>
+          )}
           {switchedToDeepCleaning && (
             <p className="mt-3 text-sm font-medium text-[#1E5B3A]" role="status">
               Your service is now Deep Cleaning. Please review the updated total and duration, then submit your booking.
@@ -324,7 +353,7 @@ export default function ReviewStep({
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!isComplete || submission.status === "submitting" || appointmentCheckPending}
+          disabled={!isComplete || submission.status === "submitting" || appointmentCheckPending || quoteCheckPending}
           className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#3B2F27] px-8 py-4 text-base font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_32px_-12px_rgba(59,47,39,0.4)] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:w-auto"
         >
           {submission.status === "submitting" && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
@@ -332,7 +361,9 @@ export default function ReviewStep({
             ? "Submitting…"
             : appointmentCheckPending
               ? "Checking your appointment…"
-              : "Submit Booking Request"}
+              : quoteCheckPending
+                ? "Confirming your price…"
+                : "Submit Booking Request"}
         </button>
       </div>
     </StepShell>

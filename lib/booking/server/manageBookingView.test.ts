@@ -145,3 +145,51 @@ describe("buildManageBookingView", () => {
     expect(withExtras.extras).toEqual(["Inside kitchen cabinets", "Interior windows × 2"]);
   });
 });
+
+describe("buildManageBookingView — canBookNextCleaning", () => {
+  const NEW_POLICY = "first-visit-full-price-v1";
+
+  it("is false for a first cleaning created under the policy that has not been completed", async () => {
+    const view = await buildManageBookingView(
+      activeRecord({ frequency: "Weekly", pricingPolicy: NEW_POLICY, completedAt: "" }),
+      MORE_THAN_24H_BEFORE,
+    );
+    expect(view.canBookNextCleaning).toBe(false);
+  });
+
+  it("is true once BeLa has marked that cleaning completed", async () => {
+    const view = await buildManageBookingView(
+      activeRecord({ frequency: "Weekly", pricingPolicy: NEW_POLICY, completedAt: "10/01/2026, 12:00:00 PM EDT" }),
+      MORE_THAN_24H_BEFORE,
+    );
+    expect(view.canBookNextCleaning).toBe(true);
+  });
+
+  it("is false for a one-time or cancelled booking", async () => {
+    const oneTime = await buildManageBookingView(
+      activeRecord({ frequency: "One time", pricingPolicy: NEW_POLICY, completedAt: "10/01/2026" }),
+      MORE_THAN_24H_BEFORE,
+    );
+    const cancelled = await buildManageBookingView(
+      activeRecord({ frequency: "Weekly", pricingPolicy: NEW_POLICY, completedAt: "10/01/2026", bookingStatus: "Cancelled" }),
+      MORE_THAN_24H_BEFORE,
+    );
+    expect(oneTime.canBookNextCleaning).toBe(false);
+    expect(cancelled.canBookNextCleaning).toBe(false);
+  });
+
+  it("is true for an existing (pre-policy) recurring booking, preserving its schedule's policy", async () => {
+    const view = await buildManageBookingView(activeRecord({ frequency: "Weekly", pricingPolicy: "" }), MORE_THAN_24H_BEFORE);
+    expect(view.canBookNextCleaning).toBe(true);
+  });
+
+  it("exposes only a boolean — never the schedule ID or pricing policy", async () => {
+    const view = await buildManageBookingView(
+      activeRecord({ frequency: "Weekly", pricingPolicy: NEW_POLICY, recurringScheduleId: "BELA-SECRET-SCHEDULE", completedAt: "x" }),
+      MORE_THAN_24H_BEFORE,
+    );
+    const serialized = JSON.stringify(view);
+    expect(serialized).not.toContain("BELA-SECRET-SCHEDULE");
+    expect(serialized).not.toContain(NEW_POLICY);
+  });
+});

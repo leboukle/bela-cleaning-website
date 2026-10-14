@@ -21,6 +21,8 @@ import { verifySucceededSetupIntent, type ConfirmedSetupIntent } from "./stripe/
 import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { generateManageToken, hashManageToken } from "./manageToken";
 import { formatOperationalTimestamp } from "./dateUtils";
+import { resolveFollowUpEligibility } from "./followUpEligibility";
+import { FIRST_VISIT_PRICING_POLICY, isRecurringFrequency } from "@/lib/booking/recurringPricing";
 import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
@@ -66,6 +68,10 @@ export type BookingSubmissionFailure =
   | { ok: false; code: "validation"; issues: ValidationIssue[] }
   | { ok: false; code: "date-unavailable"; message: string }
   | { ok: false; code: "payment-setup-invalid"; message: string }
+  // The total the customer was shown differs from the authoritative one
+  // (e.g. their follow-up eligibility changed since the quote was shown).
+  // Nothing is saved or charged; the client re-quotes and asks again.
+  | { ok: false; code: "price-changed"; message: string; totalPrice: number }
   | { ok: false; code: "server-error"; message: string };
 
 export type BookingSubmissionResult = BookingSubmissionSuccess | BookingSubmissionFailure;
@@ -146,6 +152,7 @@ function buildBookingRecord(
   setupIntent: ConfirmedSetupIntent,
   scheduledChargeAt: Date,
   manageToken: string,
+  recurringScheduleId: string,
 ): BookingRecord {
   const propertyTypeLabel = PROPERTY_TYPE_OPTIONS.find((o) => o.id === booking.propertyType)?.label ?? booking.propertyType;
   const squareFootageLabel = SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === booking.squareFootage)?.label ?? booking.squareFootage;
@@ -226,6 +233,8 @@ function buildBookingRecord(
     serviceStartTime: booking.serviceStartTime,
     originalServiceStartTime: "",
     manageBookingReminderTokenHash: "",
+    pricingPolicy: FIRST_VISIT_PRICING_POLICY,
+    recurringScheduleId,
   };
 }
 
@@ -294,13 +303,40 @@ export async function submitBooking(
       };
     }
 
+    // Recurring-discount eligibility is decided HERE, from authoritative
+    // records only (the token's earlier booking: not cancelled, and — for
+    // bookings created under the policy — confirmed completed). The first
+    // cleaning of a recurring schedule, and every booking made without a
+    // valid link, is priced at the regular amount.
+    let followUp;
+    try {
+      followUp = await resolveFollowUpEligibility(booking.followUpToken, repository);
+    } catch (error) {
+      logServerError("resolveFollowUpEligibility", error);
+      return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
+    }
+    const applyFrequencyDiscount = followUp.eligible && isRecurringFrequency(booking.frequency);
+
     let pricing;
     try {
-      pricing = calculateAuthoritativePricing(booking);
+      pricing = calculateAuthoritativePricing(booking, { applyFrequencyDiscount });
     } catch (error) {
       logServerError("calculateAuthoritativePricing", error);
       const message = error instanceof PricingError ? error.message : GENERIC_SERVER_ERROR_MESSAGE;
       return { ok: false, code: "server-error", message };
+    }
+
+    // The saved (and therefore charged) amount must be the one the
+    // customer saw. The client's figure is never used to price — only to
+    // refuse a mismatch rather than silently charge a different amount.
+    const shownTotal = input.clientTotalPrice;
+    if (typeof shownTotal === "number" && Number.isFinite(shownTotal) && Math.abs(shownTotal - pricing.totalPrice) > 0.005) {
+      return {
+        ok: false,
+        code: "price-changed",
+        message: "The price for your booking has been updated. Please review the new total and submit again.",
+        totalPrice: pricing.totalPrice,
+      };
     }
 
     // The authoritative, overlap/capacity-aware check — now that duration
@@ -382,6 +418,15 @@ export async function submitBooking(
       };
     }
 
+    // A recurring first cleaning starts its own schedule (its Booking ID is
+    // the schedule's ID); a qualifying follow-up continues the schedule of
+    // the booking its link resolved to. One-time bookings have none.
+    const recurringScheduleId = isRecurringFrequency(booking.frequency)
+      ? followUp.eligible
+        ? followUp.scheduleId
+        : bookingId
+      : "";
+
     const manageToken = generateManageToken();
     const record = buildBookingRecord(
       booking,
@@ -392,6 +437,7 @@ export async function submitBooking(
       confirmedSetupIntent,
       scheduledChargeAt,
       manageToken,
+      recurringScheduleId,
     );
     try {
       await repository.appendBooking(record);

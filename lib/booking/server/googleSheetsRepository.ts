@@ -109,6 +109,8 @@ function recordToRow(record: BookingRecord): Array<string | number | boolean> {
     "Appointment Reminder Attempts": record.appointmentReminderAttempts,
     "Manage Booking Reminder Token Hash": record.manageBookingReminderTokenHash,
     "Square Footage Price": record.squareFootagePrice,
+    "Pricing Policy": record.pricingPolicy,
+    "Recurring Schedule ID": record.recurringScheduleId,
   };
 
   return BOOKINGS_COLUMNS.map((column) => {
@@ -214,6 +216,8 @@ function rowToRecord(row: string[]): BookingRecord {
     appointmentReminderAttempts: getNumber("Appointment Reminder Attempts"),
     manageBookingReminderTokenHash: get("Manage Booking Reminder Token Hash"),
     squareFootagePrice: getNumber("Square Footage Price"),
+    pricingPolicy: get("Pricing Policy"),
+    recurringScheduleId: get("Recurring Schedule ID"),
   };
 }
 

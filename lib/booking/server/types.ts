@@ -66,8 +66,17 @@ export type BookingSubmissionInput = {
   // ever persisted. See docs/payments.md.
   setupIntentId?: unknown;
 
-  // Client-displayed values, used only for tamper detection — never
-  // trusted as the authoritative figures. See validateSubmission.ts.
+  // Optional: the secret Manage Booking token of an earlier booking, from
+  // the customer's "Book your next cleaning" link. It is the ONLY way a
+  // recurring discount can be earned — never a browser-supplied
+  // "returning customer" or visit-number flag. Resolved and verified
+  // server-side in followUpEligibility.ts.
+  followUpToken?: unknown;
+
+  // Client-displayed values: the server never uses them to price, only to
+  // refuse a submission whose shown total differs from the authoritative
+  // one (see bookingService.ts), so a customer is never charged an amount
+  // other than the one they confirmed.
   clientTotalPrice?: unknown;
   clientDurationMinutes?: unknown;
 };
@@ -104,6 +113,8 @@ export type ValidatedBooking = {
   agreedToPolicy: true;
   idempotencyToken: string;
   setupIntentId: string;
+  /** Plausibly-shaped follow-up token, or "" when none was supplied. Not yet verified. */
+  followUpToken: string;
 };
 
 export type ValidationIssue = {
@@ -220,6 +231,14 @@ export type BookingRecord = {
   // before it existed, which is correct — those bookings were priced
   // without it, and their Subtotal/Total/Charge Amount are never recomputed.
   squareFootagePrice: number;
+  // First-cleaning-at-full-price policy (see lib/booking/recurringPricing.ts).
+  // pricingPolicy: FIRST_VISIT_PRICING_POLICY for rows created under the
+  // rule; "" for every earlier row, which keeps its original policy and is
+  // never repriced. recurringScheduleId: groups the visits of one
+  // recurring schedule (the initial booking's own Booking ID; a follow-up
+  // carries the schedule it continues); "" for one-time and legacy rows.
+  pricingPolicy: string;
+  recurringScheduleId: string;
 };
 
 /** Written by cancellationService.ts the moment a cancellation is confirmed — before any Stripe call. */

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronUp, Clock } from "lucide-react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getSummaryLines } from "@/lib/booking/summary";
+import { getQuoteKind, getTotalLabel } from "@/lib/booking/recurringPricing";
 import type { BookingState } from "@/lib/booking/types";
 import { usePulseClass } from "@/components/booking/usePulseClass";
 
@@ -12,14 +13,17 @@ const PULSE = "animate-[booking-value-pop_0.25s_ease-out]";
 type MobileSummaryBarProps = {
   state: BookingState;
   estimate: EstimateBreakdown | null;
+  /** True only when the server confirmed this is a qualifying follow-up cleaning. */
+  discountApplied?: boolean;
 };
 
 // Sticky bottom bar shown only on mobile. Tapping it expands/collapses the
 // same selection details the desktop sidebar shows. `env(safe-area-inset-bottom)`
 // keeps the bar clear of the home indicator on notched phones.
-export default function MobileSummaryBar({ state, estimate }: MobileSummaryBarProps) {
+export default function MobileSummaryBar({ state, estimate, discountApplied = false }: MobileSummaryBarProps) {
   const [expanded, setExpanded] = useState(false);
   const lines = getSummaryLines(state);
+  const kind = getQuoteKind(state.frequency, discountApplied);
   const totalPulse = usePulseClass(estimate ? estimate.totalPrice : "custom", PULSE);
   const durationPulse = usePulseClass(estimate ? estimate.totalDurationMinutes : "custom-duration", PULSE);
 
@@ -33,6 +37,12 @@ export default function MobileSummaryBar({ state, estimate }: MobileSummaryBarPr
         <div className="min-h-0">
           <div className="max-h-[45vh] overflow-y-auto border-b border-[#EFE7DA] px-5 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A9998A]">Your Cleaning</p>
+            {estimate && kind === "first-cleaning" && estimate.ongoingVisitDiscount > 0 && (
+              <p className="mt-2 text-xs leading-relaxed text-[#8A7A6B]">
+                Cleanings after your first: about {formatCurrency(estimate.ongoingVisitTotal)} each, if your cleaning
+                details stay the same.
+              </p>
+            )}
             {lines.length === 0 ? (
               <p className="mt-2 text-sm text-[#A9998A]">Your selections will appear here as you go.</p>
             ) : (
@@ -58,7 +68,7 @@ export default function MobileSummaryBar({ state, estimate }: MobileSummaryBarPr
       >
         <span className="min-w-0 text-left">
           <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B9AC9B]">
-            Estimated total
+            {getTotalLabel(kind)}
           </span>
           <span className="flex items-baseline gap-2.5">
             <span className={`font-heading text-[1.75rem] leading-none text-[#3B2F27] ${totalPulse}`}>

@@ -119,6 +119,25 @@ Notification Attempt At
 > blank/0 on every earlier row — those bookings were priced without it and
 > are never recomputed. The header must exist on the live sheet before code
 > that writes it is deployed.
+>
+> The two newest columns are **`Pricing Policy`** (BQ) and **`Recurring
+> Schedule ID`** (BR), added with the first-cleaning-at-full-price rule
+> (see [`recurringPricing.ts`](../lib/booking/recurringPricing.ts) and
+> [`followUpEligibility.ts`](../lib/booking/server/followUpEligibility.ts)).
+> A *recurring* schedule's first cleaning is priced at the regular amount
+> (Frequency is still recorded, Frequency Discount is 0); the existing
+> percentage applies from the second cleaning. Frequency alone is only a
+> label — no linked appointments are created — so a follow-up qualifies
+> only through the customer's own Manage Booking token (the "Book your
+> next cleaning" link), resolved server-side against the earlier
+> booking's saved state: not cancelled and, for bookings created under the
+> rule, `Completed At` set by BeLa's explicit Mark Complete. Nothing a
+> browser sends can grant the discount, and a submission whose shown total
+> differs from the server's is refused (`price-changed`). `Pricing Policy`
+> is blank on every earlier row, which keeps its original policy and is
+> never repriced (a link from such a recurring booking continues its
+> schedule with the discount). Both headers must exist on the live sheet
+> before code that writes them is deployed.
 
 The last 3 columns of the original listing were added in Milestone 4 — see
 [`docs/notifications.md`](./notifications.md) §7 for the full detail
