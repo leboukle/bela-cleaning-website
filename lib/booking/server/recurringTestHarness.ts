@@ -200,8 +200,16 @@ export class InMemoryBookings implements BookingRepository {
     return this.rows.filter((r) => r.recurringScheduleId === scheduleId);
   }
   open(scheduleId: string): BookingRecord[] {
-    return this.forSchedule(scheduleId).filter((r) => r.bookingStatus !== "Cancelled" && !r.completedAt);
+    return this.forSchedule(scheduleId).filter((r) => r.bookingStatus !== "Cancelled" && r.paymentStatus !== "Paid");
   }
+  /** The visit's service payment succeeded (Payment Status Paid) — what makes the next appointment due. */
+  pay(bookingId: string): void {
+    const row = this.byId(bookingId);
+    row.paymentStatus = "Paid";
+    row.stripePaymentIntentId = `pi_paid_${bookingId}`;
+    row.paidAt = "2026-11-02T20:00:00.000Z";
+  }
+  /** Legacy manual mark (no longer drives generation). */
   complete(bookingId: string, at = "10/20/2026, 1:00:00 PM EDT"): void {
     this.byId(bookingId).completedAt = at;
   }

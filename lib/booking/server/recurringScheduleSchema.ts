@@ -28,7 +28,8 @@ export const REVIEW_REASON = {
   BLACKOUT: "blackout",
   UNAVAILABLE: "unavailable",
   TOO_SOON: "too-soon",
-  COMPLETION_MISSING: "completion-missing",
+  /** The visit date passed but its payment is still not confirmed (and not retrying / failed). */
+  PAYMENT_NOT_CONFIRMED: "payment-not-confirmed",
   PAYMENT_FINAL_FAILURE: "payment-final-failure",
   DUPLICATE_DETECTED: "duplicate-detected",
   GENERATION_ERROR: "generation-error",

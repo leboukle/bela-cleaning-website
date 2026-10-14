@@ -4,12 +4,15 @@
  * Container-bound to the same spreadsheet as paymentScheduler.gs,
  * reminderScheduler.gs and cleanerAssignmentScheduler.gs. Runs on a
  * 30-minute time-driven trigger. It is the RETRY / RECONCILIATION safety
- * net for automatic recurring appointments: the normal path creates the
- * next appointment immediately when BeLa marks a cleaning complete or a
- * customer cancels one, and this scheduler recovers anything that path
- * missed (a crash, a transient Sheets/Vercel error, a blackout that was
- * later lifted) and alerts the owner to a visit that was never marked
- * complete.
+ * net — and the NORMAL TRIGGER — for automatic recurring appointments: the
+ * next appointment is due once the current visit's service date has passed
+ * (America/New_York) and its payment has been confirmed successful (Payment
+ * Status "Paid", written by the Stripe webhook). No manual completion is
+ * needed; the first run after that point creates it. A customer
+ * cancellation advances the schedule immediately; this scheduler also
+ * recovers anything missed (a crash, a transient Sheets/Vercel error, a
+ * blackout that was later lifted) and alerts the owner to a visit whose
+ * payment never got going.
  *
  * It scans the "Recurring Schedules" tab (cross-referencing "Bookings")
  * and calls ONE Vercel endpoint with just the schedule IDs worth looking
@@ -54,7 +57,8 @@ var RECUR_BOOKING_ID_HEADER = "Booking ID";
 var RECUR_BOOKING_STATUS_HEADER = "Booking Status";
 var RECUR_BOOKING_SCHEDULE_ID_HEADER = "Recurring Schedule ID";
 var RECUR_BOOKING_OCCURRENCE_HEADER = "Occurrence Number";
-var RECUR_BOOKING_COMPLETED_AT_HEADER = "Completed At";
+var RECUR_BOOKING_PAYMENT_STATUS_HEADER = "Payment Status";
+var RECUR_PAYMENT_STATUS_SCHEDULED = "Scheduled";
 var RECUR_BOOKING_STATUS_CANCELLED = "Cancelled";
 
 /** One-time setup: installs the 30-minute time-driven trigger. Run manually once from the editor. */
@@ -150,7 +154,7 @@ function recurFindScheduleIds_() {
   var idxBstatus = bHeader.indexOf(RECUR_BOOKING_STATUS_HEADER);
   var idxBsched = bHeader.indexOf(RECUR_BOOKING_SCHEDULE_ID_HEADER);
   var idxBocc = bHeader.indexOf(RECUR_BOOKING_OCCURRENCE_HEADER);
-  var idxBdone = bHeader.indexOf(RECUR_BOOKING_COMPLETED_AT_HEADER);
+  var idxBpay = bHeader.indexOf(RECUR_BOOKING_PAYMENT_STATUS_HEADER);
   if (idxBid === -1 || idxBsched === -1 || idxBocc === -1) {
     Logger.log("ERROR: Bookings header row is missing Booking ID / Recurring Schedule ID / Occurrence Number. Aborting scan.");
     return [];
@@ -166,8 +170,10 @@ function recurFindScheduleIds_() {
     if (!bookingId || !scheduleId || !(occurrence > 0)) continue; // not a recurring-schedule appointment
 
     var cancelled = idxBstatus !== -1 && row[idxBstatus] === RECUR_BOOKING_STATUS_CANCELLED;
-    var completed = idxBdone !== -1 && !!row[idxBdone];
-    if (!cancelled && !completed) openByScheduleId[scheduleId] = true;
+    // Not yet charged and not cancelled: an upcoming appointment that an
+    // interrupted "stop" must still cancel.
+    var unbilled = idxBpay !== -1 && row[idxBpay] === RECUR_PAYMENT_STATUS_SCHEDULED;
+    if (!cancelled && unbilled) openByScheduleId[scheduleId] = true;
 
     // A recurring initial appointment with no schedule row: needs repair.
     if (occurrence === 1 && scheduleId === bookingId && !(scheduleId in statusById)) {

@@ -3,9 +3,14 @@
 // Model: one persistent schedule record (Recurring Schedules sheet) per
 // recurring booking, and each appointment an ordinary Bookings row linked
 // by Recurring Schedule ID + Occurrence Number. At most ONE upcoming
-// non-cancelled appointment exists per schedule; the next one is created
-// only when the current one is completed or cancelled (or by the
-// reconciliation scheduler recovering a missed trigger).
+// non-cancelled appointment exists per schedule. The next one is created
+// when the current visit's service date has passed in America/New_York AND
+// its payment is confirmed successful (the existing authoritative Payment
+// Status "Paid") — no manual completion — or immediately when the current
+// one is cancelled / closed as unperformed. A pending, retrying or
+// requires-action payment waits; a final failure pauses and alerts. The
+// reconciliation scheduler (every 30 minutes) is what notices a payment
+// that succeeded, and recovers any missed trigger.
 //
 // ALL appointment creation goes through generateNextOccurrence — the one
 // serialized path. Why it is safe across concurrent serverless requests
@@ -92,9 +97,17 @@ export type GenerationOutcome =
   | { outcome: "needs-review"; reason: string; occurrenceNumber: number; serviceDate: string }
   | { outcome: "paused"; reason: string };
 
-// A visit is treated as missing its completion mark this long after it
-// should have ended. (The charge itself fires one hour after the end.)
-export const COMPLETION_MISSING_GRACE_MS = 24 * 60 * 60 * 1000;
+// A visit whose date has passed but whose payment is still Scheduled /
+// Processing / Requires Action this long after it ended is reported to the
+// owner (the normal charge fires one hour after the end, so this means the
+// payment pipeline is stuck). Retrying and failed payments are NOT reported
+// here: retries are working, and a final failure pauses + alerts on its own.
+export const PAYMENT_NOT_CONFIRMED_GRACE_MS = 48 * 60 * 60 * 1000;
+
+/** The business-timezone calendar date (yyyy-mm-dd) of an instant. */
+export function localDateKey(now: Date, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
 
 const SCHEDULE_SOURCE = "Recurring schedule";
 
@@ -130,9 +143,61 @@ function canonicalRows(rows: ScheduleBookingRow[]): ScheduleBookingRow[] {
   return result;
 }
 
-/** An appointment that is neither cancelled nor marked complete. */
-function isOpen(row: ScheduleBookingRow): boolean {
-  return row.bookingStatus !== BOOKING_STATUS.CANCELLED && !row.completedAt;
+/**
+ * A SERVICE visit that was successfully paid for: not cancelled, and its
+ * Payment Status — the existing authoritative status, written by the Stripe
+ * webhook and self-healed by the payment endpoint — is Paid. A payment
+ * ATTEMPT is not enough (Processing / Retry Scheduled / Requires Action),
+ * and a late-cancellation fee never counts: a late-cancelled visit is
+ * Cancelled, its Payment Status being a Cancellation Fee state.
+ */
+export function isServicePaid(row: ScheduleBookingRow): boolean {
+  return row.bookingStatus !== BOOKING_STATUS.CANCELLED && row.paymentStatus === PAYMENT_STATUS.PAID;
+}
+
+/** Not yet charged and not cancelled: what a customer's stop / an owner's end cancels. */
+function isUnbilledUpcoming(row: ScheduleBookingRow): boolean {
+  return row.bookingStatus !== BOOKING_STATUS.CANCELLED && row.paymentStatus === PAYMENT_STATUS.SCHEDULED;
+}
+
+/**
+ * An appointment that still blocks the NEXT one. It stops blocking when it is
+ *  - cancelled (customer cancellation, or an owner's unperformed mark — both
+ *    advance the schedule immediately), or
+ *  - successfully paid AND its service date has passed in the business
+ *    timezone (no manual completion needed), or
+ *  - a payment that ended in Final Failure which the owner has acknowledged
+ *    by resuming the schedule (it never qualifies for the discount).
+ * Anything else — including a paid visit on its own date, and a payment that
+ * is pending, retrying or requires action — waits.
+ */
+function isOpen(row: ScheduleBookingRow, todayKey: string, acknowledgedFailures: ReadonlySet<string>): boolean {
+  if (row.bookingStatus === BOOKING_STATUS.CANCELLED) return false;
+  if (isServicePaid(row) && row.serviceDate !== "" && row.serviceDate < todayKey) return false;
+  if (row.paymentStatus === PAYMENT_STATUS.FINAL_FAILURE && acknowledgedFailures.has(row.bookingId)) return false;
+  return true;
+}
+
+async function acknowledgedFailureIds(deps: Pick<RecurringDeps, "schedules">, rows: ScheduleBookingRow[]): Promise<Set<string>> {
+  const acknowledged = new Set<string>();
+  for (const row of rows) {
+    if (row.bookingStatus === BOOKING_STATUS.CANCELLED || row.paymentStatus !== PAYMENT_STATUS.FINAL_FAILURE) continue;
+    if (await deps.schedules.hasClaim(`payfail-ack:${row.bookingId}`)) acknowledged.add(row.bookingId);
+  }
+  return acknowledged;
+}
+
+/** The schedule's appointments that currently block the next one, lowest occurrence first. */
+export async function findOpenAppointments(
+  deps: Pick<RecurringDeps, "schedules">,
+  rows: ScheduleBookingRow[],
+  timezone: string,
+  now: Date,
+): Promise<ScheduleBookingRow[]> {
+  const canonical = canonicalRows(rows);
+  const todayKey = localDateKey(now, timezone || "America/New_York");
+  const acknowledged = await acknowledgedFailureIds(deps, canonical);
+  return canonical.filter((r) => isOpen(r, todayKey, acknowledged)).sort((a, b) => a.occurrenceNumber - b.occurrenceNumber);
 }
 
 function highestOccurrence(rows: ScheduleBookingRow[]): number {
@@ -572,7 +637,12 @@ export async function generateNextOccurrence(
     }
   }
 
-  const open = canonical.find(isOpen);
+  // The next appointment is due only once the current one has been paid for
+  // AND its service date has passed in the business timezone (or it was
+  // cancelled / owner-closed as unperformed, which advance immediately).
+  const todayKey = localDateKey(now, schedule.timezone || "America/New_York");
+  const acknowledged = await acknowledgedFailureIds(deps, canonical);
+  const open = canonical.find((r) => isOpen(r, todayKey, acknowledged));
   if (open) return { outcome: "has-open-appointment", bookingId: open.bookingId, occurrenceNumber: open.occurrenceNumber };
 
   const nextN = Math.max(schedule.nextOccurrenceNumber, highestOccurrence(rows) + 1);
@@ -616,8 +686,9 @@ export async function generateNextOccurrence(
   }
 
   // The first PERFORMED cleaning stays full price; discounted only once at
-  // least one appointment of this schedule has actually been completed.
-  const performedBefore = canonical.some((r) => r.bookingStatus !== BOOKING_STATUS.CANCELLED && Boolean(r.completedAt));
+  // least one service visit of this schedule has been successfully PAID
+  // (never a cancelled / unperformed visit, never a cancellation fee).
+  const performedBefore = canonical.some(isServicePaid);
   const priced = priceAgreedOccurrence(agreedPricingOf(schedule), performedBefore);
 
   const settings = await getBookingSettings();
@@ -662,7 +733,7 @@ export async function generateNextOccurrence(
     await voidAppointment(deps, schedule, bookingId, nextN, "lost occurrence arbitration (a row for this occurrence already existed)", now);
     return { outcome: "lost-race", occurrenceNumber: nextN };
   }
-  const openAfter = canonicalRows(afterAppend).filter(isOpen);
+  const openAfter = canonicalRows(afterAppend).filter((r) => isOpen(r, todayKey, acknowledged));
   if (openAfter.length > 1) {
     const keeper = openAfter.reduce((a, b) => (b.occurrenceNumber < a.occurrenceNumber ? b : a));
     if (keeper.bookingId !== bookingId) {
@@ -714,7 +785,8 @@ export async function generateNextOccurrence(
 export type AppointmentChangeOutcome = { outcome: "not-recurring" } | GenerationOutcome;
 
 /**
- * After an appointment is marked complete, cancelled, or marked unperformed:
+ * After an appointment is cancelled or marked unperformed (and from any
+ * owner "mark complete", which no longer drives generation by itself):
  * advance the schedule through the same creation path. Idempotent — a
  * repeated completion or cancellation request simply finds the appointment
  * already created.
@@ -739,7 +811,7 @@ export type ReconcileOutcome = {
   repairedProgress?: boolean;
   voidedDuplicates: number;
   notificationsRecovered: number;
-  completionMissing?: boolean;
+  paymentNotConfirmed?: boolean;
   generation?: GenerationOutcome | { outcome: "skipped"; reason: string };
 };
 
@@ -811,7 +883,7 @@ export async function reconcileSchedule(
 
   // An Ended schedule must not leave an upcoming appointment behind.
   if (schedule.status === SCHEDULE_STATUS.ENDED) {
-    for (const row of canonical.filter((r) => isOpen(r) && r.paymentStatus === PAYMENT_STATUS.SCHEDULED)) {
+    for (const row of canonical.filter(isUnbilledUpcoming)) {
       try {
         await finishCancellation(deps, row.bookingId, now);
       } catch (error) {
@@ -821,20 +893,32 @@ export async function reconcileSchedule(
     return { ...result, generation: { outcome: "skipped", reason: "schedule-ended" } };
   }
 
-  // Missing completion: alert the owner rather than stalling silently.
-  const open = canonical.find(isOpen);
-  if (open) {
-    const end = serviceEndOf(open);
-    if (end && now.getTime() > end.getTime() + COMPLETION_MISSING_GRACE_MS) {
-      result.completionMissing = true;
+  // A visit whose date passed but whose payment never got going: alert the
+  // owner instead of waiting silently. (Retrying and failed payments are
+  // handled by the payment retry cadence and the pause-and-alert path.)
+  const todayKey = localDateKey(now, schedule.timezone || "America/New_York");
+  const acknowledged = await acknowledgedFailureIds(deps, canonical);
+  const stuck = canonical.find(
+    (r) =>
+      isOpen(r, todayKey, acknowledged) &&
+      r.serviceDate !== "" &&
+      r.serviceDate < todayKey &&
+      (r.paymentStatus === PAYMENT_STATUS.SCHEDULED ||
+        r.paymentStatus === PAYMENT_STATUS.PROCESSING ||
+        r.paymentStatus === PAYMENT_STATUS.REQUIRES_ACTION),
+  );
+  if (stuck) {
+    const end = serviceEndOf(stuck);
+    if (end && now.getTime() > end.getTime() + PAYMENT_NOT_CONFIRMED_GRACE_MS) {
+      result.paymentNotConfirmed = true;
       await flagForReview(
         deps,
         schedule,
         {
-          code: REVIEW_REASON.COMPLETION_MISSING,
-          headline: `Mark this cleaning complete to schedule the next one (${open.serviceDate})`,
-          detail: `Appointment ${open.bookingId} (#${open.occurrenceNumber}) was scheduled for ${open.serviceDate}, but is not marked complete, so the next recurring appointment has not been created. Mark it complete — or mark it unperformed if the visit did not happen.`,
-          occurrenceNumber: open.occurrenceNumber,
+          code: REVIEW_REASON.PAYMENT_NOT_CONFIRMED,
+          headline: `Payment not confirmed for the ${stuck.serviceDate} cleaning`,
+          detail: `Appointment ${stuck.bookingId} (#${stuck.occurrenceNumber}) was on ${stuck.serviceDate}, but its payment is still "${stuck.paymentStatus}", so the next recurring appointment has not been created. The next one is created automatically as soon as the payment succeeds. If the visit did not happen, mark it unperformed (before the charge) or end the schedule.`,
+          occurrenceNumber: stuck.occurrenceNumber,
         },
         { now },
       );
@@ -898,7 +982,7 @@ async function endScheduleAndCancelUpcoming(
 
   const rows = await listRows(deps, scheduleId);
   const cancelled: Array<{ bookingId: string; result: CancelBookingResult }> = [];
-  for (const row of canonicalRows(rows).filter((r) => isOpen(r) && r.paymentStatus === PAYMENT_STATUS.SCHEDULED)) {
+  for (const row of canonicalRows(rows).filter(isUnbilledUpcoming)) {
     const result = await finishCancellation(deps, row.bookingId, now);
     cancelled.push({ bookingId: row.bookingId, result });
   }
@@ -948,7 +1032,7 @@ export async function skipNextOccurrence(scheduleId: string, deps: RecurringDeps
   if (!schedule) return { outcome: "schedule-not-found" };
   if (schedule.status === SCHEDULE_STATUS.ENDED) return { outcome: "not-applicable", message: "The schedule has ended." };
   const rows = await listRows(deps, scheduleId);
-  if (canonicalRows(rows).some(isOpen)) {
+  if ((await findOpenAppointments(deps, rows, schedule.timezone, now)).length > 0) {
     return { outcome: "not-applicable", message: "An appointment is already upcoming; there is nothing to skip." };
   }
   const skipped = Math.max(schedule.nextOccurrenceNumber, highestOccurrence(rows) + 1);
@@ -1093,10 +1177,10 @@ export async function convertExistingBookingToSchedule(
     detail: `Converted from existing booking ${record.bookingId} (${record.frequency}). Booked amount preserved at $${record.totalPrice}; ongoing per-appointment total $${schedule.recurringPriceTotal}. Customer confirmation: ${note}`.slice(0, 500),
   });
 
-  // If that booking has already been performed, the next appointment is due
-  // now — create it through the one creation path.
-  let generation: GenerationOutcome | undefined;
-  if (record.completedAt) generation = await generateNextOccurrence(schedule.scheduleId, deps, now);
+  // Converted schedules follow the same rule as new ones: if that booking has
+  // already been paid for and its date has passed, the next appointment is
+  // due now — through the one creation path (which waits otherwise).
+  const generation: GenerationOutcome | undefined = await generateNextOccurrence(schedule.scheduleId, deps, now);
   return {
     outcome: "converted",
     scheduleId: schedule.scheduleId,
@@ -1142,7 +1226,7 @@ export async function buildRecurringManageContext(
   if (active && deps.bookings.listScheduleBookings) {
     const rows = canonicalRows(await deps.bookings.listScheduleBookings(schedule.scheduleId));
     const target = rows
-      .filter((r) => isOpen(r) && r.paymentStatus === PAYMENT_STATUS.SCHEDULED)
+      .filter(isUnbilledUpcoming)
       .sort((a, b) => a.occurrenceNumber - b.occurrenceNumber)[0];
     if (target) {
       const full = target.bookingId === record.bookingId ? record : await deps.bookings.getFullBookingRecord(target.bookingId);

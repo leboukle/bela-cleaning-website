@@ -14,6 +14,7 @@ import { SCHEDULE_COLUMNS, SCHEDULE_EVENT_COLUMNS } from "./recurringScheduleSch
 import { sampleBookingRecord } from "./testFixtures";
 
 const NOW = new Date("2026-10-13T15:00:00.000Z");
+const LATER = new Date("2026-11-03T15:00:00.000Z"); // after the initial visit's date (2026-11-02)
 let h: Harness;
 
 const noAssignments = { getLatestAssignmentForBooking: vi.fn(async () => null) };
@@ -80,13 +81,13 @@ describe("setup check", () => {
 });
 
 describe("owner dashboard", () => {
-  async function build() {
+  async function build(now: Date = LATER) {
     return buildOwnerDashboard({
       bookings: h.bookings,
       schedules: h.schedules,
       assignments: noAssignments,
       timezone: "America/New_York",
-      now: NOW,
+      now,
     });
   }
 
@@ -109,25 +110,26 @@ describe("owner dashboard", () => {
       bookingId: initial.bookingId,
       occurrenceNumber: 1,
       assignment: "Not assigned",
-      canMarkComplete: true,
       canMarkUnperformed: true,
     });
+    expect(card.appointment?.statusNote).toMatch(/Charged automatically one hour after the visit ends/);
   });
 
   it("an appointment whose charge was attempted can no longer be marked unperformed", async () => {
     const initial = await seedInitialAppointment(h);
     h.bookings.byId(initial.bookingId).paymentStatus = "Paid";
-    const card = (await build()).schedules[0];
+    // On the visit's own date: paid, but the date has not passed, so it is still the upcoming appointment.
+    const card = (await build(new Date("2026-11-02T22:00:00.000Z"))).schedules[0];
     expect(card.appointment?.canMarkUnperformed).toBe(false);
-    expect(card.appointment?.canMarkComplete).toBe(true);
+    expect(card.appointment?.statusNote).toMatch(/^Paid\./);
   });
 
   it("surfaces a blocked schedule first, with plain-English help and the skip action", async () => {
     const initial = await seedInitialAppointment(h);
     await seedInitialAppointment(h, { bookingId: "BELA-20261103-OTHERB", recurringScheduleId: "BELA-20261103-OTHERB" });
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     vi.mocked(checkExactTimeAvailability).mockResolvedValue({ available: false, reason: "blackout", maxCapacity: 2, peakConcurrentCount: 0 });
-    await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
 
     const dash = await build();
     expect(dash.schedules[0]).toMatchObject({ scheduleId: initial.bookingId, needsAttention: true, reviewReason: "blackout", canSkip: true });
@@ -140,8 +142,7 @@ describe("owner dashboard", () => {
   it("shows a paused schedule with Resume available", async () => {
     const initial = await seedInitialAppointment(h);
     h.bookings.byId(initial.bookingId).paymentStatus = "Final Failure";
-    h.bookings.complete(initial.bookingId);
-    await reconcileSchedule(initial.bookingId, h.deps, NOW);
+    await reconcileSchedule(initial.bookingId, h.deps, LATER);
     const card = (await build()).schedules[0];
     expect(card).toMatchObject({ status: "Paused", needsAttention: true, canResume: true, canEnd: true });
   });

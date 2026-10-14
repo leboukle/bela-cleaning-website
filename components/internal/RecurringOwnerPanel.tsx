@@ -143,7 +143,8 @@ export default function RecurringOwnerPanel({ setup, setupError, dashboard, dash
           <section className={card}>
             <h2 className="font-heading text-lg text-[#3B2F27]">3. Active recurring schedules ({active.length})</h2>
             <p className="mt-1 text-sm text-[#6B5B4C]">
-              Each schedule has at most one upcoming appointment. Marking it complete creates the next one.
+              Each schedule has at most one upcoming appointment. The next one is created automatically the day after a
+              visit, once its payment has succeeded — no manual completion is needed.
             </p>
             {active.length === 0 && <p className="mt-2 text-sm text-[#6B5B4C]">No active schedules.</p>}
             <div className="mt-3 space-y-4">
@@ -162,7 +163,7 @@ export default function RecurringOwnerPanel({ setup, setupError, dashboard, dash
               <ul className="mt-3 space-y-1 text-sm text-[#6B5B4C]">
                 {ended.map((s) => (
                   <li key={s.scheduleId}>
-                    {s.customerName} — {s.frequency} — {s.scheduleId} ({s.completedCount} completed)
+                    {s.customerName} — {s.frequency} — {s.scheduleId} ({s.completedCount} paid)
                   </li>
                 ))}
               </ul>
@@ -178,12 +179,6 @@ type RunFn = (key: string, url: string, init: RequestInit | undefined, reloadOnS
 
 function ScheduleCard({ s, busy, run, highlight = false }: { s: OwnerScheduleCard; busy: string | null; run: RunFn; highlight?: boolean }) {
   const a = s.appointment;
-  const confirmFuture = (verb: string) =>
-    !a?.isFuture ||
-    window.confirm(
-      `This visit is on ${a.serviceDateLabel}, which hasn't happened yet. ${verb} it anyway? (Use this only for testing or if the visit has actually taken place.)`,
-    );
-
   return (
     <div className={`rounded-xl border p-4 ${highlight ? "border-[#E3C77E] bg-[#FBF3DC]" : "border-[#E7DECE] bg-[#FBF7EF]"}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -194,7 +189,7 @@ function ScheduleCard({ s, busy, run, highlight = false }: { s: OwnerScheduleCar
           {s.frequency} · {s.status} · full {formatCurrency(s.fullPriceTotal)} / recurring {formatCurrency(s.recurringPriceTotal)}
         </p>
       </div>
-      <p className="mt-1 text-xs text-[#8A7A6B]">Schedule {s.scheduleId} · {s.completedCount} completed</p>
+      <p className="mt-1 text-xs text-[#8A7A6B]">Schedule {s.scheduleId} · {s.completedCount} paid</p>
 
       {s.reviewReason && (
         <p className="mt-3 text-sm text-[#8A6A1E]">
@@ -212,18 +207,8 @@ function ScheduleCard({ s, busy, run, highlight = false }: { s: OwnerScheduleCar
             · {a.paymentStatus}
           </p>
           <p className="text-xs text-[#6B5B4C]">Booking {a.bookingId} · Cleaner: {a.assignment}</p>
+          <p className="mt-1 text-xs text-[#6B5B4C]">{a.statusNote}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={btnPrimary}
-              disabled={busy !== null || !a.canMarkComplete}
-              onClick={() =>
-                confirmFuture("Mark complete") &&
-                run(`complete:${a.bookingId}`, `/api/internal/bookings/${encodeURIComponent(a.bookingId)}/complete`, undefined)
-              }
-            >
-              {busy === `complete:${a.bookingId}` ? "Working…" : "Mark complete"}
-            </button>
             <button
               type="button"
               className={btnDanger}

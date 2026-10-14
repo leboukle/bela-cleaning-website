@@ -56,8 +56,8 @@ as the assign-cleaner page; a link on that page leads here).
 
 | Control | Where | Notes |
 |---|---|---|
-| Mark complete | **Recurring cleanings → 3. Active recurring schedules → [the schedule's appointment] → Mark complete**. Also on `/internal/assign-cleaner` ("Mark a booking complete"). | A future visit asks for confirmation first. Creates the next appointment immediately. |
-| Mark unperformed | Same appointment box → **Mark unperformed** | Disabled once the charge has been attempted (refund in Stripe instead). Closes it as no-charge and moves the schedule on. |
+| Mark complete | **Not needed for recurring cleanings.** The next appointment is created automatically once a visit's date has passed and its payment succeeded. (The button on `/internal/assign-cleaner` still exists for the cleaner payout statement.) | — |
+| Mark unperformed | Appointment box → **Mark unperformed** | Disabled once the charge has been attempted (refund in Stripe instead). Closes it as no-charge and moves the schedule on. |
 | Review a blocked schedule | **2. Needs your attention** | Plain-English reason + what to do. Also emailed once. |
 | Skip an occurrence | The schedule card → **Skip this occurrence** | Only when no appointment is upcoming (i.e. blocked). The series continues from the following regular date. |
 | Resume | The schedule card → **Resume schedule** | Only for a paused schedule (payment failure). |
@@ -115,12 +115,21 @@ Today is **Wed 14 Oct 2026**. Bookings need **120 hours (5 days)** notice, so
 the earliest allowed is Mon 19 Oct at the current time of day; use
 **Tue 20 Oct 2026, 9:00 AM** (every date below is relative to that).
 
-**Safety conditions** (marking a *future* visit complete is only safe because):
-Stripe on Preview is in **test mode** (`pk_test_…`), so any charge uses a test
-card; the customer is **your own email**; and **no real cleaner** is assigned
-(a cleaner's payout statement is sent when a visit is marked complete — assign
-nobody, or a test cleaner with your own email). If any condition is not true,
-don't mark future visits complete.
+**How the next appointment is created (so you know what you're testing):** a
+visit qualifies when (1) its *Service Date* has passed in New York time **and**
+(2) its *Payment Status* is **Paid** (written automatically by Stripe's test
+webhook). Nothing is marked complete by hand. Stripe on Preview is in **test
+mode** (`pk_test_…`), so test-card charges are safe. The customer must be your
+own email address, and don't assign a real cleaner.
+
+**"Fast-forward a test visit"** (used below; you can't wait a real week): in the
+**Bookings** tab, on the visit's row, edit **two cells**:
+*Service Date* → **yesterday** (`2026-10-14` format) and *Scheduled Charge At* →
+a time **one hour ago in UTC** (e.g. `2026-10-15T13:00:00.000Z`). Within 15
+minutes the payment scheduler charges the test card, Stripe's webhook sets
+*Payment Status* = **Paid**, and the next recurring check (≤30 min, or press
+**Run recurring check now**) creates the next appointment. The schedule's
+*Anchor Date* is not touched, so the series stays on its original dates.
 
 Use your own email and Stripe test card `4242 4242 4242 4242`.
 
@@ -129,14 +138,16 @@ Use your own email and Stripe test card `4242 4242 4242 4242`.
 | 0 | Setup check ✓ everywhere; press **Test the sheet's duplicate protection**. | "Passed". |
 | 1 | Book **Weekly** on Tue 20 Oct, 9:00 AM, any size. On Review write down **First cleaning total = A** and **"Estimated total for later cleanings = B each"**. Try submitting *without* ticking the recurring consent. | Submit stays disabled until the consent box is ticked. |
 | 2 | Submit. Open the Bookings tab and the Recurring Schedules tab. | Confirmation says "First cleaning total A". One Bookings row: *Occurrence Number* 1, *Frequency Discount* 0, *Total Price* = A. One schedule row: *Status* Active, **AG (Full Price Total) = A**, **AH (Recurring Price Total) = B**, *Consent Version* `recurring-consent-v2`. |
-| 3 | `/internal/recurring` → the schedule shows appointment #1, Tue 20 Oct. Press **Mark complete** (confirm the future-date prompt). | New Bookings row: *Occurrence Number* 2, **Service Date 2026-10-27**, *Total Price* = **B**, same Stripe Customer/PaymentMethod IDs, *Payment Status* Scheduled. Page shows appointment #2. |
-| 4 | Check email + assignment list. | You receive **one** "Your next cleaning is scheduled" email (with Cancel-this-only and Stop links) and **one** owner "Needs assignment" email. `/internal/assign-cleaner` lists the new booking. **Don't assign a real cleaner.** |
-| 5 | **Repeated requests:** press **Mark complete** on #1 again (use `/internal/assign-cleaner` → mark complete with its Booking ID), then press **Run recurring check now** three times. | Still **exactly one** non-cancelled future row for occurrence 2 (filter Bookings by *Recurring Schedule ID*); no second email. |
-| 6 | **Cancel only one:** open the Manage link from the email → **Cancel this cleaning only**. Read the confirmation (names 27 Oct, says the series continues, "free"). Confirm. | Row for 27 Oct: *Cancelled / Cancelled — No Charge*. A new row: *Occurrence Number* 3, **2026-11-03**, *Total Price* B. Schedule still **Active**. |
-| 7 | **Blackout blocks generation:** in the **Blackout Dates** tab add a row: `2026-11-10`, reason `Test`, `TRUE`. Then on `/internal/recurring` **Mark complete** appointment #3 (3 Nov). | Nothing new is created. Schedule appears under **2. Needs your attention** with reason *blackout*; you get **one** owner email; Bookings has no row for occurrence 4. Pressing **Run recurring check now** several times sends no more emails. |
-| 8 | Remove (or set to FALSE) the blackout row; press **Run recurring check now**. | Occurrence 4 is created for **2026-11-10**; attention box clears. |
-| 9 | **Unperformed:** on appointment #4 press **Mark unperformed** and confirm. | Row: *Cancelled*, *Payment Status* **Cancelled — No Charge**, *Stripe Payment Intent ID* **blank**, and it is never charged (payment scheduler skips cancelled). A new occurrence 5 (2026-11-17) is created. |
-| 10 | **Stop:** open occurrence 5's Manage link → **Stop recurring cleanings**. | Confirmation shows two separate blocks: "1. Ending… Stopping has no fee" and "2. Your upcoming cleaning… (No fee — more than 24 hours away)". Confirm: schedule *Status* **Ended**, the 17 Nov row cancelled, and **Run recurring check now** creates nothing more. |
+| 3 | **Not yet:** press **Run recurring check now** twice. | Nothing new is created: the visit is in the future and unpaid. The page says "Charged automatically one hour after the visit ends…". |
+| 4 | **Fast-forward** visit #1 (edit the two cells). Wait for *Payment Status* = **Paid** (≤ ~20 min). Don't press anything yet — then press **Run recurring check now**. | New row: *Occurrence Number* 2, **Service Date 2026-10-27**, *Total Price* = **B**, same Stripe Customer/PaymentMethod IDs, *Payment Status* Scheduled. *Completed At* on #1 is still **empty** — that is fine. |
+| 5 | Check email + assignment list. | **One** "Your next cleaning is scheduled" email (with Cancel-this-only and Stop links) and **one** owner "Needs assignment" email. `/internal/assign-cleaner` lists the new booking. **Don't assign a real cleaner.** |
+| 6 | **Repeated requests:** press **Run recurring check now** three more times. | Still **exactly one** non-cancelled future row for occurrence 2 (filter Bookings by *Recurring Schedule ID*); no second email. |
+| 7 | **Cancel only one:** Manage link from the email → **Cancel this cleaning only**. Read the confirmation (names 27 Oct, says the series continues, "free"). Confirm. | Row for 27 Oct: *Cancelled / Cancelled — No Charge*. A new row: *Occurrence Number* 3, **2026-11-03**, *Total Price* B (the paid first visit earned the discount). Schedule still **Active**. |
+| 8 | **Blackout blocks generation:** add a row to **Blackout Dates**: `2026-11-10`, reason `Test`, `TRUE`. Then **fast-forward** visit #3 (3 Nov) and wait for it to be Paid; press **Run recurring check now**. | Nothing new is created for 10 Nov. The schedule appears under **2. Needs your attention** with reason *blackout*; **one** owner email; Bookings has no row for occurrence 4. More presses send no more emails. |
+| 9 | Remove (or set FALSE) the blackout row; press **Run recurring check now**. | Occurrence 4 is created for **2026-11-10**; attention box clears. |
+| 10 | **Unperformed:** on appointment #4 press **Mark unperformed** and confirm. | Row: *Cancelled*, *Payment Status* **Cancelled — No Charge**, *Stripe Payment Intent ID* **blank**; it is never charged. A new occurrence 5 (2026-11-17) is created at the recurring amount (the discount was already earned by the paid visit #1). |
+| 11 | **Payment retry / failure (optional):** on the current visit, fast-forward it as above, then edit its *Payment Status* cell to **Retry Scheduled** and press **Run recurring check now**. | The schedule waits; no new appointment; no alert. Setting it back to **Paid** creates the next one on the next run. Setting **Final Failure** pauses the schedule and emails you once; **Resume schedule** continues (the failed visit earns no discount). |
+| 12 | **Stop:** open occurrence 5's Manage link → **Stop recurring cleanings**. | Confirmation shows two separate blocks: "1. Ending… Stopping has no fee" and "2. Your upcoming cleaning… (No fee — more than 24 hours away)". Confirm: schedule *Status* **Ended**, the 17 Nov row cancelled, and **Run recurring check now** creates nothing more. |
 
 Optionally also test a *late* stop: book a visit ≥5 days away, then edit its
 *Service Date* in the sheet to tomorrow before opening Stop — the page must
@@ -160,7 +171,7 @@ weekly / every-other-week / monthly, stored on the schedule):
 
 **Shown beside the first-cleaning total:**
 
-> Your first cleaning is charged at the regular price. After it is completed,
+> Your first cleaning is charged at the regular price. After your first cleaning,
 > we schedule your next cleaning automatically and apply your recurring
 > discount to it and to every later cleaning. Each cleaning is charged to your
 > saved card one hour after it ends.

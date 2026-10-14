@@ -52,7 +52,7 @@ describe("Recurring Schedules worksheet contract", () => {
 
 describe("apps-script/recurringScheduler.gs stays in step with the sheet contracts", () => {
   it("looks up the Bookings columns it reads by the exact header names", () => {
-    for (const header of ["Booking ID", "Booking Status", "Recurring Schedule ID", "Occurrence Number", "Completed At"]) {
+    for (const header of ["Booking ID", "Booking Status", "Recurring Schedule ID", "Occurrence Number", "Payment Status"]) {
       expect(BOOKINGS_COLUMNS).toContain(header);
       expect(SCRIPT).toContain(`"${header}"`);
     }

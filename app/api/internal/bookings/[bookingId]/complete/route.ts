@@ -48,10 +48,10 @@ export async function POST(request: Request, context: { params: Promise<{ bookin
 
   try {
     const result = await markBookingComplete(bookingId, bookingRepository);
-    // Completing an appointment of a recurring schedule creates its next
-    // appointment. Also runs for "already-completed" so that a repeated
-    // request (or one that crashed after the completion write) still
-    // converges — generation is idempotent.
+    // Marking complete is NOT what generates a recurring schedule's next
+    // appointment (that is the visit date having passed plus a confirmed
+    // payment). This call is a harmless, idempotent nudge: it re-evaluates
+    // the schedule and creates the next appointment only if it is already due.
     if (result.outcome === "completed" || result.outcome === "already-completed") {
       await advanceScheduleAfterChange(bookingId);
     }

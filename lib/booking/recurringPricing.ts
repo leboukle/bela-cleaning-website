@@ -71,7 +71,7 @@ export function getTotalLabel(kind: QuoteKind): string {
  * already carries its discount).
  */
 export const FIRST_CLEANING_NOTICE =
-  "Your first cleaning is charged at the regular price. After it is completed, we schedule your next cleaning automatically and apply your recurring discount to it and to every later cleaning. Each cleaning is charged to your saved card one hour after it ends.";
+  "Your first cleaning is charged at the regular price. After your first cleaning, we schedule your next cleaning automatically and apply your recurring discount to it and to every later cleaning. Each cleaning is charged to your saved card one hour after it ends.";
 
 /**
  * What a recurring customer can do afterwards; shown beside the notice.

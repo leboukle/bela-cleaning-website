@@ -42,6 +42,10 @@ const mockedRetrieve = vi.mocked(retrievePaymentIntent);
 
 const SETTINGS = { minimumLeadDays: 7, defaultDailyCapacity: 2, timezone: "America/New_York", schemaVersion: 1 };
 const NOW = new Date("2026-10-13T15:00:00.000Z");
+// After the initial visit's date (2026-11-02) and before occurrence 2's (2026-11-09).
+const LATER = new Date("2026-11-03T15:00:00.000Z");
+// After every date the cadence chain tests walk through.
+const FAR = new Date("2029-01-01T12:00:00.000Z");
 
 const AVAILABLE: ExactTimeAvailabilityResult = { available: true, reason: null, maxCapacity: 2, peakConcurrentCount: 0 };
 function unavailable(reason: "blackout" | "at-capacity" | "too-soon"): ExactTimeAvailabilityResult {
@@ -60,10 +64,10 @@ async function setup(overrides: Parameters<typeof seedInitialAppointment>[1] = {
   return initial;
 }
 
-/** Marks an appointment complete and advances exactly as the internal route does. */
+/** The visit's payment succeeded and its date passed; the next scheduler run generates. */
 async function completeAndAdvance(bookingId: string) {
-  h.bookings.complete(bookingId);
-  return afterAppointmentChanged(bookingId, h.deps, NOW);
+  h.bookings.pay(bookingId);
+  return afterAppointmentChanged(bookingId, h.deps, FAR);
 }
 
 function createdBookingId(result: AppointmentChangeOutcome): string {
@@ -142,9 +146,9 @@ describe("schedule creation", () => {
     );
     for (const id of ["BELA-LEGACY-1", "BELA-PREVIEW-1"]) {
       expect((await repairMissingSchedule(id, h.deps)).repaired).toBe(false);
-      const reconciled = await reconcileSchedule(id, h.deps, NOW);
+      const reconciled = await reconcileSchedule(id, h.deps, LATER);
       expect(reconciled.generation).toEqual({ outcome: "skipped", reason: "no-schedule" });
-      expect((await afterAppointmentChanged(id, h.deps, NOW)).outcome).toBe("not-recurring");
+      expect((await afterAppointmentChanged(id, h.deps, LATER)).outcome).toBe("not-recurring");
     }
     expect(h.schedules.schedules).toHaveLength(0);
     expect(h.bookings.rows).toHaveLength(2); // nothing created
@@ -212,10 +216,10 @@ describe("generation after completion", () => {
 
   it("keeps at most one upcoming appointment: repeated completion requests create nothing more", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    const first = await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
-    const second = await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
-    const third = await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    h.bookings.pay(initial.bookingId);
+    const first = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
+    const second = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
+    const third = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
     expect(first.outcome).toBe("created");
     expect(second.outcome).toBe("has-open-appointment");
     expect(third.outcome).toBe("has-open-appointment");
@@ -226,7 +230,7 @@ describe("generation after completion", () => {
 
   it("never generates before the current appointment is completed or cancelled", async () => {
     await setup();
-    const result = await generateNextOccurrence(scheduleId, h.deps, NOW);
+    const result = await generateNextOccurrence(scheduleId, h.deps, LATER);
     expect(result.outcome).toBe("has-open-appointment");
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
   });
@@ -245,8 +249,7 @@ describe("generation after completion", () => {
     h.bookings.byId(initial.bookingId).paymentStatus = "Paid";
     h.bookings.byId(initial.bookingId).stripePaymentIntentId = "pi_initial_paid";
     const before = { ...h.bookings.byId(initial.bookingId) };
-    h.bookings.complete(initial.bookingId);
-    await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
     const after = h.bookings.byId(initial.bookingId);
     expect({ ...after, completedAt: "" }).toEqual({ ...before, completedAt: "" });
     expect(after.totalPrice).toBe(165);
@@ -262,7 +265,7 @@ describe("first performed cleaning stays full price", () => {
     await cancelBookingByToken(INITIAL_RAW_TOKEN, h.bookings, h.notifications, NOW);
     expect(h.bookings.byId(initial.bookingId).bookingStatus).toBe("Cancelled");
     // …and "Cancel this cleaning only" advances the schedule.
-    const result = await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    const result = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
     const next = h.bookings.byId(createdBookingId(result));
     expect(next.occurrenceNumber).toBe(2);
     expect(next.serviceDate).toBe("2026-11-09"); // next REGULAR occurrence from the anchor
@@ -279,7 +282,7 @@ describe("first performed cleaning stays full price", () => {
     const initial = await setup();
     const marked = await markBookingUnperformed(initial.bookingId, h.bookings, NOW);
     expect(marked.outcome).toBe("marked-unperformed");
-    const next = h.bookings.byId(createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW)));
+    const next = h.bookings.byId(createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER)));
     expect(next.totalPrice).toBe(FULL);
     expect(next.frequencyDiscount).toBe(0);
   });
@@ -358,7 +361,7 @@ describe("cadence anchoring", () => {
 
     // Cancel one, keep the schedule: the next REGULAR occurrence follows.
     await cancelBookingByToken(await tokenFor(third.bookingId), h.bookings, h.notifications, NOW);
-    const fourth = h.bookings.byId(createdBookingId(await afterAppointmentChanged(third.bookingId, h.deps, NOW)));
+    const fourth = h.bookings.byId(createdBookingId(await afterAppointmentChanged(third.bookingId, h.deps, FAR)));
     expect(fourth.occurrenceNumber).toBe(4);
     expect(fourth.serviceDate).toBe("2026-11-23");
   });
@@ -376,11 +379,11 @@ describe("owner review instead of silent shifting", () => {
   it("a blacked-out date creates nothing, flags the schedule and alerts the owner exactly once", async () => {
     const initial = await setup();
     mockedAvailability.mockResolvedValue(unavailable("blackout"));
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
 
-    const first = await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
-    const retry1 = await reconcileSchedule(scheduleId, h.deps, NOW);
-    const retry2 = await reconcileSchedule(scheduleId, h.deps, NOW);
+    const first = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
+    const retry1 = await reconcileSchedule(scheduleId, h.deps, LATER);
+    const retry2 = await reconcileSchedule(scheduleId, h.deps, LATER);
 
     expect(first).toMatchObject({ outcome: "needs-review", reason: "blackout", occurrenceNumber: 2, serviceDate: "2026-11-09" });
     expect(retry1.generation).toMatchObject({ outcome: "needs-review" });
@@ -393,11 +396,11 @@ describe("owner review instead of silent shifting", () => {
   it("resumes through the same creation path once the blackout is resolved", async () => {
     const initial = await setup();
     mockedAvailability.mockResolvedValue(unavailable("blackout"));
-    h.bookings.complete(initial.bookingId);
-    await reconcileSchedule(scheduleId, h.deps, NOW);
+    h.bookings.pay(initial.bookingId);
+    await reconcileSchedule(scheduleId, h.deps, LATER);
 
     mockedAvailability.mockResolvedValue(AVAILABLE); // owner removed the blackout row
-    const resumed = await reconcileSchedule(scheduleId, h.deps, NOW);
+    const resumed = await reconcileSchedule(scheduleId, h.deps, LATER);
     const bookingId = createdBookingId(resumed.generation as never);
     expect(h.bookings.byId(bookingId)).toMatchObject({ occurrenceNumber: 2, serviceDate: "2026-11-09", totalPrice: WEEKLY });
     expect(h.schedules.get(scheduleId).reviewReason).toBe("");
@@ -405,24 +408,24 @@ describe("owner review instead of silent shifting", () => {
 
   it("flags a capacity-full date and a too-soon date without bypassing the availability rules", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     mockedAvailability.mockResolvedValue(unavailable("at-capacity"));
-    expect(await generateNextOccurrence(scheduleId, h.deps, NOW)).toMatchObject({ outcome: "needs-review", reason: "unavailable" });
+    expect(await generateNextOccurrence(scheduleId, h.deps, LATER)).toMatchObject({ outcome: "needs-review", reason: "unavailable" });
     mockedAvailability.mockResolvedValue(unavailable("too-soon"));
-    expect(await generateNextOccurrence(scheduleId, h.deps, NOW)).toMatchObject({ outcome: "needs-review", reason: "too-soon" });
+    expect(await generateNextOccurrence(scheduleId, h.deps, LATER)).toMatchObject({ outcome: "needs-review", reason: "too-soon" });
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
     // The rule it asked about is the standard one: same date, time and duration as any booking.
-    expect(mockedAvailability).toHaveBeenLastCalledWith("2026-11-09", "09:00", 240, NOW);
+    expect(mockedAvailability).toHaveBeenLastCalledWith("2026-11-09", "09:00", 240, LATER);
   });
 
   it("owner can skip a blocked occurrence: the series continues from the next regular date; the anchor never moves", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     mockedAvailability.mockImplementation(async (date: string) => (date === "2026-11-09" ? unavailable("blackout") : AVAILABLE));
-    await generateNextOccurrence(scheduleId, h.deps, NOW);
+    await generateNextOccurrence(scheduleId, h.deps, LATER);
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
 
-    const skipped = await skipNextOccurrence(scheduleId, h.deps, NOW);
+    const skipped = await skipNextOccurrence(scheduleId, h.deps, LATER);
     expect(skipped.outcome).toBe("done");
     const rows = h.bookings.forSchedule(scheduleId);
     expect(rows).toHaveLength(2);
@@ -431,30 +434,182 @@ describe("owner review instead of silent shifting", () => {
     expect(h.schedules.get(scheduleId).anchorDate).toBe("2026-11-02");
   });
 
-  it("alerts the owner (once) when a completed visit is never marked complete, instead of stalling silently or assuming completion", async () => {
-    await setup(); // visit 2026-11-02, ends 13:00 EST
-    const longAfter = new Date("2026-11-04T20:00:00.000Z"); // > 24h after the visit ended
+  it("alerts the owner (once) when a visit's payment is still unconfirmed two days after it, instead of stalling silently", async () => {
+    await setup(); // visit 2026-11-02, ends 13:00 EST; payment never attempted
+    const longAfter = new Date("2026-11-05T20:00:00.000Z"); // > 48h after the visit ended
     const r1 = await reconcileSchedule(scheduleId, h.deps, longAfter);
     const r2 = await reconcileSchedule(scheduleId, h.deps, longAfter);
-    expect(r1.completionMissing).toBe(true);
+    expect(r1.paymentNotConfirmed).toBe(true);
     expect(r1.generation).toMatchObject({ outcome: "has-open-appointment" });
-    expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1); // completion was NOT assumed
-    expect(r2.completionMissing).toBe(true);
+    expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1); // nothing was assumed
+    expect(r2.paymentNotConfirmed).toBe(true);
     expect(h.notifications.sendInternalRecurringScheduleAlert).toHaveBeenCalledTimes(1);
-    expect(h.schedules.get(scheduleId).reviewReason).toBe("completion-missing");
+    expect(h.schedules.get(scheduleId).reviewReason).toBe("payment-not-confirmed");
 
-    // Marking it complete resolves the review and creates the next appointment.
-    const bookingId = createdBookingId(await completeAndAdvance(h.bookings.rows[0].bookingId));
-    expect(h.bookings.byId(bookingId).occurrenceNumber).toBe(2);
+    // The payment finally succeeds: the very next run creates the appointment and clears the flag.
+    h.bookings.pay(h.bookings.rows[0].bookingId);
+    const resumed = await reconcileSchedule(scheduleId, h.deps, longAfter);
+    expect(resumed.generation).toMatchObject({ outcome: "created", occurrenceNumber: 2 });
     expect(h.schedules.get(scheduleId).reviewReason).toBe("");
   });
 
-  it("does not alert while the visit is still recent", async () => {
-    await setup();
-    const justAfter = new Date("2026-11-02T20:00:00.000Z"); // an hour after the visit ended
-    const r = await reconcileSchedule(scheduleId, h.deps, justAfter);
-    expect(r.completionMissing).toBeUndefined();
-    expect(h.notifications.sendInternalRecurringScheduleAlert).not.toHaveBeenCalled();
+  it("does not alert while the visit's payment is still within its normal window, or while it is retrying", async () => {
+    const initial = await setup();
+    const justAfter = new Date("2026-11-03T20:00:00.000Z");
+    expect((await reconcileSchedule(scheduleId, h.deps, justAfter)).paymentNotConfirmed).toBeUndefined();
+    for (const status of ["Processing", "Retry Scheduled"]) {
+      h.bookings.byId(initial.bookingId).paymentStatus = status;
+      const r = await reconcileSchedule(scheduleId, h.deps, new Date("2026-11-20T20:00:00.000Z"));
+      expect(r.generation).toMatchObject({ outcome: "has-open-appointment" });
+    }
+    // Retrying is working as designed: no "payment not confirmed" alert for Retry Scheduled.
+    expect(h.notifications.sendInternalRecurringScheduleAlert).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ code: "payment-not-confirmed", detail: expect.stringContaining("Retry Scheduled") }),
+    );
+  });
+});
+
+describe("generation trigger: service date passed AND payment confirmed (no manual completion)", () => {
+  const MONTHLY_OCT_20 = { frequency: "Monthly", serviceDate: "2026-10-20", scheduledChargeAt: "2026-10-20T19:00:00.000Z" };
+
+  it("the example: an Oct 20 monthly visit charged after it ended creates Nov 20 on the first run on Oct 21 (New York time)", async () => {
+    const initial = await setup(MONTHLY_OCT_20);
+    h.bookings.pay(initial.bookingId); // charged Oct 20 after the visit; Completed At was never set
+    expect(h.bookings.byId(initial.bookingId).completedAt).toBe("");
+
+    // Still Oct 20 in New York at 23:30 local: not yet.
+    const sameDay = await generateNextOccurrence(scheduleId, h.deps, new Date("2026-10-21T03:30:00.000Z"));
+    expect(sameDay.outcome).toBe("has-open-appointment");
+    expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
+
+    // 00:30 local on Oct 21 — the first scheduler run of the new day.
+    const next = await generateNextOccurrence(scheduleId, h.deps, new Date("2026-10-21T04:30:00.000Z"));
+    const row = h.bookings.byId(createdBookingId(next));
+    expect(row).toMatchObject({ occurrenceNumber: 2, serviceDate: "2026-11-20", frequency: "Monthly" });
+    // Paid service visit => the recurring discount applies (5% of the $130 base).
+    expect(row.frequencyDiscount).toBe(6.5);
+    expect(row.totalPrice).toBe(158.5);
+  });
+
+  it("delayed payment success: waits while pending, generates on the first run after success", async () => {
+    const initial = await setup(MONTHLY_OCT_20);
+    const day2 = new Date("2026-10-22T14:00:00.000Z"); // date long passed
+    expect((await generateNextOccurrence(scheduleId, h.deps, day2)).outcome).toBe("has-open-appointment");
+    h.bookings.byId(initial.bookingId).paymentStatus = "Processing";
+    expect((await generateNextOccurrence(scheduleId, h.deps, day2)).outcome).toBe("has-open-appointment");
+    expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
+
+    h.bookings.pay(initial.bookingId); // webhook confirms success
+    const created = await generateNextOccurrence(scheduleId, h.deps, new Date("2026-10-23T14:00:00.000Z"));
+    expect(created.outcome).toBe("created");
+  });
+
+  it.each(["Scheduled", "Processing", "Retry Scheduled", "Requires Action"])(
+    "a payment that is %s never qualifies, however late",
+    async (status) => {
+      const initial = await setup(MONTHLY_OCT_20);
+      h.bookings.byId(initial.bookingId).paymentStatus = status;
+      const result = await generateNextOccurrence(scheduleId, h.deps, new Date("2027-06-01T12:00:00.000Z"));
+      expect(result.outcome).toBe("has-open-appointment");
+      expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
+    },
+  );
+
+  it("retries: a failed first attempt then a successful retry generates exactly once", async () => {
+    const initial = await setup(MONTHLY_OCT_20);
+    const run = new Date("2026-10-22T14:00:00.000Z");
+    h.bookings.byId(initial.bookingId).paymentStatus = "Retry Scheduled";
+    expect((await generateNextOccurrence(scheduleId, h.deps, run)).outcome).toBe("has-open-appointment");
+    h.bookings.pay(initial.bookingId);
+    const results = await Promise.all([
+      generateNextOccurrence(scheduleId, h.deps, run),
+      generateNextOccurrence(scheduleId, h.deps, run),
+    ]);
+    expect(results.filter((r) => r.outcome === "created")).toHaveLength(1);
+    expect(h.bookings.open(scheduleId)).toHaveLength(1);
+  });
+
+  it("final failure follows the existing pause-and-alert behaviour and creates nothing", async () => {
+    const initial = await setup(MONTHLY_OCT_20);
+    h.bookings.byId(initial.bookingId).paymentStatus = "Final Failure";
+    const result = await generateNextOccurrence(scheduleId, h.deps, new Date("2026-10-30T12:00:00.000Z"));
+    expect(result).toEqual({ outcome: "paused", reason: "payment-final-failure" });
+    expect(h.schedules.get(scheduleId).status).toBe("Paused");
+    expect(h.notifications.sendInternalRecurringScheduleAlert).toHaveBeenCalledTimes(1);
+    expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
+  });
+
+  it("a cancellation-fee payment does not qualify: the late-cancelled visit advances the schedule but earns no discount", async () => {
+    const initial = await setup(MONTHLY_OCT_20);
+    // Cancelled inside 24h; the fee was charged successfully.
+    const row = h.bookings.byId(initial.bookingId);
+    row.bookingStatus = "Cancelled";
+    row.paymentStatus = "Cancellation Fee Paid";
+    row.cancellationFeeAmount = 82.5;
+    row.stripePaymentIntentId = "pi_fee_paid";
+
+    const next = h.bookings.byId(createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, new Date("2026-10-20T10:00:00.000Z"))));
+    expect(next).toMatchObject({ occurrenceNumber: 2, serviceDate: "2026-11-20", frequencyDiscount: 0, totalPrice: 165 });
+  });
+
+  it("a cancelled visit and an unperformed visit never qualify later visits for the discount", async () => {
+    const initial = await setup(MONTHLY_OCT_20);
+    await markBookingUnperformed(initial.bookingId, h.bookings, NOW);
+    const second = h.bookings.byId(createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER)));
+    expect(second.totalPrice).toBe(165);
+    // The second visit then really happens and is paid: only now is the discount earned.
+    h.bookings.pay(second.bookingId);
+    const third = h.bookings.byId(createdBookingId(await afterAppointmentChanged(second.bookingId, h.deps, FAR)));
+    expect(third.frequencyDiscount).toBe(6.5);
+  });
+
+  it("a paid visit on its own service date keeps the schedule waiting until the date has passed", async () => {
+    const initial = await setup(MONTHLY_OCT_20);
+    h.bookings.pay(initial.bookingId);
+    const sameDayEvening = new Date("2026-10-20T23:00:00.000Z"); // 19:00 EDT, Oct 20
+    expect((await generateNextOccurrence(scheduleId, h.deps, sameDayEvening)).outcome).toBe("has-open-appointment");
+  });
+
+  it("applies to converted schedules too: a paid, past booking generates; an unpaid one waits", async () => {
+    const make = (id: string, overrides: Parameters<typeof sampleBookingRecord>[0]) => {
+      const row = sampleBookingRecord({
+        bookingId: id,
+        frequency: "Weekly",
+        serviceDate: "2026-11-05",
+        arrivalWindow: "",
+        serviceStartTime: "10:00",
+        paymentStatus: "Scheduled",
+        subtotal: 150,
+        baseCleaningPrice: 130,
+        bathroomPrice: 20,
+        squareFootagePrice: 0,
+        cleaningTypePrice: 0,
+        extrasPrice: 0,
+        frequencyDiscount: 19.5,
+        totalPrice: 130.5,
+        chargeAmount: 130.5,
+        estimatedDurationMinutes: 210,
+        pricingPolicy: "",
+        recurringScheduleId: "",
+        occurrenceNumber: 0,
+        completedAt: "",
+        ...overrides,
+      });
+      h.bookings.rows.push(row);
+      return row;
+    };
+    const confirmed = { customerConfirmed: true, note: "Confirmed by email 2026-10-14" };
+
+    const paid = make("BELA-CONV-PAID", { paymentStatus: "Paid" });
+    const resultPaid = await convertExistingBookingToSchedule(paid.bookingId, confirmed, h.deps, new Date("2026-11-06T15:00:00.000Z"));
+    if (resultPaid.outcome !== "converted") throw new Error(JSON.stringify(resultPaid));
+    expect(resultPaid.generation).toMatchObject({ outcome: "created", occurrenceNumber: 2 });
+
+    const unpaid = make("BELA-CONV-UNPAID", {});
+    const resultUnpaid = await convertExistingBookingToSchedule(unpaid.bookingId, confirmed, h.deps, new Date("2026-11-06T15:00:00.000Z"));
+    if (resultUnpaid.outcome !== "converted") throw new Error(JSON.stringify(resultUnpaid));
+    expect(resultUnpaid.generation).toMatchObject({ outcome: "has-open-appointment" });
   });
 });
 
@@ -463,10 +618,9 @@ describe("payment failure", () => {
   it("pauses further generation on final payment failure and alerts the owner once", async () => {
     const initial = await setup();
     h.bookings.byId(initial.bookingId).paymentStatus = "Final Failure";
-    h.bookings.complete(initial.bookingId);
 
-    const first = await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
-    const again = await reconcileSchedule(scheduleId, h.deps, NOW);
+    const first = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
+    const again = await reconcileSchedule(scheduleId, h.deps, LATER);
     expect(first).toEqual({ outcome: "paused", reason: "payment-final-failure" });
     expect(again.generation).toMatchObject({ outcome: "skipped" });
     expect(h.schedules.get(scheduleId).status).toBe("Paused");
@@ -477,19 +631,21 @@ describe("payment failure", () => {
   it("resumes only when the owner resumes, acknowledging the failure so it does not immediately re-pause", async () => {
     const initial = await setup();
     h.bookings.byId(initial.bookingId).paymentStatus = "Final Failure";
-    h.bookings.complete(initial.bookingId);
-    await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
 
-    const resumed = await resumeSchedule(scheduleId, h.deps, NOW);
+    const resumed = await resumeSchedule(scheduleId, h.deps, LATER);
     expect(resumed.outcome).toBe("done");
     expect(h.schedules.get(scheduleId).status).toBe("Active");
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(2);
     expect(h.schedules.eventsOfType("schedule-resumed")).toHaveLength(1);
+    // A visit whose payment failed for good was never paid for: it earns no discount.
+    const resumedRow = h.bookings.forSchedule(scheduleId)[1];
+    expect(resumedRow).toMatchObject({ occurrenceNumber: 2, frequencyDiscount: 0, totalPrice: 165 });
   });
 
   it("resume is refused for a schedule that is not paused", async () => {
     await setup();
-    const result = await resumeSchedule(scheduleId, h.deps, NOW);
+    const result = await resumeSchedule(scheduleId, h.deps, LATER);
     expect(result.outcome).toBe("not-applicable");
   });
 });
@@ -500,8 +656,8 @@ describe("stopping recurrence", () => {
     const initial = await setup();
     h.bookings.byId(initial.bookingId).paymentStatus = "Paid";
     h.bookings.byId(initial.bookingId).stripePaymentIntentId = "pi_paid_1";
-    h.bookings.complete(initial.bookingId);
-    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+    h.bookings.pay(initial.bookingId);
+    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     const initialBefore = { ...h.bookings.byId(initial.bookingId) };
 
     const result = await stopRecurringByToken(INITIAL_RAW_TOKEN, h.deps, NOW);
@@ -521,20 +677,20 @@ describe("stopping recurrence", () => {
 
   it("no further appointments can be generated afterwards, by any trigger", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    h.bookings.pay(initial.bookingId);
+    await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
     await stopRecurringByToken(INITIAL_RAW_TOKEN, h.deps, NOW);
 
-    expect(await generateNextOccurrence(scheduleId, h.deps, NOW)).toMatchObject({ outcome: "schedule-not-active", status: "Ended" });
-    expect((await reconcileSchedule(scheduleId, h.deps, NOW)).generation).toMatchObject({ outcome: "skipped" });
-    expect((await skipNextOccurrence(scheduleId, h.deps, NOW)).outcome).toBe("not-applicable");
+    expect(await generateNextOccurrence(scheduleId, h.deps, LATER)).toMatchObject({ outcome: "schedule-not-active", status: "Ended" });
+    expect((await reconcileSchedule(scheduleId, h.deps, LATER)).generation).toMatchObject({ outcome: "skipped" });
+    expect((await skipNextOccurrence(scheduleId, h.deps, LATER)).outcome).toBe("not-applicable");
     expect(h.bookings.open(scheduleId)).toHaveLength(0);
   });
 
   it("is idempotent: stopping twice cancels nothing twice", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    h.bookings.pay(initial.bookingId);
+    await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
     const first = await stopRecurringByToken(INITIAL_RAW_TOKEN, h.deps, NOW);
     const second = await stopRecurringByToken(INITIAL_RAW_TOKEN, h.deps, NOW);
     expect(first.outcome).toBe("stopped");
@@ -545,8 +701,8 @@ describe("stopping recurrence", () => {
 
   it("applies the EXISTING late-cancellation fee when the upcoming appointment is within 24 hours", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+    h.bookings.pay(initial.bookingId);
+    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     // 2026-11-09 09:00 EST = 14:00Z. Stop at 05:00Z the same day: 9 hours out.
     const lateNow = new Date("2026-11-09T05:00:00.000Z");
     const result = await stopRecurringByToken(INITIAL_RAW_TOKEN, h.deps, lateNow);
@@ -560,8 +716,8 @@ describe("stopping recurrence", () => {
 
   it("works from the link of an older, already-completed appointment and cancels the schedule's actual upcoming one", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+    h.bookings.pay(initial.bookingId);
+    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     const result = await stopRecurringByToken(INITIAL_RAW_TOKEN, h.deps, NOW); // INITIAL token = the completed #1
     if (result.outcome !== "stopped") throw new Error(JSON.stringify(result));
     expect(result.cancelled.map((c) => c.bookingId)).toEqual([upcoming]);
@@ -578,8 +734,8 @@ describe("stopping recurrence", () => {
 
   it("an owner-ended schedule is handled exactly like a customer stop", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+    h.bookings.pay(initial.bookingId);
+    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     const result = await endScheduleByOwner(scheduleId, h.deps, NOW);
     expect(result.outcome).toBe("done");
     expect(h.bookings.byId(upcoming).bookingStatus).toBe("Cancelled");
@@ -588,13 +744,13 @@ describe("stopping recurrence", () => {
 
   it("reconciliation finishes an interrupted stop (schedule ended, upcoming appointment still open)", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+    h.bookings.pay(initial.bookingId);
+    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     // Simulate a crash right after the schedule was ended.
     h.schedules.get(scheduleId).status = "Ended";
     h.schedules.get(scheduleId).endedReason = "customer-stopped";
     expect(h.bookings.byId(upcoming).bookingStatus).not.toBe("Cancelled");
-    await reconcileSchedule(scheduleId, h.deps, NOW);
+    await reconcileSchedule(scheduleId, h.deps, LATER);
     expect(h.bookings.byId(upcoming).bookingStatus).toBe("Cancelled");
   });
 });
@@ -603,13 +759,13 @@ describe("stopping recurrence", () => {
 describe("reliability: concurrency and recovery", () => {
   it("simultaneous generation requests create exactly one appointment and one confirmation", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
 
     const results = await Promise.all([
-      generateNextOccurrence(scheduleId, h.deps, NOW),
-      generateNextOccurrence(scheduleId, h.deps, NOW),
-      generateNextOccurrence(scheduleId, h.deps, NOW),
-      generateNextOccurrence(scheduleId, h.deps, NOW),
+      generateNextOccurrence(scheduleId, h.deps, LATER),
+      generateNextOccurrence(scheduleId, h.deps, LATER),
+      generateNextOccurrence(scheduleId, h.deps, LATER),
+      generateNextOccurrence(scheduleId, h.deps, LATER),
     ]);
 
     expect(results.filter((r) => r.outcome === "created")).toHaveLength(1);
@@ -627,11 +783,11 @@ describe("reliability: concurrency and recovery", () => {
 
   it("completion racing reconciliation (two different triggers) still creates one appointment", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     await Promise.all([
-      afterAppointmentChanged(initial.bookingId, h.deps, NOW),
-      reconcileSchedule(scheduleId, h.deps, NOW),
-      reconcileSchedule(scheduleId, h.deps, NOW),
+      afterAppointmentChanged(initial.bookingId, h.deps, LATER),
+      reconcileSchedule(scheduleId, h.deps, LATER),
+      reconcileSchedule(scheduleId, h.deps, LATER),
     ]);
     expect(h.bookings.open(scheduleId)).toHaveLength(1);
     expect(h.bookings.forSchedule(scheduleId).filter((r) => r.bookingStatus !== "Cancelled" && r.occurrenceNumber === 2)).toHaveLength(1);
@@ -640,16 +796,16 @@ describe("reliability: concurrency and recovery", () => {
 
   it("crash after the booking append but before the schedule update: recovery adopts it without a duplicate, and sends one confirmation", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     h.schedules.failNextUpdates = 1; // the progress write after the append "crashes"
 
-    await expect(generateNextOccurrence(scheduleId, h.deps, NOW)).rejects.toThrow(/simulated crash/);
+    await expect(generateNextOccurrence(scheduleId, h.deps, LATER)).rejects.toThrow(/simulated crash/);
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(2); // the appointment exists…
     expect(h.schedules.get(scheduleId).nextOccurrenceNumber).toBe(2); // …but progress is stale
     expect(h.notifications.sendRecurringAppointmentScheduled).not.toHaveBeenCalled();
 
     // The reconciliation scheduler recovers (later: the 10-minute in-flight window has passed).
-    const later = new Date(NOW.getTime() + 15 * 60_000);
+    const later = new Date(LATER.getTime() + 15 * 60_000);
     const r1 = await reconcileSchedule(scheduleId, h.deps, later);
     const r2 = await reconcileSchedule(scheduleId, h.deps, later);
 
@@ -667,22 +823,22 @@ describe("reliability: concurrency and recovery", () => {
 
   it("does not recover a confirmation while creation may still be in flight", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     h.schedules.failNextUpdates = 1;
-    await expect(generateNextOccurrence(scheduleId, h.deps, NOW)).rejects.toThrow();
-    const stillFresh = new Date(NOW.getTime() + 60_000);
+    await expect(generateNextOccurrence(scheduleId, h.deps, LATER)).rejects.toThrow();
+    const stillFresh = new Date(LATER.getTime() + 60_000);
     const r = await reconcileSchedule(scheduleId, h.deps, stillFresh);
     expect(r.notificationsRecovered).toBe(0);
   });
 
   it("a failed Sheets write while appending creates nothing and a retry succeeds without duplicating", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     h.bookings.appendFailure = new Error("sheets unavailable");
-    await expect(generateNextOccurrence(scheduleId, h.deps, NOW)).rejects.toThrow(/sheets unavailable/);
+    await expect(generateNextOccurrence(scheduleId, h.deps, LATER)).rejects.toThrow(/sheets unavailable/);
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
     h.bookings.appendFailure = null;
-    const retry = await reconcileSchedule(scheduleId, h.deps, NOW);
+    const retry = await reconcileSchedule(scheduleId, h.deps, LATER);
     expect(retry.generation).toMatchObject({ outcome: "created" });
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(2);
   });
@@ -692,7 +848,7 @@ describe("reliability: concurrency and recovery", () => {
     const results = [];
     for (let i = 0; i < 3; i++) {
       await cancelBookingByToken(INITIAL_RAW_TOKEN, h.bookings, h.notifications, NOW);
-      results.push(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+      results.push(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     }
     expect(results.map((r) => r.outcome)).toEqual(["created", "has-open-appointment", "has-open-appointment"]);
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(2);
@@ -703,13 +859,13 @@ describe("reliability: concurrency and recovery", () => {
     "stopping the schedule while generation is in flight leaves no upcoming appointment (offset %i)",
     async (offset) => {
       const initial = await setup();
-      h.bookings.complete(initial.bookingId);
+      h.bookings.pay(initial.bookingId);
 
       const stop = (async () => {
         for (let i = 0; i < offset; i++) await Promise.resolve();
         return stopRecurringByToken(INITIAL_RAW_TOKEN, h.deps, NOW);
       })();
-      await Promise.all([generateNextOccurrence(scheduleId, h.deps, NOW), stop]);
+      await Promise.all([generateNextOccurrence(scheduleId, h.deps, LATER), stop]);
 
       expect(h.schedules.get(scheduleId).status).toBe("Ended");
       expect(h.bookings.open(scheduleId)).toHaveLength(0);
@@ -719,14 +875,14 @@ describe("reliability: concurrency and recovery", () => {
       }
       expect(mockedCharge).not.toHaveBeenCalled();
       // And nothing more is ever created.
-      await reconcileSchedule(scheduleId, h.deps, NOW);
+      await reconcileSchedule(scheduleId, h.deps, LATER);
       expect(h.bookings.open(scheduleId)).toHaveLength(0);
     },
   );
 
   it("a stop that fully completes while generation is paused before its append cannot be undone: the late appointment voids itself", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
 
     // Generation passes every pre-check, then is held right before its append.
     let release!: () => void;
@@ -741,7 +897,7 @@ describe("reliability: concurrency and recovery", () => {
       reachedAppend();
       await gate;
     };
-    const generation = generateNextOccurrence(scheduleId, h.deps, NOW);
+    const generation = generateNextOccurrence(scheduleId, h.deps, LATER);
     await atAppend;
 
     // The customer stops recurring cleanings, to completion, in the meantime.
@@ -763,11 +919,11 @@ describe("reliability: concurrency and recovery", () => {
 
   it("two concurrent recovery runs send the recovered confirmation once", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
+    h.bookings.pay(initial.bookingId);
     h.schedules.failNextUpdates = 1;
-    await expect(generateNextOccurrence(scheduleId, h.deps, NOW)).rejects.toThrow();
+    await expect(generateNextOccurrence(scheduleId, h.deps, LATER)).rejects.toThrow();
 
-    const later = new Date(NOW.getTime() + 15 * 60_000);
+    const later = new Date(LATER.getTime() + 15 * 60_000);
     const [a, b, c] = await Promise.all([
       reconcileSchedule(scheduleId, h.deps, later),
       reconcileSchedule(scheduleId, h.deps, later),
@@ -784,11 +940,11 @@ describe("reliability: concurrency and recovery", () => {
     const second = createdBookingId(await completeAndAdvance(initial.bookingId));
     // A duplicate that survived (e.g. its writer crashed before voiding itself).
     h.bookings.rows.push({ ...h.bookings.byId(second), bookingId: "BELA-DUPLICATE-1", manageBookingTokenHash: "" });
-    const r = await reconcileSchedule(scheduleId, h.deps, NOW);
+    const r = await reconcileSchedule(scheduleId, h.deps, LATER);
     expect(r.voidedDuplicates).toBe(1);
     expect(h.bookings.byId("BELA-DUPLICATE-1")).toMatchObject({ bookingStatus: "Cancelled", paymentStatus: "Cancelled — No Charge" });
     expect(h.bookings.byId(second).bookingStatus).toBe("Pending Payment");
-    expect((await reconcileSchedule(scheduleId, h.deps, NOW)).voidedDuplicates).toBe(0);
+    expect((await reconcileSchedule(scheduleId, h.deps, LATER)).voidedDuplicates).toBe(0);
   });
 });
 
@@ -847,7 +1003,7 @@ describe("explicitly unperformed visits", () => {
     const marked = await markBookingUnperformed(initial.bookingId, h.bookings, NOW);
     expect(marked.outcome).toBe("marked-unperformed");
     expect(h.bookings.byId(initial.bookingId)).toMatchObject({ bookingStatus: "Cancelled", paymentStatus: "Cancelled — No Charge", cancellationFeeAmount: 0 });
-    const next = await afterAppointmentChanged(initial.bookingId, h.deps, NOW);
+    const next = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
     expect(next.outcome).toBe("created");
   });
 
@@ -856,7 +1012,7 @@ describe("explicitly unperformed visits", () => {
     h.bookings.byId(initial.bookingId).paymentStatus = "Paid";
     expect((await markBookingUnperformed(initial.bookingId, h.bookings, NOW)).outcome).toBe("already-charged");
     h.bookings.byId(initial.bookingId).paymentStatus = "Scheduled";
-    h.bookings.complete(initial.bookingId);
+    h.bookings.complete(initial.bookingId); // legacy manual mark
     expect((await markBookingUnperformed(initial.bookingId, h.bookings, NOW)).outcome).toBe("already-completed");
     expect((await markBookingUnperformed("NOPE", h.bookings, NOW)).outcome).toBe("not-found");
   });
@@ -945,14 +1101,14 @@ describe("owner-assisted conversion of an existing booking", () => {
   it("continues through the normal path: completing it creates the next appointment at the agreed amount", async () => {
     const legacy = legacyBooking();
     await convertExistingBookingToSchedule(legacy.bookingId, confirmed, h.deps, NOW);
-    h.bookings.complete(legacy.bookingId);
-    const next = h.bookings.byId(createdBookingId(await afterAppointmentChanged(legacy.bookingId, h.deps, NOW)));
+    h.bookings.pay(legacy.bookingId);
+    const next = h.bookings.byId(createdBookingId(await afterAppointmentChanged(legacy.bookingId, h.deps, FAR)));
     expect(next).toMatchObject({ occurrenceNumber: 2, serviceDate: "2026-11-12", serviceStartTime: "10:00", totalPrice: 130.5, frequencyDiscount: 19.5 });
   });
 
-  it("an already-performed booking gets its next appointment immediately", async () => {
-    const legacy = legacyBooking({ completedAt: "11/05/2026, 2:00:00 PM EST" });
-    const result = await convertExistingBookingToSchedule(legacy.bookingId, confirmed, h.deps, NOW);
+  it("an already-paid, past booking gets its next appointment immediately", async () => {
+    const legacy = legacyBooking({ paymentStatus: "Paid" });
+    const result = await convertExistingBookingToSchedule(legacy.bookingId, confirmed, h.deps, FAR);
     if (result.outcome !== "converted") throw new Error(JSON.stringify(result));
     expect(result.generation).toMatchObject({ outcome: "created", occurrenceNumber: 2 });
   });
@@ -993,8 +1149,8 @@ describe("owner-assisted conversion of an existing booking", () => {
 describe("Manage Booking context", () => {
   it("shows the exact appointment 'Stop recurring cleanings' would cancel, with no fee more than 24h out", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+    h.bookings.pay(initial.bookingId);
+    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     const ctx = await buildRecurringManageContext(h.bookings.byId(initial.bookingId), h.deps, NOW);
     expect(ctx).toMatchObject({
       frequency: "Weekly",
@@ -1007,8 +1163,8 @@ describe("Manage Booking context", () => {
 
   it("shows the late fee before confirmation when the upcoming appointment is within 24 hours", async () => {
     const initial = await setup();
-    h.bookings.complete(initial.bookingId);
-    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, NOW));
+    h.bookings.pay(initial.bookingId);
+    const upcoming = createdBookingId(await afterAppointmentChanged(initial.bookingId, h.deps, LATER));
     const ctx = await buildRecurringManageContext(h.bookings.byId(upcoming), h.deps, new Date("2026-11-09T05:00:00.000Z"));
     expect(ctx?.upcoming).toMatchObject({ isThisAppointment: true, isLateWindow: true, lateCancellationFeeCents: 7275 });
   });

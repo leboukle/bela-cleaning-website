@@ -16,6 +16,7 @@ import type { CleanerAssignmentRepository } from "./cleanerRepository";
 import { getFrequencyIdForLabel, getOccurrenceDateKey } from "@/lib/booking/recurrence";
 import { formatReadableDate, getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import { getTodayDateKeyInTimezone } from "./dateUtils";
+import { findOpenAppointments, isServicePaid } from "./recurringScheduleService";
 
 export type SetupCheckItem = { label: string; ok: boolean; detail: string };
 export type SetupCheck = {
@@ -102,8 +103,8 @@ export type OwnerAppointment = {
   paymentStatus: string;
   isFuture: boolean;
   assignment: string;
-  /** Mark complete is always allowed; for a future visit the page asks for explicit confirmation. */
-  canMarkComplete: boolean;
+  /** Plain-English state: what the schedule is waiting for before the next appointment is created. */
+  statusNote: string;
   /** Only before the charge has been attempted. */
   canMarkUnperformed: boolean;
 };
@@ -154,16 +155,35 @@ export const REVIEW_HELP: Record<string, string> = {
     "The next appointment's date/time is at capacity. Free the capacity (it is then created automatically), or skip this occurrence.",
   [REVIEW_REASON.TOO_SOON]:
     "The next regular date is too close (or already past) for the 120-hour booking lead time. It cannot be created as scheduled — skip this occurrence to continue from the following regular date.",
-  [REVIEW_REASON.COMPLETION_MISSING]:
-    "A visit ended more than 24 hours ago and was never marked complete, so the next appointment has not been created. Mark it complete — or mark it unperformed if the visit did not happen.",
+  [REVIEW_REASON.PAYMENT_NOT_CONFIRMED]:
+    "A visit's date passed but its payment is still not confirmed, so the next appointment has not been created. It is created automatically as soon as the payment succeeds. If the visit did not happen, mark it unperformed (before the charge) or end the schedule.",
   [REVIEW_REASON.PAYMENT_FINAL_FAILURE]:
     "The latest appointment's payment failed for good, so generation is paused. Contact the customer; then Resume (same saved card) or End the schedule.",
   [REVIEW_REASON.DUPLICATE_DETECTED]: "A duplicate appointment was detected. It was voided automatically; review the schedule.",
   [REVIEW_REASON.GENERATION_ERROR]: "The schedule could not be processed. Check its frequency and details.",
 };
 
-function isOpen(row: ScheduleBookingRow): boolean {
-  return row.bookingStatus !== BOOKING_STATUS.CANCELLED && !row.completedAt;
+/** What the schedule is waiting on, in the owner's words. */
+function describeWaiting(paymentStatus: string, serviceDate: string, todayDateKey: string): string {
+  const passed = serviceDate !== "" && serviceDate < todayDateKey;
+  switch (paymentStatus) {
+    case PAYMENT_STATUS.PAID:
+      return passed
+        ? "Paid. The next appointment is created automatically on the next check."
+        : "Paid. The next appointment is created automatically on the first check after the visit date.";
+    case PAYMENT_STATUS.SCHEDULED:
+      return passed
+        ? "The visit date has passed and the payment has not been made yet. The next appointment is created as soon as it succeeds."
+        : "Charged automatically one hour after the visit ends. The next appointment is created the day after, once that payment succeeds.";
+    case PAYMENT_STATUS.PROCESSING:
+    case PAYMENT_STATUS.RETRY_SCHEDULED:
+    case PAYMENT_STATUS.REQUIRES_ACTION:
+      return "Payment is in progress or being retried. The next appointment is created as soon as it succeeds.";
+    case PAYMENT_STATUS.FINAL_FAILURE:
+      return "Payment failed for good. Generation is paused until you resume or end the schedule.";
+    default:
+      return `Payment status: ${paymentStatus || "unknown"}.`;
+  }
 }
 
 export async function buildOwnerDashboard(deps: {
@@ -231,7 +251,8 @@ async function buildCard(
     return true;
   });
 
-  const open = canonical.filter(isOpen).sort((a, b) => a.occurrenceNumber - b.occurrenceNumber)[0] ?? null;
+  const open =
+    (await findOpenAppointments({ schedules: deps.schedules }, rows, schedule.timezone, deps.now ?? new Date()))[0] ?? null;
   let appointment: OwnerAppointment | null = null;
   if (open && schedule.status !== SCHEDULE_STATUS.ENDED) {
     const latest = await deps.assignments.getLatestAssignmentForBooking(open.bookingId);
@@ -245,7 +266,7 @@ async function buildCard(
       paymentStatus: open.paymentStatus,
       isFuture: open.serviceDate > todayDateKey,
       assignment: latest ? `${latest.cleanerName} — ${latest.status}` : "Not assigned",
-      canMarkComplete: true,
+      statusNote: describeWaiting(open.paymentStatus, open.serviceDate, todayDateKey),
       canMarkUnperformed: open.paymentStatus === PAYMENT_STATUS.SCHEDULED,
     };
   }
@@ -271,7 +292,7 @@ async function buildCard(
     fullPriceTotal: schedule.fullPriceTotal,
     recurringPriceTotal: schedule.recurringPriceTotal,
     nextRegularDate,
-    completedCount: canonical.filter((r) => r.bookingStatus !== BOOKING_STATUS.CANCELLED && Boolean(r.completedAt)).length,
+    completedCount: canonical.filter(isServicePaid).length,
     appointment,
     needsAttention,
     canSkip: schedule.status !== SCHEDULE_STATUS.ENDED && !open,

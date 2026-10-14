@@ -42,6 +42,8 @@ import type { BookingRecord } from "./types";
 import { FIRST_VISIT_PRICING_POLICY } from "@/lib/booking/recurringPricing";
 
 const NOW = new Date("2026-10-13T15:00:00.000Z");
+// After the initial visit's date (2026-11-02).
+const LATER = new Date("2026-11-03T15:00:00.000Z");
 const RAW = "R".repeat(43);
 
 let sheets: FakeSheets;
@@ -88,6 +90,19 @@ async function seed(overrides: Partial<BookingRecord> = {}) {
   const schedule = buildScheduleFromInitialBooking(record, true, "America/New_York");
   await schedules.createSchedule(schedule);
   return record;
+}
+
+/** The service payment succeeded: written through the real payment-attempt update. */
+async function markPaid(bookingId: string) {
+  await bookings.updatePaymentAttempt(bookingId, {
+    paymentStatus: "Paid",
+    stripePaymentIntentId: "pi_paid_sheet",
+    paidAt: "2026-11-02T20:00:00.000Z",
+    paymentAttemptCount: 1,
+    lastPaymentAttemptAt: "2026-11-02T19:00:00.000Z",
+    nextPaymentAttemptAt: "",
+    paymentFailureCode: "",
+  });
 }
 
 /** Parsed view of the Bookings worksheet, straight from the simulated cells. */
@@ -145,10 +160,10 @@ describe("several schedules share the worksheets", () => {
     expect((await bookings.listScheduleBookings!(b.bookingId)).map((r) => r.bookingId)).toEqual([b.bookingId]);
 
     // A is completed and generates; B (still open) must neither block nor be affected.
-    await bookings.markBookingCompleted(a.bookingId, "11/02/2026, 2:00:00 PM EST");
-    const created = await generateNextOccurrence(a.bookingId, deps, NOW);
+    await markPaid(a.bookingId);
+    const created = await generateNextOccurrence(a.bookingId, deps, LATER);
     expect(created.outcome).toBe("created");
-    expect((await generateNextOccurrence(b.bookingId, deps, NOW)).outcome).toBe("has-open-appointment");
+    expect((await generateNextOccurrence(b.bookingId, deps, LATER)).outcome).toBe("has-open-appointment");
     expect(bookingRows().filter((r) => r["Recurring Schedule ID"] === b.bookingId)).toHaveLength(1);
   });
 });
@@ -206,9 +221,9 @@ describe("claim arbitration (notifications and alerts) on real sheet reads and w
 describe("concurrent occurrence creation on the real Bookings worksheet", () => {
   it("N simultaneous generation requests leave exactly one live appointment, one confirmation, and no billable duplicate", async () => {
     const record = await seed();
-    await bookings.markBookingCompleted(record.bookingId, "11/02/2026, 2:00:00 PM EST");
+    await markPaid(record.bookingId);
 
-    const outcomes = await Promise.all(Array.from({ length: 6 }, () => generateNextOccurrence(record.bookingId, deps, NOW)));
+    const outcomes = await Promise.all(Array.from({ length: 6 }, () => generateNextOccurrence(record.bookingId, deps, LATER)));
 
     expect(outcomes.filter((o) => o.outcome === "created")).toHaveLength(1);
     const second = occurrence(2);
@@ -228,12 +243,12 @@ describe("concurrent occurrence creation on the real Bookings worksheet", () => 
 
   it("completion, reconciliation and repeated cancellation racing each other still produce one appointment", async () => {
     const record = await seed();
-    await bookings.markBookingCompleted(record.bookingId, "11/02/2026, 2:00:00 PM EST");
+    await markPaid(record.bookingId);
     await Promise.all([
-      afterAppointmentChanged(record.bookingId, deps, NOW),
-      afterAppointmentChanged(record.bookingId, deps, NOW),
-      reconcileSchedule(record.bookingId, deps, NOW),
-      reconcileSchedule(record.bookingId, deps, NOW),
+      afterAppointmentChanged(record.bookingId, deps, LATER),
+      afterAppointmentChanged(record.bookingId, deps, LATER),
+      reconcileSchedule(record.bookingId, deps, LATER),
+      reconcileSchedule(record.bookingId, deps, LATER),
     ]);
     expect(live(occurrence(2))).toHaveLength(1);
     expect(notifications.sendRecurringAppointmentScheduled).toHaveBeenCalledTimes(1);
@@ -243,18 +258,18 @@ describe("concurrent occurrence creation on the real Bookings worksheet", () => 
 describe("stopping while generation is in flight, on the real worksheets", () => {
   it.each(Array.from({ length: 16 }, (_, i) => i))("leaves no live future appointment (offset %i)", async (offset) => {
     const record = await seed();
-    await bookings.markBookingCompleted(record.bookingId, "11/02/2026, 2:00:00 PM EST");
+    await markPaid(record.bookingId);
 
     const stop = (async () => {
       for (let i = 0; i < offset; i++) await Promise.resolve();
       return stopRecurringByToken(RAW, deps, NOW);
     })();
-    await Promise.all([generateNextOccurrence(record.bookingId, deps, NOW), stop]);
+    await Promise.all([generateNextOccurrence(record.bookingId, deps, LATER), stop]);
 
     expect((await schedules.getSchedule(record.bookingId))?.status).toBe("Ended");
     for (const n of [2, 3]) expect(live(occurrence(n))).toHaveLength(0);
     expect(vi.mocked(createOffSessionPaymentIntent)).not.toHaveBeenCalled();
-    await reconcileSchedule(record.bookingId, deps, NOW);
+    await reconcileSchedule(record.bookingId, deps, LATER);
     expect(live(occurrence(2))).toHaveLength(0);
   });
 });
@@ -262,15 +277,15 @@ describe("stopping while generation is in flight, on the real worksheets", () =>
 describe("crash recovery on the real worksheets", () => {
   it("a write failure right after the booking row was appended is adopted without duplication", async () => {
     const record = await seed();
-    await bookings.markBookingCompleted(record.bookingId, "11/02/2026, 2:00:00 PM EST");
+    await markPaid(record.bookingId);
 
     // The progress write (Recurring Schedules cells) fails, as if the function was killed.
     sheets.failWhen = (op, range) => op === "batchUpdate" && range.startsWith(SCHEDULES_SHEET_NAME);
-    await expect(generateNextOccurrence(record.bookingId, deps, NOW)).rejects.toThrow(/simulated Sheets failure/);
+    await expect(generateNextOccurrence(record.bookingId, deps, LATER)).rejects.toThrow(/simulated Sheets failure/);
     expect(occurrence(2)).toHaveLength(1);
     expect((await schedules.getSchedule(record.bookingId))?.nextOccurrenceNumber).toBe(2); // stale
 
-    const later = new Date(NOW.getTime() + 15 * 60_000);
+    const later = new Date(LATER.getTime() + 15 * 60_000);
     await Promise.all([reconcileSchedule(record.bookingId, deps, later), reconcileSchedule(record.bookingId, deps, later)]);
     await reconcileSchedule(record.bookingId, deps, later);
 
@@ -282,14 +297,14 @@ describe("crash recovery on the real worksheets", () => {
 
   it("a crash AFTER the claim but BEFORE the email is sent is retried, not lost", async () => {
     const record = await seed();
-    await bookings.markBookingCompleted(record.bookingId, "11/02/2026, 2:00:00 PM EST");
+    await markPaid(record.bookingId);
     notifications.sendRecurringAppointmentScheduled.mockRejectedValueOnce(new Error("process killed"));
 
-    await generateNextOccurrence(record.bookingId, deps, NOW);
+    await generateNextOccurrence(record.bookingId, deps, LATER);
     expect(notifications.sendRecurringAppointmentScheduled).toHaveBeenCalledTimes(1);
     expect(occurrence(2)[0]["Customer Confirmation Status"]).not.toBe("Sent");
 
-    const later = new Date(NOW.getTime() + 15 * 60_000);
+    const later = new Date(LATER.getTime() + 15 * 60_000);
     await reconcileSchedule(record.bookingId, deps, later);
     expect(notifications.sendRecurringAppointmentScheduled).toHaveBeenCalledTimes(2); // retried once…
     await reconcileSchedule(record.bookingId, deps, later);
@@ -300,15 +315,15 @@ describe("crash recovery on the real worksheets", () => {
 
   it("an owner alert whose first send failed is retried by the next reconcile, then sent exactly once", async () => {
     const record = await seed();
-    await bookings.markBookingCompleted(record.bookingId, "11/02/2026, 2:00:00 PM EST");
+    await markPaid(record.bookingId);
     vi.mocked(checkExactTimeAvailability).mockResolvedValue({ available: false, reason: "blackout", maxCapacity: 2, peakConcurrentCount: 0 });
     notifications.sendInternalRecurringScheduleAlert.mockResolvedValueOnce({ ok: false, error: "gmail down" } as never);
 
-    await reconcileSchedule(record.bookingId, deps, NOW);
-    await reconcileSchedule(record.bookingId, deps, NOW);
-    await reconcileSchedule(record.bookingId, deps, NOW);
+    await reconcileSchedule(record.bookingId, deps, LATER);
+    await reconcileSchedule(record.bookingId, deps, LATER);
+    await reconcileSchedule(record.bookingId, deps, LATER);
     expect(notifications.sendInternalRecurringScheduleAlert).toHaveBeenCalledTimes(2); // failed, then succeeded
-    await reconcileSchedule(record.bookingId, deps, NOW);
+    await reconcileSchedule(record.bookingId, deps, LATER);
     expect(notifications.sendInternalRecurringScheduleAlert).toHaveBeenCalledTimes(2);
   });
 });
@@ -316,8 +331,8 @@ describe("crash recovery on the real worksheets", () => {
 describe("duplicate charges: the pre-charge guard on the real worksheet", () => {
   it("a surviving duplicate occurrence row is never charged; the first row is", async () => {
     const record = await seed();
-    await bookings.markBookingCompleted(record.bookingId, "11/02/2026, 2:00:00 PM EST");
-    const created = await generateNextOccurrence(record.bookingId, deps, NOW);
+    await markPaid(record.bookingId);
+    const created = await generateNextOccurrence(record.bookingId, deps, LATER);
     if (created.outcome !== "created") throw new Error("expected created");
 
     // A duplicate whose writer died before voiding it.

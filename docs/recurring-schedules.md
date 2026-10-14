@@ -11,10 +11,10 @@ payment, assignment, cancellation and rescheduling workflows unchanged.
 |---|---|
 | Initial appointment | Full price. It is occurrence 1 and starts the schedule. |
 | Later appointments | Existing frequency discount (weekly 15%, every other week 10%, monthly 5%) on the **bedroom base price only**. |
-| When the discount starts | Only once a cleaning of the schedule has actually been **performed** (marked complete). A cancelled or unperformed first appointment does not earn it: the next appointment is still full price. |
+| When the discount starts | Once a **service visit of the schedule has been paid for** (Payment Status `Paid`, written by the Stripe webhook). A cancelled or owner-closed unperformed visit never counts, and a late-cancellation fee payment never counts. The initial visit is therefore full price. |
 | Quote | The agreed recurring amount is snapshotted on the schedule (component prices **and** the discount rate at agreement). Later configuration changes never reprice an existing schedule. |
 | How many exist | At most **one** upcoming non-cancelled appointment per schedule. |
-| Next appointment is created | When the current one is marked complete, or cancelled / marked unperformed while the schedule stays active. A reconciliation scheduler retries anything missed. |
+| Next appointment is created | **Automatically, with no manual completion.** When the current visit's service date has **passed in America/New_York AND its payment is confirmed successful**: the first scheduler run (every 30 min) after both are true creates it. A payment that is Scheduled / Processing / Retry Scheduled / Requires Action **waits**; a Final Failure pauses the schedule and alerts. A cancelled or unperformed visit advances the schedule immediately. Example: a Tue Oct 20 monthly visit charged after it ended → the Nov 20 appointment is created on the first run on Oct 21. |
 | Charge | Existing: one hour after scheduled end, off-session, on the saved card (the per-row Stripe Customer / PaymentMethod IDs are copied from the schedule). Retry behavior and cancellation-fee calculation are unchanged. |
 | Reminder | Existing 72-hour customer reminder; for a recurring appointment it also carries the two separate controls. |
 | Cleaner assignment | Stays manual. A generated appointment appears in the existing assignable-bookings list and the owner is emailed once. Cleaner pay is unchanged (60% of the appointment's charge). |
@@ -148,13 +148,14 @@ the matching confirmation). Rescheduling changes that appointment only.
 
 ## Owner operations
 
-**Day to day use the page `/internal/recurring`** (setup check, needs-attention list with Skip / Resume / End, mark complete / unperformed, convert an existing booking, run the check now). Step-by-step setup and a live test script are in [recurring-schedules-owner-guide.md](./recurring-schedules-owner-guide.md). The API calls below are what those buttons use.
+**Day to day use the page `/internal/recurring`** (setup check, needs-attention list with Skip / Resume / End, mark unperformed, convert an existing booking, run the check now). Routine operation needs no manual action: payment success plus the date passing creates the next appointment. Step-by-step setup and a live test script are in [recurring-schedules-owner-guide.md](./recurring-schedules-owner-guide.md). The API calls below are what those buttons use.
 
 Endpoints require the internal admin session cookie or the
 `x-internal-admin-secret` header. `BASE` is the deployment URL.
 
 ```bash
-# Mark a visit complete (also creates the next appointment) — existing endpoint
+# (Not needed for recurring: marking complete no longer drives generation. It still
+# records Completed At for the cleaner payout statement.)
 curl -X POST -H "x-internal-admin-secret: $SECRET" "$BASE/api/internal/bookings/<bookingId>/complete"
 
 # The visit did not happen: closes it as no-charge and advances the schedule.
@@ -178,7 +179,7 @@ curl -X POST -H "x-internal-admin-secret: $SECRET" -H "content-type: application
 
 Owner emails (sent once per issue): *needs assignment*, *next appointment
 can't be created* (blackout / capacity / too soon), *mark this cleaning
-complete* (24h after a visit's end with no completion), *paused: payment failed*.
+confirmed* (a visit's date passed 48h ago but its payment never got going), *paused: payment failed*.
 A blackout or capacity problem resolves itself: remove the blackout and the
 next reconcile creates the appointment through the same path.
 
