@@ -19,7 +19,6 @@ import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/s
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
 import type { AccessId, ExtrasState } from "@/lib/booking/types";
 import { isValidDateKey } from "./dateUtils";
-import { isPlausibleManageToken } from "./manageToken";
 import type { BookingSubmissionInput, ValidatedBooking, ValidationIssue, ValidationResult } from "./types";
 
 function asString(value: unknown): string {
@@ -211,11 +210,22 @@ export function validateSubmission(input: BookingSubmissionInput): ValidationRes
     addIssue("someoneHome", "Please let us know whether someone will be home.");
   }
   const specialInstructions = asString(input.specialInstructions).slice(0, SPECIAL_INSTRUCTIONS_MAX_LENGTH).trim();
-  const followUpToken = asTrimmedString(input.followUpToken);
 
   // --- Policy ---
   if (input.agreedToPolicy !== true) {
     addIssue("agreedToPolicy", "You must agree to the Service Policy and Terms & Conditions.");
+  }
+
+  // --- Recurring consent ---
+  // A recurring frequency creates ongoing automatically-scheduled,
+  // automatically-charged appointments, so it needs its own explicit
+  // consent. One-time bookings never record it, whatever the client sent.
+  const isRecurring = frequency !== "one-time";
+  if (isRecurring && input.recurringConsent !== true) {
+    addIssue(
+      "recurringConsent",
+      "Please confirm that you authorize your recurring cleanings to be scheduled and charged automatically.",
+    );
   }
 
   if (issues.length > 0) {
@@ -249,10 +259,7 @@ export function validateSubmission(input: BookingSubmissionInput): ValidationRes
     agreedToPolicy: true,
     idempotencyToken,
     setupIntentId,
-    // Shape-only: an implausible value is treated as "no link", so the
-    // booking simply prices as a first cleaning. Authenticity and
-    // eligibility are decided in followUpEligibility.ts.
-    followUpToken: isPlausibleManageToken(followUpToken) ? followUpToken : "",
+    recurringConsent: isRecurring && input.recurringConsent === true,
   };
 
   return { ok: true, booking };

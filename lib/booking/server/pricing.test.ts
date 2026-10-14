@@ -37,7 +37,7 @@ function sampleBooking(overrides: Partial<ValidatedBooking> = {}): ValidatedBook
     agreedToPolicy: true,
     idempotencyToken: "token",
     setupIntentId: "seti_test123",
-    followUpToken: "",
+    recurringConsent: false,
     ...overrides,
   };
 }

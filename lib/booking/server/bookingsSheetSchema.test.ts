@@ -8,9 +8,9 @@ import {
 } from "./bookingsSheetSchema";
 
 describe("bookingsSheetSchema", () => {
-  it("has exactly 70 columns with no duplicates (41 M3 + 3 M4 + 12 M5 + 5 M6 + 5 M6-amendment + 1 post-verification-fix + 1 square-footage-price + 2 pricing-policy columns)", () => {
-    expect(BOOKINGS_COLUMNS.length).toBe(70);
-    expect(new Set(BOOKINGS_COLUMNS).size).toBe(70);
+  it("has exactly 71 columns with no duplicates (41 M3 + 3 M4 + 12 M5 + 5 M6 + 5 M6-amendment + 1 post-verification-fix + 1 square-footage-price + 2 pricing-policy + 1 occurrence-number columns)", () => {
+    expect(BOOKINGS_COLUMNS.length).toBe(71);
+    expect(new Set(BOOKINGS_COLUMNS).size).toBe(71);
   });
 
   it("places the 3 notification-status columns right after Schema Version", () => {
@@ -97,11 +97,12 @@ describe("bookingsSheetSchema", () => {
     expect(columnLetter("Charge Amount")).toBe("AX");
   });
 
-  it("appends 'Pricing Policy' (BQ) and 'Recurring Schedule ID' (BR) as the very last columns", () => {
-    expect(BOOKINGS_COLUMNS.slice(-2)).toEqual(["Pricing Policy", "Recurring Schedule ID"]);
+  it("appends 'Pricing Policy' (BQ), 'Recurring Schedule ID' (BR) and 'Occurrence Number' (BS) as the very last columns", () => {
+    expect(BOOKINGS_COLUMNS.slice(-3)).toEqual(["Pricing Policy", "Recurring Schedule ID", "Occurrence Number"]);
     expect(columnLetter("Pricing Policy")).toBe("BQ");
     expect(columnLetter("Recurring Schedule ID")).toBe("BR");
-    expect(BOOKINGS_LAST_COLUMN_LETTER).toBe("BR");
+    expect(columnLetter("Occurrence Number")).toBe("BS");
+    expect(BOOKINGS_LAST_COLUMN_LETTER).toBe("BS");
   });
 
   it("maps the first column to A", () => {

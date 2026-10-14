@@ -2,8 +2,7 @@
 
 import { FREQUENCY_OPTIONS } from "@/lib/booking/config";
 import type { FrequencyId } from "@/lib/booking/types";
-import { FIRST_CLEANING_NOTICE } from "@/lib/booking/recurringPricing";
-import type { FollowUpEligibilityState } from "@/components/booking/useFollowUpEligibility";
+import { FIRST_CLEANING_NOTICE, RECURRING_CONTROLS_NOTICE } from "@/lib/booking/recurringPricing";
 import SelectionCard from "@/components/booking/SelectionCard";
 import StepShell from "@/components/booking/StepShell";
 
@@ -11,22 +10,12 @@ type FrequencyStepProps = {
   value: FrequencyId | null;
   onSelect: (id: FrequencyId) => void;
   onBack: () => void;
-  /** Present when the booking was opened from a "Book your next cleaning" link. */
-  followUp?: FollowUpEligibilityState;
 };
 
-export default function FrequencyStep({ value, onSelect, onBack, followUp = { status: "none" } }: FrequencyStepProps) {
-  const applied = followUp.status === "eligible";
-
-  let note = FIRST_CLEANING_NOTICE;
-  if (applied) {
-    note = "This is a follow-up cleaning, so your recurring discount applies to this visit.";
-  } else if (followUp.status === "ineligible") {
-    note =
-      followUp.reason === "first-cleaning-not-completed"
-        ? "We can't apply a recurring discount yet because your first cleaning hasn't been marked completed. This cleaning will be charged at the regular price."
-        : "We couldn't apply a recurring discount for this link, so this cleaning will be charged at the regular price.";
-  }
+export default function FrequencyStep({ value, onSelect, onBack }: FrequencyStepProps) {
+  // Shown for every choice on this step: a one-time booking is unaffected,
+  // and the statement is exactly what applies to any recurring option.
+  const note = `Choosing a recurring option? ${FIRST_CLEANING_NOTICE} ${RECURRING_CONTROLS_NOTICE}`;
 
   return (
     <StepShell question="How often should we come by?" note={note} onBack={onBack}>
@@ -35,13 +24,7 @@ export default function FrequencyStep({ value, onSelect, onBack, followUp = { st
           <SelectionCard
             key={option.id}
             label={option.label}
-            priceLabel={
-              option.discount === 0
-                ? undefined
-                : applied
-                  ? `${option.discountLabel} on this cleaning`
-                  : `${option.discountLabel} after your first cleaning`
-            }
+            priceLabel={option.discount === 0 ? undefined : `${option.discountLabel} after your first cleaning`}
             selected={value === option.id}
             onSelect={() => onSelect(option.id)}
             role="radio"

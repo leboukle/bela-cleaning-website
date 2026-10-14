@@ -78,6 +78,7 @@ export function sampleBookingRecord(overrides: Partial<BookingRecord> = {}): Boo
     // A pre-policy (legacy) row: priced under the original rule, never repriced.
     pricingPolicy: "",
     recurringScheduleId: "",
+    occurrenceNumber: 0,
     ...overrides,
   };
 }

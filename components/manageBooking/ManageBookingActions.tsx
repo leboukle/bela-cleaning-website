@@ -12,9 +12,11 @@ import type { ManageBookingView } from "@/lib/booking/server/manageBookingView";
 type ManageBookingActionsProps = {
   token: string;
   initialBooking: ManageBookingView;
+  /** Deep link from an email: opens the matching confirmation (still requires an explicit confirm). */
+  initialAction?: "cancel-one" | "stop" | null;
 };
 
-type Phase = "idle" | "cancel-confirm" | "reschedule-pick";
+type Phase = "idle" | "cancel-confirm" | "stop-confirm" | "reschedule-pick";
 
 const STATE_ABBREVIATIONS: Record<string, string> = {
   "New Jersey": "NJ",
@@ -34,9 +36,14 @@ async function fetchBookingView(token: string): Promise<ManageBookingView | null
   }
 }
 
-export default function ManageBookingActions({ token, initialBooking }: ManageBookingActionsProps) {
+export default function ManageBookingActions({ token, initialBooking, initialAction = null }: ManageBookingActionsProps) {
   const [booking, setBooking] = useState(initialBooking);
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<Phase>(() => {
+    if (initialAction === "cancel-one" && initialBooking.eligibility.canCancel) return "cancel-confirm";
+    if (initialAction === "stop" && initialBooking.recurring?.canStop) return "stop-confirm";
+    return "idle";
+  });
+  const [stopSubmitting, setStopSubmitting] = useState(false);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
@@ -115,6 +122,23 @@ export default function ManageBookingActions({ token, initialBooking }: ManageBo
     }
   }
 
+  async function handleConfirmStop() {
+    setStopSubmitting(true);
+    setBanner(null);
+    try {
+      const res = await fetch(`/api/manage-booking/${token}/stop-recurring`, { method: "POST" });
+      const body = await res.json();
+      setBanner({ kind: body.ok ? "success" : "error", message: body.message ?? "Something went wrong. Please try again." });
+      const refreshed = await fetchBookingView(token);
+      if (refreshed) setBooking(refreshed);
+      setPhase("idle");
+    } catch {
+      setBanner({ kind: "error", message: "Something went wrong. Please try again." });
+    } finally {
+      setStopSubmitting(false);
+    }
+  }
+
   async function handleConfirmReschedule() {
     if (!newDateKey || !newStartTime) return;
     setRescheduleSubmitting(true);
@@ -176,20 +200,6 @@ export default function ManageBookingActions({ token, initialBooking }: ManageBo
         </dl>
       </div>
 
-      {booking.canBookNextCleaning && (
-        <div className="rounded-2xl border border-[#E7DECE] bg-white p-6 shadow-[0_1px_3px_-1px_rgba(59,47,39,0.08)]">
-          <h2 className="font-heading text-lg text-[#3B2F27]">Your next cleaning</h2>
-          <p className="mt-2 text-sm text-[#6B5B4C]">
-            Book your next {booking.frequency.toLowerCase()} cleaning with your recurring discount applied.
-          </p>
-          <a
-            href={`/booking?next=${encodeURIComponent(token)}`}
-            className="mt-4 inline-block rounded-full bg-[#3B2F27] px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#2A211C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B2F27]"
-          >
-            Book your next cleaning
-          </a>
-        </div>
-      )}
 
       {(booking.eligibility.canCancel || booking.eligibility.canReschedule) && phase === "idle" && (
         <div className="rounded-2xl border border-[#E7DECE] bg-white p-6 shadow-[0_1px_3px_-1px_rgba(59,47,39,0.08)]">
@@ -217,7 +227,7 @@ export default function ManageBookingActions({ token, initialBooking }: ManageBo
                 onClick={() => setPhase("cancel-confirm")}
                 className="rounded-full border-2 border-[#B14A2E] px-5 py-2.5 text-sm font-semibold text-[#B14A2E] transition-colors duration-150 hover:bg-[#FBEEE8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B14A2E]"
               >
-                Cancel booking
+                {booking.recurring ? "Cancel this cleaning only" : "Cancel booking"}
               </button>
             )}
           </div>
@@ -226,7 +236,21 @@ export default function ManageBookingActions({ token, initialBooking }: ManageBo
 
       {phase === "cancel-confirm" && (
         <div className="rounded-2xl border border-[#E3B7A6] bg-[#FBEEE8] p-6">
-          <h2 className="font-heading text-lg text-[#3B2F27]">Confirm cancellation</h2>
+          <h2 className="font-heading text-lg text-[#3B2F27]">
+            {booking.recurring ? "Cancel this cleaning only" : "Confirm cancellation"}
+          </h2>
+          {booking.recurring && (
+            <p className="mt-2 text-sm text-[#3B2F27]">
+              You are cancelling <span className="font-semibold">only</span> the cleaning on{" "}
+              <span className="font-semibold">
+                {formatReadableDate(booking.serviceDate)} at {booking.scheduleDisplayLabel}
+              </span>{" "}
+              ({formatCurrency(booking.totalPrice)}).{" "}
+              {booking.recurring.nextRegularDate
+                ? `Your recurring cleanings continue: your next regular cleaning will be scheduled for ${formatReadableDate(booking.recurring.nextRegularDate)}.`
+                : "Your recurring cleanings continue."}
+            </p>
+          )}
           {booking.eligibility.isLateWindow && booking.eligibility.lateCancellationFeeCents !== null ? (
             <p className="mt-2 text-sm text-[#6B5B4C]">
               This appointment is within 24 hours of its scheduled start. Cancelling now is subject to a
@@ -248,12 +272,93 @@ export default function ManageBookingActions({ token, initialBooking }: ManageBo
               disabled={cancelSubmitting}
               className="rounded-full bg-[#B14A2E] px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#96402A] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B14A2E]"
             >
-              {cancelSubmitting ? "Cancelling…" : "Yes, cancel my booking"}
+              {cancelSubmitting ? "Cancelling…" : booking.recurring ? "Yes, cancel this cleaning only" : "Yes, cancel my booking"}
             </button>
             <button
               type="button"
               onClick={() => setPhase("idle")}
               disabled={cancelSubmitting}
+              className="rounded-full px-5 py-2.5 text-sm font-semibold text-[#6B5B4C] transition-colors duration-150 hover:bg-white/60 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Never mind
+            </button>
+          </div>
+        </div>
+      )}
+
+      {booking.recurring && phase === "idle" && (
+        <div className="rounded-2xl border border-[#E7DECE] bg-white p-6 shadow-[0_1px_3px_-1px_rgba(59,47,39,0.08)]">
+          <h2 className="font-heading text-lg text-[#3B2F27]">Your recurring cleanings</h2>
+          {booking.recurring.canStop ? (
+            <>
+              <p className="mt-2 text-sm text-[#6B5B4C]">
+                {booking.recurring.frequency} cleanings are scheduled automatically and charged to your saved card one
+                hour after each cleaning ends. Stopping ends the series — it is separate from cancelling a single
+                cleaning.
+              </p>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setPhase("stop-confirm")}
+                  className="rounded-full border-2 border-[#B14A2E] px-5 py-2.5 text-sm font-semibold text-[#B14A2E] transition-colors duration-150 hover:bg-[#FBEEE8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B14A2E]"
+                >
+                  Stop recurring cleanings
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-[#6B5B4C]">
+              Your recurring cleanings have ended. No further cleanings will be scheduled.
+            </p>
+          )}
+        </div>
+      )}
+
+      {phase === "stop-confirm" && booking.recurring && (
+        <div className="rounded-2xl border border-[#E3B7A6] bg-[#FBEEE8] p-6">
+          <h2 className="font-heading text-lg text-[#3B2F27]">Stop recurring cleanings</h2>
+          <p className="mt-2 text-sm text-[#6B5B4C]">
+            This ends your {booking.recurring.frequency.toLowerCase()} recurring cleanings. No further cleanings will
+            be scheduled. Your booking and payment history are kept.
+          </p>
+          {booking.recurring.upcoming ? (
+            <div className="mt-3 text-sm text-[#6B5B4C]">
+              <p>
+                Your upcoming cleaning on{" "}
+                <span className="font-semibold text-[#3B2F27]">
+                  {formatReadableDate(booking.recurring.upcoming.serviceDate)} at{" "}
+                  {booking.recurring.upcoming.scheduleDisplayLabel}
+                </span>{" "}
+                ({formatCurrency(booking.recurring.upcoming.totalPrice)}) will be cancelled.
+              </p>
+              {booking.recurring.upcoming.isLateWindow && booking.recurring.upcoming.lateCancellationFeeCents !== null ? (
+                <p className="mt-2">
+                  That cleaning is within 24 hours, so a late-cancellation fee of{" "}
+                  <span className="font-semibold text-[#3B2F27]">
+                    {formatCurrency(booking.recurring.upcoming.lateCancellationFeeCents / 100)}
+                  </span>{" "}
+                  (50% of its total) will be charged to your saved payment method.
+                </p>
+              ) : (
+                <p className="mt-2">This is more than 24 hours away, so cancelling it is free.</p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-[#6B5B4C]">You have no upcoming cleaning to cancel, so nothing will be charged.</p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleConfirmStop}
+              disabled={stopSubmitting}
+              className="rounded-full bg-[#B14A2E] px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#96402A] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B14A2E]"
+            >
+              {stopSubmitting ? "Stopping…" : "Yes, stop recurring cleanings"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhase("idle")}
+              disabled={stopSubmitting}
               className="rounded-full px-5 py-2.5 text-sm font-semibold text-[#6B5B4C] transition-colors duration-150 hover:bg-white/60 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Never mind
@@ -340,7 +445,7 @@ export default function ManageBookingActions({ token, initialBooking }: ManageBo
         </div>
       )}
 
-      {!booking.eligibility.canCancel && !booking.eligibility.canReschedule && phase === "idle" && (
+      {!booking.eligibility.canCancel && !booking.eligibility.canReschedule && !booking.recurring?.canStop && phase === "idle" && (
         <div className="rounded-2xl border border-[#E7DECE] bg-[#FBF7EF] p-6 text-sm text-[#6B5B4C]">
           This booking can no longer be changed online. Please contact us directly if you need help.
         </div>

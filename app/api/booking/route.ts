@@ -9,6 +9,7 @@ import { GoogleSheetsBookingRepository } from "@/lib/booking/server/googleSheets
 import { NotificationService } from "@/lib/booking/server/notificationService";
 import { GmailApiTransport } from "@/lib/booking/server/email/gmailTransport";
 import { isRateLimited } from "@/lib/booking/server/rateLimit";
+import { GoogleRecurringScheduleRepository } from "@/lib/booking/server/googleRecurringScheduleRepository";
 import type { BookingSubmissionInput } from "@/lib/booking/server/types";
 
 export const runtime = "nodejs";
@@ -16,6 +17,7 @@ export const runtime = "nodejs";
 // Reused across invocations on a warm instance; holds no per-request state.
 const repository = new GoogleSheetsBookingRepository();
 const notificationService = new NotificationService(new GmailApiTransport());
+const recurringSchedules = new GoogleRecurringScheduleRepository();
 
 // Generous bound for a JSON booking payload (well above any legitimate
 // booking's serialized size) — rejects abusive oversized bodies outright.
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, code: "invalid-json", message: "Invalid request body." }, { status: 400 });
   }
 
-  const result = await submitBooking(input as BookingSubmissionInput, repository, notificationService);
+  const result = await submitBooking(input as BookingSubmissionInput, repository, notificationService, recurringSchedules);
   if (result.ok) {
     return NextResponse.json(result, { status: 201 });
   }

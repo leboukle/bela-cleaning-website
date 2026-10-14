@@ -66,12 +66,11 @@ export type BookingSubmissionInput = {
   // ever persisted. See docs/payments.md.
   setupIntentId?: unknown;
 
-  // Optional: the secret Manage Booking token of an earlier booking, from
-  // the customer's "Book your next cleaning" link. It is the ONLY way a
-  // recurring discount can be earned — never a browser-supplied
-  // "returning customer" or visit-number flag. Resolved and verified
-  // server-side in followUpEligibility.ts.
-  followUpToken?: unknown;
+  // Required (true) when frequency is recurring: the customer's explicit
+  // consent to automatically scheduled ongoing appointments and automatic
+  // per-visit charges to the saved card. Stored on the recurring schedule
+  // together with the consent wording version.
+  recurringConsent?: unknown;
 
   // Client-displayed values: the server never uses them to price, only to
   // refuse a submission whose shown total differs from the authoritative
@@ -113,8 +112,8 @@ export type ValidatedBooking = {
   agreedToPolicy: true;
   idempotencyToken: string;
   setupIntentId: string;
-  /** Plausibly-shaped follow-up token, or "" when none was supplied. Not yet verified. */
-  followUpToken: string;
+  /** True only when the customer gave the recurring-schedule consent (always false for one-time). */
+  recurringConsent: boolean;
 };
 
 export type ValidationIssue = {
@@ -239,6 +238,8 @@ export type BookingRecord = {
   // carries the schedule it continues); "" for one-time and legacy rows.
   pricingPolicy: string;
   recurringScheduleId: string;
+  /** 1-based position within the recurring schedule; 0 when not part of one (blank in the sheet). */
+  occurrenceNumber: number;
 };
 
 /** Written by cancellationService.ts the moment a cancellation is confirmed — before any Stripe call. */
@@ -331,6 +332,9 @@ export type BookingPaymentState = {
   paymentAttemptCount: number;
   nextPaymentAttemptAt: string;
   manualAmountOverride: boolean;
+  /** Recurring-schedule linkage, read so a charge can be refused for a duplicated occurrence. */
+  recurringScheduleId: string;
+  occurrenceNumber: number;
 };
 
 /**

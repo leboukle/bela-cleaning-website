@@ -238,6 +238,7 @@ describe("rescheduleBookingByToken — successful reschedule", () => {
           originalBookingTotal: totalPrice,
           pricingPolicy: "",
           recurringScheduleId: "",
+          occurrenceNumber: 0,
         }),
       );
 

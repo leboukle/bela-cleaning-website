@@ -99,6 +99,7 @@ function sampleRecord(overrides: Partial<BookingRecord> = {}): BookingRecord {
     manageBookingReminderTokenHash: "",
     pricingPolicy: "",
     recurringScheduleId: "",
+    occurrenceNumber: 0,
     ...overrides,
   };
 }

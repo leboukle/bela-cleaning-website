@@ -34,6 +34,29 @@ export type IdempotentBookingResult = {
   pricingPolicy: string;
 };
 
+/**
+ * The narrow, per-appointment view of one recurring schedule's Bookings
+ * rows that generation, reconciliation and the pre-charge duplicate guard
+ * need — returned in SHEET ORDER (earliest appended first), which is what
+ * makes "the first row for an occurrence wins" a deterministic rule.
+ */
+export type ScheduleBookingRow = {
+  bookingId: string;
+  occurrenceNumber: number;
+  bookingStatus: string;
+  paymentStatus: string;
+  serviceDate: string;
+  serviceStartTime: string;
+  completedAt: string;
+  scheduledChargeAt: string;
+  estimatedDurationMinutes: number;
+  chargeAmount: number;
+  frequencyDiscount: number;
+  customerConfirmationStatus: string;
+  internalNotificationStatus: string;
+  submittedAt: string;
+};
+
 export interface BookingRepository {
   /** Appends exactly one row for a newly-accepted booking. */
   appendBooking(record: BookingRecord): Promise<void>;
@@ -159,4 +182,28 @@ export interface BookingRepository {
    * checks `completedAt` is still blank before calling this.
    */
   markBookingCompleted(bookingId: string, completedAt: string): Promise<void>;
+
+  /**
+   * Recurring schedules: every Bookings row whose "Recurring Schedule ID"
+   * equals `scheduleId`, in sheet order. Optional so existing
+   * (non-recurring) repository doubles need not implement it; the
+   * recurring service and the pre-charge duplicate guard require it.
+   */
+  listScheduleBookings?(scheduleId: string): Promise<ScheduleBookingRow[]>;
+
+  /**
+   * Recurring schedules: writes the "Manage Booking Token Hash" of an
+   * already-appended appointment. Used only when recovery has to re-issue
+   * the customer's Manage Booking link for a generated appointment whose
+   * original (never-delivered) token was lost with a crashed request.
+   */
+  updateManageTokenHash?(bookingId: string, tokenHash: string): Promise<void>;
+
+  /**
+   * Owner-assisted conversion of an EXISTING booking: writes ONLY the two
+   * linkage cells ("Recurring Schedule ID", "Occurrence Number") of the
+   * existing row. Prices, Stripe IDs, payment history and every other
+   * column are left exactly as they were.
+   */
+  linkBookingToRecurringSchedule?(bookingId: string, scheduleId: string, occurrenceNumber: number): Promise<void>;
 }

@@ -16,6 +16,7 @@ import { getServiceScope, isAddOnType } from "@/lib/serviceDefinitions";
 import { describeExtras } from "../../extrasDescription";
 import { parseExtrasKeys } from "../../extras";
 import { buildManageBookingUrl } from "../../manageToken";
+import { buildRecurringControlUrls } from "./recurringScheduleEmails";
 import type { BookingRecord } from "../../types";
 import type { EmailMessage } from "../emailTransport";
 import { escapeHtml } from "../emailHtml";
@@ -42,6 +43,11 @@ export function buildAppointmentReminderEmail(record: BookingRecord, manageToken
   const address = [record.streetAddress, record.apartmentOrUnit].filter(Boolean).join(", ");
   const manageUrl = buildManageBookingUrl(manageToken);
   const scope = resolveServiceScope(record);
+  // Recurring appointments get the two separate controls reachable
+  // straight from the reminder (the reminder-issued token is bound to THIS
+  // appointment, and its Manage Booking page shows both actions).
+  const isRecurringAppointment = record.recurringScheduleId !== "" && record.occurrenceNumber > 0;
+  const recurringUrls = isRecurringAppointment ? buildRecurringControlUrls(manageToken) : null;
 
   const lines: string[] = [
     `Hi ${record.firstName},`,
@@ -58,6 +64,14 @@ export function buildAppointmentReminderEmail(record: BookingRecord, manageToken
     `Booking total: ${formatCurrency(record.chargeAmount)}`,
     "",
     `Manage your booking (view, reschedule, or cancel): ${manageUrl}`,
+    ...(recurringUrls
+      ? [
+          "",
+          "This is part of your recurring cleanings. These two options are separate:",
+          `- Cancel this cleaning only (your recurring cleanings continue): ${recurringUrls.cancelOne}`,
+          `- Stop recurring cleanings (no further cleanings will be scheduled): ${recurringUrls.stop}`,
+        ]
+      : []),
     "",
     "Cancellation and rescheduling policy:",
     "- More than 24 hours before your appointment: free cancellation or rescheduling.",
@@ -126,6 +140,13 @@ export function buildAppointmentReminderEmail(record: BookingRecord, manageToken
   <p style="margin:20px 0;">
     <a href="${escapeHtml(manageUrl)}" style="display:inline-block;background:#3B2F27;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:999px;font-size:14px;font-weight:600;">Manage Booking</a>
   </p>
+  ${
+    recurringUrls
+      ? `<p style="font-size:14px;margin:0 0 6px;"><strong>Part of your recurring cleanings — two separate options:</strong></p>
+  <p style="margin:0 0 4px;"><a href="${escapeHtml(recurringUrls.cancelOne)}" style="color:#3B2F27;font-weight:600;">Cancel this cleaning only</a> <span style="font-size:13px;color:#6B5B4C;">— your recurring cleanings continue.</span></p>
+  <p style="margin:0 0 16px;"><a href="${escapeHtml(recurringUrls.stop)}" style="color:#3B2F27;font-weight:600;">Stop recurring cleanings</a> <span style="font-size:13px;color:#6B5B4C;">— no further cleanings will be scheduled.</span></p>`
+      : ""
+  }
   <p style="font-size:13px;color:#6B5B4C;">
     <strong>Cancellation and rescheduling policy:</strong> more than 24 hours before your appointment, cancellation or
     rescheduling is free. Within 24 hours, cancellations are subject to a late-cancellation fee equal to 50% of the

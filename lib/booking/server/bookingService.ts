@@ -21,7 +21,6 @@ import { verifySucceededSetupIntent, type ConfirmedSetupIntent } from "./stripe/
 import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { generateManageToken, hashManageToken } from "./manageToken";
 import { formatOperationalTimestamp } from "./dateUtils";
-import { resolveFollowUpEligibility } from "./followUpEligibility";
 import {
   FIRST_VISIT_PRICING_POLICY,
   getSavedQuoteKind,
@@ -38,6 +37,8 @@ import {
 } from "@/lib/booking/config";
 import { formatExactTime, getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import type { BookingRepository } from "./repository";
+import type { RecurringScheduleRepository } from "./recurringScheduleRepository";
+import { createScheduleFromInitialBooking } from "./recurringScheduleService";
 import type { BookingRecord, BookingSubmissionInput, ValidatedBooking, ValidationIssue } from "./types";
 
 // The subset of NotificationService this orchestrator actually calls.
@@ -191,6 +192,7 @@ function buildBookingRecord(
   scheduledChargeAt: Date,
   manageToken: string,
   recurringScheduleId: string,
+  occurrenceNumber: number,
 ): BookingRecord {
   const propertyTypeLabel = PROPERTY_TYPE_OPTIONS.find((o) => o.id === booking.propertyType)?.label ?? booking.propertyType;
   const squareFootageLabel = SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === booking.squareFootage)?.label ?? booking.squareFootage;
@@ -273,6 +275,7 @@ function buildBookingRecord(
     manageBookingReminderTokenHash: "",
     pricingPolicy: FIRST_VISIT_PRICING_POLICY,
     recurringScheduleId,
+    occurrenceNumber,
   };
 }
 
@@ -285,6 +288,10 @@ export async function submitBooking(
   input: BookingSubmissionInput,
   repository: BookingRepository,
   notificationService: NotificationSender,
+  // Persists the recurring schedule that a recurring first appointment
+  // starts. Optional so one-time-only callers (and most unit tests) need no
+  // schedule store; the booking API route always supplies it.
+  recurringSchedules?: RecurringScheduleRepository,
 ): Promise<BookingSubmissionResult> {
   let settings;
   try {
@@ -342,23 +349,14 @@ export async function submitBooking(
       };
     }
 
-    // Recurring-discount eligibility is decided HERE, from authoritative
-    // records only (the token's earlier booking: not cancelled, and — for
-    // bookings created under the policy — confirmed completed). The first
-    // cleaning of a recurring schedule, and every booking made without a
-    // valid link, is priced at the regular amount.
-    let followUp;
-    try {
-      followUp = await resolveFollowUpEligibility(booking.followUpToken, repository);
-    } catch (error) {
-      logServerError("resolveFollowUpEligibility", error);
-      return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
-    }
-    const applyFrequencyDiscount = followUp.eligible && isRecurringFrequency(booking.frequency);
-
+    // A submission is always the FIRST appointment of whatever it starts:
+    // the frequency discount is never applied here. Later appointments of a
+    // recurring schedule are generated server-side by
+    // recurringScheduleService.ts, which prices them from the schedule's
+    // agreed snapshot once a cleaning has actually been performed.
     let pricing;
     try {
-      pricing = calculateAuthoritativePricing(booking, { applyFrequencyDiscount });
+      pricing = calculateAuthoritativePricing(booking, { applyFrequencyDiscount: false });
     } catch (error) {
       logServerError("calculateAuthoritativePricing", error);
       const message = error instanceof PricingError ? error.message : GENERIC_SERVER_ERROR_MESSAGE;
@@ -457,14 +455,10 @@ export async function submitBooking(
       };
     }
 
-    // A recurring first cleaning starts its own schedule (its Booking ID is
-    // the schedule's ID); a qualifying follow-up continues the schedule of
-    // the booking its link resolved to. One-time bookings have none.
-    const recurringScheduleId = isRecurringFrequency(booking.frequency)
-      ? followUp.eligible
-        ? followUp.scheduleId
-        : bookingId
-      : "";
+    // A recurring first cleaning starts its own schedule: its Booking ID is
+    // the schedule's ID and it is occurrence 1. One-time bookings have none.
+    const isRecurring = isRecurringFrequency(booking.frequency);
+    const recurringScheduleId = isRecurring ? bookingId : "";
 
     const manageToken = generateManageToken();
     const record = buildBookingRecord(
@@ -477,12 +471,26 @@ export async function submitBooking(
       scheduledChargeAt,
       manageToken,
       recurringScheduleId,
+      isRecurring ? 1 : 0,
     );
     try {
       await repository.appendBooking(record);
     } catch (error) {
       logServerError("appendBooking", error);
       return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
+    }
+
+    // Persist the schedule that continues this appointment. Best-effort by
+    // design: the booking is already durably saved, and the reconciliation
+    // scheduler recreates a missing schedule row from this appointment's
+    // own row (see recurringScheduleService.repairMissingSchedule), so a
+    // failure here is recoverable and never fails the customer's booking.
+    if (isRecurring && recurringSchedules) {
+      try {
+        await createScheduleFromInitialBooking(record, booking.recurringConsent, recurringSchedules, settings.timezone);
+      } catch (error) {
+        logServerError("createScheduleFromInitialBooking", error);
+      }
     }
 
     // The booking is now durably persisted — everything past this point is

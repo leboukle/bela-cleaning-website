@@ -13,7 +13,6 @@ type BookingSummaryProps = {
   state: BookingState;
   estimate: EstimateBreakdown | null;
   /** True only when the server confirmed this is a qualifying follow-up cleaning. */
-  discountApplied?: boolean;
 };
 
 // Desktop sticky sidebar. Estimated total leads as the visual focal point
@@ -22,9 +21,9 @@ type BookingSummaryProps = {
 // type — closer to a checkout summary than a form recap. Intentionally
 // still no line-by-line dollar breakdown — individual prices stay on the
 // selection cards themselves while the customer is choosing.
-export default function BookingSummary({ state, estimate, discountApplied = false }: BookingSummaryProps) {
+export default function BookingSummary({ state, estimate }: BookingSummaryProps) {
   const lines = getSummaryLines(state);
-  const kind = getQuoteKind(state.frequency, discountApplied);
+  const kind = getQuoteKind(state.frequency);
   const totalPulse = usePulseClass(estimate ? estimate.totalPrice : "custom", PULSE);
   const durationPulse = usePulseClass(estimate ? estimate.totalDurationMinutes : "custom-duration", PULSE);
 

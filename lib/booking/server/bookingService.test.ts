@@ -106,6 +106,8 @@ class InMemoryBookingRepository implements BookingRepository {
       paymentAttemptCount: record.paymentAttemptCount,
       nextPaymentAttemptAt: record.nextPaymentAttemptAt,
       manualAmountOverride: record.manualAmountOverride,
+      recurringScheduleId: record.recurringScheduleId,
+      occurrenceNumber: record.occurrenceNumber,
     };
   }
 
@@ -326,6 +328,7 @@ function sampleRecordWithToken(token: string): BookingRecord {
     manageBookingReminderTokenHash: "",
     pricingPolicy: "",
     recurringScheduleId: "",
+    occurrenceNumber: 0,
   };
 }
 

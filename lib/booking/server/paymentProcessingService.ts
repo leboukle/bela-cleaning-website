@@ -33,6 +33,7 @@ export type ProcessDueOutcome =
   | { bookingId: string; outcome: "skipped-not-due"; paymentStatus: string }
   | { bookingId: string; outcome: "skipped-not-yet-due" }
   | { bookingId: string; outcome: "skipped-missing-payment-method" }
+  | { bookingId: string; outcome: "skipped-duplicate-occurrence"; canonicalBookingId: string }
   | { bookingId: string; outcome: "skipped-already-paid"; paymentIntentId: string }
   | { bookingId: string; outcome: "skipped-payment-intent-in-progress"; paymentIntentId: string; stripeStatus: string }
   | { bookingId: string; outcome: "skipped-payment-intent-lookup-failed"; paymentIntentId: string }
@@ -77,6 +78,19 @@ export async function processDueBooking(
     return { bookingId, outcome: "skipped-not-due", paymentStatus: state.paymentStatus };
   }
   if (!isDue(state, now)) return { bookingId, outcome: "skipped-not-yet-due" };
+
+  // Recurring schedules: an appointment is only chargeable if it is the
+  // FIRST row (sheet order) for its schedule + occurrence number. A
+  // duplicate that somehow survived generation's own arbitration is never
+  // charged; reconciliation voids it. Fails CLOSED — if the lookup throws,
+  // nothing is charged this run and the scheduler retries.
+  if (state.recurringScheduleId && state.occurrenceNumber > 0 && repository.listScheduleBookings) {
+    const siblings = await repository.listScheduleBookings(state.recurringScheduleId);
+    const first = siblings.find((row) => row.occurrenceNumber === state.occurrenceNumber);
+    if (first && first.bookingId !== bookingId) {
+      return { bookingId, outcome: "skipped-duplicate-occurrence", canonicalBookingId: first.bookingId };
+    }
+  }
   if (!state.stripeCustomerId || !state.stripePaymentMethodId) {
     return { bookingId, outcome: "skipped-missing-payment-method" };
   }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildCustomerBookingReceivedEmail } from "./customerBookingReceived";
 import { sampleBookingRecord } from "../../testFixtures";
+import { FIRST_CLEANING_NOTICE } from "@/lib/booking/recurringPricing";
 
 const MANAGE_TOKEN = "test-manage-token-abc123";
 
@@ -145,8 +146,7 @@ describe("buildCustomerBookingReceivedEmail", () => {
 
 describe("buildCustomerBookingReceivedEmail — first-cleaning-at-full-price wording", () => {
   const NEW_POLICY = "first-visit-full-price-v1";
-  const NOTICE =
-    "Your first cleaning is charged at the regular price. After it is completed, use \u2018Book your next cleaning\u2019 in Manage Booking to receive your recurring discount. Future visits are booked separately.";
+  const NOTICE = FIRST_CLEANING_NOTICE;
 
   it("a recurring first cleaning (new policy, no discount) is labelled 'First cleaning total' with the notice and how to book the follow-up", () => {
     const record = sampleBookingRecord({

@@ -78,6 +78,24 @@ export async function cancelBookingByToken(
   const bookingId = await repository.findBookingIdByManageTokenHash(hashManageToken(token));
   if (!bookingId) return { outcome: "invalid-token" };
 
+  return cancelBookingById(bookingId, repository, notifications, now);
+}
+
+/**
+ * The cancellation logic proper, keyed by Booking ID. Identical rules and
+ * idempotency to cancelBookingByToken (which delegates here after
+ * resolving its token). Exposed for flows where the caller has already
+ * authenticated the customer's authority over the booking — e.g. "Stop
+ * recurring cleanings", which must cancel the schedule's upcoming
+ * appointment under this same policy without that appointment's own link.
+ * Returns "invalid-token" only when no row exists for the ID.
+ */
+export async function cancelBookingById(
+  bookingId: string,
+  repository: BookingRepository,
+  notifications: CancellationNotificationSender,
+  now: Date = new Date(),
+): Promise<CancelBookingResult> {
   const record = await repository.getFullBookingRecord(bookingId);
   if (!record) return { outcome: "invalid-token" };
 

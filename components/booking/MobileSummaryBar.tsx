@@ -14,16 +14,15 @@ type MobileSummaryBarProps = {
   state: BookingState;
   estimate: EstimateBreakdown | null;
   /** True only when the server confirmed this is a qualifying follow-up cleaning. */
-  discountApplied?: boolean;
 };
 
 // Sticky bottom bar shown only on mobile. Tapping it expands/collapses the
 // same selection details the desktop sidebar shows. `env(safe-area-inset-bottom)`
 // keeps the bar clear of the home indicator on notched phones.
-export default function MobileSummaryBar({ state, estimate, discountApplied = false }: MobileSummaryBarProps) {
+export default function MobileSummaryBar({ state, estimate }: MobileSummaryBarProps) {
   const [expanded, setExpanded] = useState(false);
   const lines = getSummaryLines(state);
-  const kind = getQuoteKind(state.frequency, discountApplied);
+  const kind = getQuoteKind(state.frequency);
   const totalPulse = usePulseClass(estimate ? estimate.totalPrice : "custom", PULSE);
   const durationPulse = usePulseClass(estimate ? estimate.totalDurationMinutes : "custom-duration", PULSE);
 

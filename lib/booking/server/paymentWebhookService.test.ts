@@ -108,6 +108,8 @@ function baseState(overrides: Partial<BookingPaymentState> = {}): BookingPayment
     paymentAttemptCount: 1,
     nextPaymentAttemptAt: "",
     manualAmountOverride: false,
+    recurringScheduleId: "",
+    occurrenceNumber: 0,
     ...overrides,
   };
 }

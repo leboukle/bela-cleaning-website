@@ -169,6 +169,15 @@ export const BOOKINGS_COLUMNS = [
   // code that writes these columns is deployed.
   "Pricing Policy",
   "Recurring Schedule ID",
+  // Automatic recurring appointments. Appended last (no column moves).
+  // Position of this appointment within its recurring schedule: 1 for the
+  // initial appointment, then 2, 3, ... for each generated one. Blank on
+  // one-time bookings and on every row created before recurring schedules
+  // existed. (Recurring Schedule ID + Occurrence Number) is the unique key
+  // of an appointment — generation arbitrates duplicates on it. The header
+  // "Occurrence Number" (BS) MUST exist on the live sheet before code that
+  // writes it is deployed.
+  "Occurrence Number",
 ] as const;
 
 export type BookingColumn = (typeof BOOKINGS_COLUMNS)[number];

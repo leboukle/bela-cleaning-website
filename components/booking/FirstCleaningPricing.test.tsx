@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import BookingFlow from "./BookingFlow";
 import BookingConfirmation from "./BookingConfirmation";
 import ReviewStep from "./steps/ReviewStep";
 import FrequencyStep from "./steps/FrequencyStep";
+import IntroStep from "./steps/IntroStep";
 import { calculateEstimate } from "@/lib/booking/calculate";
+import { FIRST_CLEANING_NOTICE, RECURRING_CONSENT_TEXT } from "@/lib/booking/recurringPricing";
 import { initialBookingState, initialExtrasState, type BookingState } from "@/lib/booking/types";
 
 beforeEach(() => {
@@ -16,10 +18,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-
-// The exact customer-facing policy statement (frequency-independent).
-const NOTICE =
-  "Your first cleaning is charged at the regular price. After it is completed, use ‘Book your next cleaning’ in Manage Booking to receive your recurring discount. Future visits are booked separately.";
 
 function completeState(overrides: Partial<BookingState> = {}): BookingState {
   return {
@@ -49,17 +47,17 @@ function completeState(overrides: Partial<BookingState> = {}): BookingState {
   };
 }
 
-function renderReview(state: BookingState, discountApplied = false) {
-  const estimate = calculateEstimate({ ...state, applyFrequencyDiscount: discountApplied });
+function renderReview(state: BookingState, onSubmit: () => void = () => {}, onConsent: (v: boolean) => void = () => {}) {
+  const estimate = calculateEstimate({ ...state, applyFrequencyDiscount: false });
   render(
     <ReviewStep
       state={state}
       estimate={estimate}
       onEdit={() => {}}
       onAgreedChange={() => {}}
+      onRecurringConsentChange={onConsent}
       submission={{ status: "idle" }}
-      onSubmit={() => {}}
-      followUpDiscountApplied={discountApplied}
+      onSubmit={onSubmit}
       onPickNewDate={() => {}}
       onRedoPayment={() => {}}
       honeypot=""
@@ -69,71 +67,85 @@ function renderReview(state: BookingState, discountApplied = false) {
   );
 }
 
+describe("Booking introduction", () => {
+  it("does not claim that no appointment is created or saved", () => {
+    render(<IntroStep onStart={() => {}} />);
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/no appointment is\s+created/i);
+    expect(text).not.toMatch(/no information is saved/i);
+    expect(text).not.toMatch(/preview of/i);
+    expect(text).toMatch(/creates your appointment request/i);
+    expect(text).toMatch(/not charged until one hour after your cleaning ends/i);
+  });
+});
+
 describe("Review step — what the customer is shown", () => {
-  it("a recurring FIRST cleaning shows 'First cleaning total' at the regular price, the policy notice, and a labeled ongoing estimate", () => {
+  it("a recurring initial booking shows 'First cleaning total' at the regular price, the explicit notice, and a labeled ongoing estimate", () => {
     renderReview(completeState({ frequency: "weekly" }));
     expect(screen.getByText("First cleaning total")).toBeTruthy();
     expect(screen.getByText("$165")).toBeTruthy(); // regular price — never the discounted figure
-    expect(screen.getByText(NOTICE)).toBeTruthy();
-    // The ongoing figure is labelled as later cleanings, not presented as this appointment's charge.
+    expect(screen.getByText(FIRST_CLEANING_NOTICE)).toBeTruthy();
     expect(screen.getByText(/Estimated total for later cleanings: \$145\.50 each, if your cleaning details stay the same\./)).toBeTruthy();
     expect(screen.queryByText("Estimated total")).toBeNull();
   });
 
-  it("shows the same explicit notice whichever recurring frequency is selected", () => {
+  it("the notice describes AUTOMATIC scheduling and no longer asks the customer to rebook through a link", () => {
     renderReview(completeState({ frequency: "biweekly" }));
-    expect(screen.getByText(NOTICE)).toBeTruthy();
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("we schedule your next cleaning automatically");
+    expect(text).not.toMatch(/book your next cleaning/i);
+    expect(text).not.toMatch(/future visits are booked separately/i);
   });
 
-  it("states that the discount begins with the second cleaning in the Frequency section", () => {
+  it("shows the discount as starting after the first cleaning in the Frequency section", () => {
     renderReview(completeState({ frequency: "monthly" }));
     expect(screen.getByText("5% discount, after your first cleaning")).toBeTruthy();
   });
 
-  it("a one-time booking is unchanged: 'Estimated total', no recurring notice, no ongoing estimate", () => {
+  it("a one-time booking is unchanged: 'Estimated total', no recurring notice or consent", () => {
     renderReview(completeState({ frequency: "one-time" }));
     expect(screen.getByText("Estimated total")).toBeTruthy();
     expect(screen.getByText("$165")).toBeTruthy();
     expect(screen.queryByText(/first cleaning is charged/i)).toBeNull();
-    expect(screen.queryByText(/later cleanings/i)).toBeNull();
+    expect(screen.queryByText(RECURRING_CONSENT_TEXT)).toBeNull();
+  });
+});
+
+describe("Recurring consent", () => {
+  it("is required for a recurring booking: Submit stays disabled until the consent box is ticked", () => {
+    renderReview(completeState({ frequency: "weekly", recurringConsent: false }));
+    const submit = screen.getByRole("button", { name: /submit booking request/i }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(screen.getByText(RECURRING_CONSENT_TEXT)).toBeTruthy();
   });
 
-  it("a qualifying follow-up shows the discounted amount as the amount for THIS appointment, with an 'applied' note", () => {
-    renderReview(completeState({ frequency: "weekly" }), true);
-    expect(screen.getByText("$145.50")).toBeTruthy();
-    expect(screen.getByText("Estimated total")).toBeTruthy();
-    expect(screen.getByText("Your weekly discount is applied to this cleaning.")).toBeTruthy();
-    expect(screen.queryByText("First cleaning total")).toBeNull();
-    expect(screen.queryByText(/later cleanings/i)).toBeNull();
+  it("enables Submit once consent is given", () => {
+    renderReview(completeState({ frequency: "weekly", recurringConsent: true }));
+    const submit = screen.getByRole("button", { name: /submit booking request/i }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+  });
+
+  it("reports the checkbox change to the flow", () => {
+    const onConsent = vi.fn();
+    renderReview(completeState({ frequency: "weekly", recurringConsent: false }), () => {}, onConsent);
+    fireEvent.click(screen.getByRole("checkbox", { name: /authorize BeLa Cleaning to automatically schedule/i }));
+    expect(onConsent).toHaveBeenCalledWith(true);
+  });
+
+  it("a one-time booking never needs it", () => {
+    renderReview(completeState({ frequency: "one-time", recurringConsent: false }));
+    const submit = screen.getByRole("button", { name: /submit booking request/i }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
   });
 });
 
 describe("Frequency selector", () => {
-  it("explains the policy and labels each discount as starting with the 2nd cleaning", () => {
+  it("states the arrangement and labels each discount as starting after the first cleaning", () => {
     render(<FrequencyStep value={null} onSelect={() => {}} onBack={() => {}} />);
-    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(document.body.textContent).toContain(FIRST_CLEANING_NOTICE);
     expect(screen.getByRole("radio", { name: /Weekly/ }).textContent).toContain("15% discount after your first cleaning");
     expect(screen.getByRole("radio", { name: /Every other week/ }).textContent).toContain("10% discount after your first cleaning");
     expect(screen.getByRole("radio", { name: /One time/ }).textContent).not.toContain("discount");
-  });
-
-  it("tells a follow-up customer their discount applies, and explains an unconfirmed first cleaning rather than promising it", () => {
-    const { rerender } = render(
-      <FrequencyStep value={null} onSelect={() => {}} onBack={() => {}} followUp={{ status: "eligible" }} />,
-    );
-    expect(screen.getByText(/follow-up cleaning, so your recurring discount applies to this visit/i)).toBeTruthy();
-    // An eligible follow-up is never told this is a first cleaning.
-    expect(screen.queryByText(NOTICE)).toBeNull();
-
-    rerender(
-      <FrequencyStep
-        value={null}
-        onSelect={() => {}}
-        onBack={() => {}}
-        followUp={{ status: "ineligible", reason: "first-cleaning-not-completed" }}
-      />,
-    );
-    expect(screen.getByText(/first cleaning hasn't been marked completed.*regular price/i)).toBeTruthy();
   });
 });
 
@@ -149,31 +161,16 @@ describe("Confirmation page", () => {
     ...base,
     saved: { cleaningType: "Standard cleaning", frequency: "Weekly", frequencyDiscount: 0, quoteKind: "first-cleaning" as const },
   };
-  const followUp = {
-    ...base,
-    totalPrice: 145.5,
-    saved: { cleaningType: "Standard cleaning", frequency: "Weekly", frequencyDiscount: 19.5, quoteKind: "follow-up" as const },
-  };
   const oneTime = {
     ...base,
     saved: { cleaningType: "Standard cleaning", frequency: "One time", frequencyDiscount: 0, quoteKind: "one-time" as const },
   };
 
-  it("an initial recurring booking is labelled 'First cleaning total' and gets the explicit policy notice", () => {
+  it("an initial recurring booking is labelled 'First cleaning total' and gets the explicit notice", () => {
     render(<BookingConfirmation state={completeState({ frequency: "weekly" })} submission={firstCleaning} />);
     expect(screen.getByText("First cleaning total")).toBeTruthy();
     expect(screen.getByText("$165")).toBeTruthy();
-    expect(screen.getByText(NOTICE)).toBeTruthy();
-  });
-
-  it("an eligible follow-up shows its actual discount and total and never says this is a first cleaning", () => {
-    render(<BookingConfirmation state={completeState({ frequency: "weekly" })} submission={followUp} />);
-    expect(screen.getByText("$145.50")).toBeTruthy();
-    expect(screen.getByText("Weekly discount applied")).toBeTruthy();
-    expect(screen.getByText("-$19.50")).toBeTruthy();
-    expect(screen.getByText("Your weekly discount is applied to this cleaning.")).toBeTruthy();
-    expect(screen.queryByText("First cleaning total")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/first cleaning/i);
+    expect(screen.getByText(FIRST_CLEANING_NOTICE)).toBeTruthy();
   });
 
   it("is unchanged for a one-time booking", () => {
@@ -183,8 +180,6 @@ describe("Confirmation page", () => {
   });
 
   it("describes the SAVED booking even when the browser's form state has since changed", () => {
-    // Saved as a weekly Standard first cleaning at $165; the form state now
-    // says monthly + deep. The confirmation must still say what was saved.
     render(<BookingConfirmation state={completeState({ frequency: "monthly", cleaningType: "deep" })} submission={firstCleaning} />);
     expect(screen.getByText("Weekly")).toBeTruthy();
     expect(screen.queryByText("Monthly")).toBeNull();
@@ -194,22 +189,13 @@ describe("Confirmation page", () => {
   });
 });
 
-describe("Booking flow with a follow-up link", () => {
-  function stubFetch(eligibility: { ok: boolean; eligible?: boolean; reason?: string }) {
-    const calls: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string) => {
-        calls.push(String(url));
-        return Promise.resolve({ json: () => Promise.resolve(eligibility) } as Response);
-      }),
-    );
-    return calls;
-  }
-
+describe("Booking flow", () => {
   const pick = (name: RegExp) => fireEvent.click(screen.getByRole("radio", { name }));
 
-  async function walkToFrequencyAndChooseWeekly() {
+  it("quotes the regular price for a recurring selection and never asks the server about a follow-up link", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<BookingFlow />);
     fireEvent.click(screen.getByRole("button", { name: /get started/i }));
     pick(/^Apartment$/);
     pick(/^2 bedrooms/);
@@ -219,41 +205,9 @@ describe("Booking flow with a follow-up link", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     pick(/^1,001–2,000 sq\. ft\./);
     pick(/^Weekly/);
-  }
-
-  it("without a link: the quote is the regular first-cleaning price", async () => {
-    const calls = stubFetch({ ok: true });
-    render(<BookingFlow />);
-    await walkToFrequencyAndChooseWeekly();
     expect(screen.getAllByText("$165").length).toBeGreaterThan(0);
     expect(screen.queryByText("$145.50")).toBeNull();
     expect(screen.getAllByText("First cleaning total").length).toBeGreaterThan(0);
-    expect(calls.some((c) => c.includes("follow-up-eligibility"))).toBe(false);
-  });
-
-  it("with a link the server confirms: the quote shows the discounted amount for this appointment", async () => {
-    const calls = stubFetch({ ok: true, eligible: true });
-    render(<BookingFlow followUpToken={"T".repeat(43)} />);
-    await waitFor(() => expect(calls.some((c) => c.includes("follow-up-eligibility?token="))).toBe(true));
-    await walkToFrequencyAndChooseWeekly();
-    await waitFor(() => expect(screen.getAllByText("$145.50").length).toBeGreaterThan(0));
-    expect(screen.queryByText("First cleaning total")).toBeNull();
-  });
-
-  it("with a link the server does NOT confirm: the quote stays at the regular price and the customer is told why", async () => {
-    stubFetch({ ok: true, eligible: false, reason: "first-cleaning-not-completed" });
-    render(<BookingFlow followUpToken={"T".repeat(43)} />);
-    fireEvent.click(await screen.findByRole("button", { name: /get started/i }));
-    pick(/^Apartment$/);
-    pick(/^2 bedrooms/);
-    pick(/^2 bathrooms/);
-    pick(/^Standard cleaning/);
-    fireEvent.click(screen.getByRole("button", { name: "No extras" }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    pick(/^1,001–2,000 sq\. ft\./);
-    await waitFor(() => expect(screen.getByText(/hasn't been marked completed/i)).toBeTruthy());
-    pick(/^Weekly/);
-    expect(screen.getAllByText("$165").length).toBeGreaterThan(0);
-    expect(screen.queryByText("$145.50")).toBeNull();
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("follow-up"))).toBe(false);
   });
 });

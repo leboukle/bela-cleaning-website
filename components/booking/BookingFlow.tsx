@@ -9,8 +9,6 @@ import {
   STEP_STAGE,
 } from "@/lib/booking/config";
 import { calculateEstimate } from "@/lib/booking/calculate";
-import { isRecurringFrequency } from "@/lib/booking/recurringPricing";
-import { useFollowUpEligibility } from "@/components/booking/useFollowUpEligibility";
 import { withAppointmentDate } from "@/lib/booking/appointmentSelection";
 import {
   initialBookingState,
@@ -85,7 +83,7 @@ const CUSTOM_ESTIMATE_MESSAGES: Record<"square-footage" | "bedrooms" | "bathroom
 // Orchestrates the linear question flow: owns BookingState, advances or
 // rewinds stepIndex, and branches into the custom-estimate stop screen
 // whenever the current step's selection is out of instant-pricing range.
-export default function BookingFlow({ followUpToken = null }: { followUpToken?: string | null } = {}) {
+export default function BookingFlow() {
   const [state, setState] = useState(initialBookingState);
 
   // Stable for the lifetime of this booking session (not reset by
@@ -105,18 +103,12 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
   // total/duration just changed. Cleared on any subsequent edit.
   const [switchedToDeepCleaning, setSwitchedToDeepCleaning] = useState(false);
 
-  // First-cleaning-at-full-price policy: the frequency discount applies
-  // only to a follow-up whose link the SERVER has confirmed (the earlier
-  // booking was completed). This mirrors that answer for display; the
-  // server re-decides on submission and refuses a mismatching total.
-  const followUpLink = useFollowUpEligibility(followUpToken);
-  const discountApplied = followUpLink.state.status === "eligible" && isRecurringFrequency(state.frequency);
-
   const currentStepId = STEP_ORDER[state.stepIndex];
-  const estimate = useMemo(
-    () => calculateEstimate({ ...state, applyFrequencyDiscount: discountApplied }),
-    [state, discountApplied],
-  );
+  // A submission is always the FIRST appointment of whatever it starts, so
+  // the frequency discount is never applied to this quote; later
+  // appointments of a recurring schedule are generated (and priced) by the
+  // server after a cleaning has been performed.
+  const estimate = useMemo(() => calculateEstimate({ ...state, applyFrequencyDiscount: false }), [state]);
 
   // Any selection that lengthens the estimated duration (square footage,
   // cleaning type, extras, the Standard -> Deep switch, ...) re-checks an
@@ -295,6 +287,7 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
 
   // --- Review & policy ---
   const setAgreedToPolicy = (agreed: boolean) => setState((s) => ({ ...s, agreedToPolicy: agreed }));
+  const setRecurringConsent = (consented: boolean) => setState((s) => ({ ...s, recurringConsent: consented }));
 
   // --- Payment (Milestone 5) ---
   const handleSetupComplete = (setupIntentId: string) => {
@@ -340,7 +333,7 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
       specialInstructions: state.specialInstructions,
       agreedToPolicy: state.agreedToPolicy,
       setupIntentId: state.setupIntentId,
-      followUpToken: followUpToken ?? "",
+      recurringConsent: state.recurringConsent,
       clientTotalPrice: estimate?.totalPrice ?? null,
       clientDurationMinutes: estimate?.totalDurationMinutes ?? null,
     };
@@ -388,15 +381,11 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
 
     if (body.code === "price-changed") {
       // The server's authoritative total differs from the one shown.
-      // Nothing was saved. With a follow-up link, re-ask the server so the
-      // quote updates; otherwise the price configuration itself changed
-      // underneath this session, which only a reload can pick up.
-      if (followUpToken) followUpLink.refresh();
+      // Nothing was saved. The price configuration changed underneath this
+      // session, which only a reload can pick up.
       setSubmission({
         status: "error",
-        message: followUpToken
-          ? "The price for your booking has changed. We've refreshed it — please review the total and submit again."
-          : "The price for your booking has changed. Please reload this page to see the current price.",
+        message: "The price for your booking has changed. Please reload this page to see the current price.",
       });
       return;
     }
@@ -480,7 +469,7 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
         );
       case "frequency":
         return (
-          <FrequencyStep value={state.frequency} onSelect={selectFrequency} onBack={goBack} followUp={followUpLink.state} />
+          <FrequencyStep value={state.frequency} onSelect={selectFrequency} onBack={goBack} />
         );
       case "location":
         return (
@@ -577,8 +566,7 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
             switchedToDeepCleaning={switchedToDeepCleaning}
             appointmentNoLongerFits={appointmentNoLongerFits && !state.serviceStartTime}
             appointmentCheckPending={appointmentRevalidation.isChecking}
-            followUpDiscountApplied={discountApplied}
-            quoteCheckPending={followUpLink.state.status === "checking"}
+            onRecurringConsentChange={setRecurringConsent}
             onChooseNewTime={() => editSection("arrival-window")}
             onPickNewDate={pickNewDate}
             onRedoPayment={redoPayment}
@@ -610,9 +598,9 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
             {renderStep()}
           </StepTransition>
         </div>
-        {currentStepId !== "intro" && !isConfirmed && <BookingSummary state={state} estimate={estimate} discountApplied={discountApplied} />}
+        {currentStepId !== "intro" && !isConfirmed && <BookingSummary state={state} estimate={estimate} />}
       </div>
-      {currentStepId !== "intro" && !isConfirmed && <MobileSummaryBar state={state} estimate={estimate} discountApplied={discountApplied} />}
+      {currentStepId !== "intro" && !isConfirmed && <MobileSummaryBar state={state} estimate={estimate} />}
       {noticeGate.isOpen && currentStepId === "review" && !isConfirmed && (
         <DeepCleaningNoticeDialog
           onSwitchToDeep={noticeGate.switchToDeep}

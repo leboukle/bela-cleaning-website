@@ -7,10 +7,10 @@ import "server-only";
 import { BOOKING_STATUS, PAYMENT_STATUS } from "./bookingsSheetSchema";
 import { getBookingTimingStatus, calculateLateCancellationFeeCents } from "./cancellationPolicy";
 import { getBookingSettings } from "./settings";
-import { evaluateFollowUpEligibility } from "./followUpEligibility";
 import { describeExtras } from "./extrasDescription";
 import { getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import type { BookingRecord } from "./types";
+import type { RecurringManageContext } from "./recurringScheduleService";
 
 export type ManageBookingView = {
   bookingId: string;
@@ -32,12 +32,12 @@ export type ManageBookingView = {
   extras: string[];
   frequency: string;
   /**
-   * True when this booking's own saved state qualifies a follow-up cleaning
-   * for the recurring discount (see followUpEligibility.ts) — the page then
-   * offers "Book your next cleaning". Display only: the booking flow and
-   * the server re-verify from the token on every use.
+   * Present only when this appointment belongs to a recurring schedule:
+   * what "Cancel this cleaning only" and "Stop recurring cleanings" would
+   * each affect, and any fee, so the customer sees the exact appointment
+   * before confirming. Display only — the server re-derives on every action.
    */
-  canBookNextCleaning: boolean;
+  recurring: RecurringManageContext | null;
   eligibility: {
     canCancel: boolean;
     canReschedule: boolean;
@@ -92,7 +92,7 @@ export async function buildManageBookingView(record: BookingRecord, now: Date = 
     totalPrice: record.chargeAmount,
     extras: describeExtras(record.extras),
     frequency: record.frequency,
-    canBookNextCleaning: evaluateFollowUpEligibility(record).eligible,
+    recurring: null,
     eligibility: {
       canCancel,
       canReschedule,

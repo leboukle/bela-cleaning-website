@@ -5,7 +5,13 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getFrequencyOption } from "@/lib/booking/config";
-import { FIRST_CLEANING_NOTICE, followUpAppliedNotice, getQuoteKind, getTotalLabel } from "@/lib/booking/recurringPricing";
+import {
+  FIRST_CLEANING_NOTICE,
+  RECURRING_CONSENT_TEXT,
+  RECURRING_CONTROLS_NOTICE,
+  getQuoteKind,
+  getTotalLabel,
+} from "@/lib/booking/recurringPricing";
 import { getSummaryLines } from "@/lib/booking/summary";
 import { formatExactTime, formatReadableDate } from "@/lib/booking/schedule";
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
@@ -28,10 +34,8 @@ type ReviewStepProps = {
   appointmentNoLongerFits?: boolean;
   /** True while a live availability re-check of the selected time is still in flight. */
   appointmentCheckPending?: boolean;
-  /** True only when the server confirmed this is a qualifying follow-up cleaning (discount applied). */
-  followUpDiscountApplied?: boolean;
-  /** True while the follow-up link's eligibility — and therefore the quote — is still being confirmed. */
-  quoteCheckPending?: boolean;
+  /** Explicit consent to automatic recurring scheduling and per-visit charges (recurring frequencies only). */
+  onRecurringConsentChange?: (consented: boolean) => void;
   /** Routes the customer to the existing appointment-time step. */
   onChooseNewTime?: () => void;
   onPickNewDate: () => void;
@@ -84,8 +88,7 @@ export default function ReviewStep({
   switchedToDeepCleaning = false,
   appointmentNoLongerFits = false,
   appointmentCheckPending = false,
-  followUpDiscountApplied = false,
-  quoteCheckPending = false,
+  onRecurringConsentChange,
   onChooseNewTime,
   onPickNewDate,
   onRedoPayment,
@@ -103,7 +106,8 @@ export default function ReviewStep({
   const extrasLine = lines.find((l) => l.label === "Extras");
   const squareFootageLine = lines.find((l) => l.label === "Square footage");
   const frequencyOption = state.frequency ? getFrequencyOption(state.frequency) : null;
-  const quoteKind = getQuoteKind(state.frequency, followUpDiscountApplied);
+  const quoteKind = getQuoteKind(state.frequency);
+  const isRecurring = quoteKind === "first-cleaning";
 
   const city = getCityForZip(state.zipCode);
 
@@ -137,6 +141,7 @@ export default function ReviewStep({
       addressZipValid &&
       state.someoneHome &&
       state.agreedToPolicy &&
+      (!isRecurring || state.recurringConsent) &&
       state.setupIntentId,
   );
 
@@ -172,11 +177,7 @@ export default function ReviewStep({
           {frequencyOption && frequencyOption.discount > 0 && (
             <ReviewLine
               label="Recurring discount"
-              value={
-                followUpDiscountApplied
-                  ? `${frequencyOption.discountLabel} (applied to this cleaning)`
-                  : `${frequencyOption.discountLabel}, after your first cleaning`
-              }
+              value={`${frequencyOption.discountLabel}, after your first cleaning`}
             />
           )}
         </ReviewSection>
@@ -221,6 +222,7 @@ export default function ReviewStep({
           {quoteKind === "first-cleaning" && state.frequency && (
             <>
               <p className="mt-3 text-sm font-medium text-[#3B2F27]">{FIRST_CLEANING_NOTICE}</p>
+              <p className="mt-2 text-sm text-[#6B5B4C]">{RECURRING_CONTROLS_NOTICE}</p>
               {estimate && estimate.ongoingVisitDiscount > 0 && (
                 <p className="mt-2 text-sm text-[#6B5B4C]">
                   Estimated total for later cleanings: {formatCurrency(estimate.ongoingVisitTotal)} each, if your
@@ -228,9 +230,6 @@ export default function ReviewStep({
                 </p>
               )}
             </>
-          )}
-          {quoteKind === "follow-up" && state.frequency && (
-            <p className="mt-3 text-sm font-medium text-[#1E5B3A]">{followUpAppliedNotice(state.frequency)}</p>
           )}
           {switchedToDeepCleaning && (
             <p className="mt-3 text-sm font-medium text-[#1E5B3A]" role="status">
@@ -243,7 +242,11 @@ export default function ReviewStep({
           <p className="text-sm font-semibold uppercase tracking-wide text-[#8A7A6B]">Before you book</p>
           <ul className="mt-3 space-y-2 text-sm text-[#6B5B4C]">
             <li>Every visit is completed by a professional, background-checked member of our team.</li>
-            <li>Transparent pricing, no hidden fees — the total above is exactly what you&rsquo;ll pay.</li>
+            <li>
+              {isRecurring
+                ? "Transparent pricing, no hidden fees — the total above is exactly what you’ll pay for this first cleaning."
+                : "Transparent pricing, no hidden fees — the total above is exactly what you’ll pay."}
+            </li>
             <li>We&rsquo;ll confirm your appointment and send a reminder before we arrive.</li>
             <li>
               Plans change — reschedule or cancel free of charge up to 24 hours before your visit.
@@ -276,6 +279,18 @@ export default function ReviewStep({
             .
           </span>
         </label>
+
+        {isRecurring && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E7DECE] bg-white p-5">
+            <input
+              type="checkbox"
+              checked={state.recurringConsent}
+              onChange={(event) => onRecurringConsentChange?.(event.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-[#C9BCA6] text-[#3B2F27] accent-[#3B2F27] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B2F27]"
+            />
+            <span className="text-sm text-[#3B2F27]">{RECURRING_CONSENT_TEXT}</span>
+          </label>
+        )}
 
         {/* Honeypot: invisible to real customers (off-screen, unfocusable,
             hidden from assistive tech) but present in the DOM for bots
@@ -353,7 +368,7 @@ export default function ReviewStep({
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!isComplete || submission.status === "submitting" || appointmentCheckPending || quoteCheckPending}
+          disabled={!isComplete || submission.status === "submitting" || appointmentCheckPending}
           className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#3B2F27] px-8 py-4 text-base font-medium tracking-wide text-white transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:bg-[#2A211C] hover:shadow-[0_16px_32px_-12px_rgba(59,47,39,0.4)] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none sm:w-auto"
         >
           {submission.status === "submitting" && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
@@ -361,9 +376,7 @@ export default function ReviewStep({
             ? "Submitting…"
             : appointmentCheckPending
               ? "Checking your appointment…"
-              : quoteCheckPending
-                ? "Confirming your price…"
-                : "Submit Booking Request"}
+              : "Submit Booking Request"}
         </button>
       </div>
     </StepShell>

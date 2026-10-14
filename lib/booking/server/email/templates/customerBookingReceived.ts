@@ -12,6 +12,7 @@ import { formatReadableDate, getScheduleDisplayLabel } from "@/lib/booking/sched
 import { getCleaningTypeIdForLabel } from "@/lib/booking/config";
 import {
   FIRST_CLEANING_NOTICE,
+  RECURRING_CONTROLS_NOTICE,
   followUpAppliedNoticeForLabel,
   getSavedQuoteKind,
   getTotalLabel,
@@ -62,7 +63,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
   const isFollowUp = quoteKind === "follow-up";
   const totalLabel = getTotalLabel(quoteKind);
   const policyLines = isFirstCleaning
-    ? [FIRST_CLEANING_NOTICE]
+    ? [FIRST_CLEANING_NOTICE, RECURRING_CONTROLS_NOTICE]
     : isFollowUp
       ? [followUpAppliedNoticeForLabel(record.frequency)]
       : [];

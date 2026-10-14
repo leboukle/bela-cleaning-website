@@ -7,6 +7,7 @@ import { hashManageToken, isPlausibleManageToken } from "./manageToken";
 import { resolveCancellationFeeState, type CancellationNotificationSender } from "./cancellationService";
 import { buildManageBookingView, type ManageBookingView } from "./manageBookingView";
 import type { BookingRepository } from "./repository";
+import { buildRecurringManageContext, type RecurringDeps } from "./recurringScheduleService";
 
 export type ManageBookingAccessResult = { ok: true; view: ManageBookingView } | { ok: false };
 
@@ -25,6 +26,10 @@ export async function getManageBookingView(
   repository: BookingRepository,
   notifications: CancellationNotificationSender,
   now: Date = new Date(),
+  // Present for recurring-aware callers (the Manage Booking page and API):
+  // adds the schedule context. Optional so non-recurring callers and tests
+  // are unaffected.
+  recurring?: Pick<RecurringDeps, "bookings" | "schedules">,
 ): Promise<ManageBookingAccessResult> {
   if (!isPlausibleManageToken(token)) return { ok: false };
 
@@ -43,5 +48,14 @@ export async function getManageBookingView(
     }
   }
 
-  return { ok: true, view: await buildManageBookingView(record, now) };
+  const view = await buildManageBookingView(record, now);
+  if (recurring) {
+    try {
+      view.recurring = await buildRecurringManageContext(record, recurring, now);
+    } catch {
+      // Best-effort: the page still renders every normal action without it.
+      view.recurring = null;
+    }
+  }
+  return { ok: true, view };
 }

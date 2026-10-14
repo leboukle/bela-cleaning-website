@@ -19,6 +19,13 @@ import { buildInternalRescheduleEmail } from "./email/templates/internalReschedu
 import { buildAppointmentReminderEmail } from "./email/templates/appointmentReminder";
 import { buildInternalReminderSentEmail } from "./email/templates/internalReminderSent";
 import { buildInternalReminderFailedEmail } from "./email/templates/internalReminderFailed";
+import {
+  buildCustomerRecurringAppointmentScheduledEmail,
+  buildInternalRecurringAppointmentCreatedEmail,
+  buildInternalRecurringScheduleAlertEmail,
+  type RecurringScheduleAlertContent,
+} from "./email/templates/recurringScheduleEmails";
+import type { RecurringScheduleRecord } from "./recurringScheduleSchema";
 import { getInternalNotificationEmail } from "./email/gmailAuth";
 import type { PaymentIntentFailureDetail } from "./stripe/paymentIntent";
 import type { BookingRecord } from "./types";
@@ -53,6 +60,42 @@ export class NotificationService {
     }
     const { subject, text, html } = buildInternalNewBookingEmail(record);
     return this.transport.send({ to: internalEmail, subject, text, html });
+  }
+
+  /** Recurring schedules: the customer's one confirmation for an automatically created appointment. */
+  async sendRecurringAppointmentScheduled(record: BookingRecord, manageToken: string): Promise<NotificationResult> {
+    const { subject, text, html } = buildCustomerRecurringAppointmentScheduledEmail(record, manageToken);
+    return this.transport.send({ to: record.email, subject, text, html });
+  }
+
+  /** Recurring schedules: tells the owner a generated appointment exists and needs a cleaner assigned. */
+  async sendInternalRecurringAppointmentCreated(record: BookingRecord): Promise<NotificationResult> {
+    const recipient = this.resolveInternalRecipient();
+    if (!recipient.ok) return recipient;
+    const { subject, text, html } = buildInternalRecurringAppointmentCreatedEmail(record);
+    return this.transport.send({ to: recipient.email, subject, text, html });
+  }
+
+  /** Recurring schedules: an owner-attention alert (blocked generation, missing completion, payment failure…). */
+  async sendInternalRecurringScheduleAlert(
+    schedule: RecurringScheduleRecord,
+    alert: RecurringScheduleAlertContent,
+  ): Promise<NotificationResult> {
+    const recipient = this.resolveInternalRecipient();
+    if (!recipient.ok) return recipient;
+    const { subject, text, html } = buildInternalRecurringScheduleAlertEmail(schedule, alert);
+    return this.transport.send({ to: recipient.email, subject, text, html });
+  }
+
+  private resolveInternalRecipient(): { ok: true; email: string } | { ok: false; error: string } {
+    try {
+      return { ok: true, email: getInternalNotificationEmail() };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Missing internal notification recipient configuration.",
+      };
+    }
   }
 
   /**

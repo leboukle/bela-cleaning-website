@@ -10,7 +10,7 @@ import {
   columnLetter,
   type BookingColumn,
 } from "./bookingsSheetSchema";
-import type { BookingRepository, IdempotentBookingResult } from "./repository";
+import type { BookingRepository, IdempotentBookingResult, ScheduleBookingRow } from "./repository";
 import type {
   AppointmentReminderUpdate,
   AssignableBookingSummary,
@@ -111,6 +111,8 @@ function recordToRow(record: BookingRecord): Array<string | number | boolean> {
     "Square Footage Price": record.squareFootagePrice,
     "Pricing Policy": record.pricingPolicy,
     "Recurring Schedule ID": record.recurringScheduleId,
+    // Blank (not 0) for one-time / pre-recurring rows.
+    "Occurrence Number": record.occurrenceNumber > 0 ? record.occurrenceNumber : "",
   };
 
   return BOOKINGS_COLUMNS.map((column) => {
@@ -218,6 +220,7 @@ function rowToRecord(row: string[]): BookingRecord {
     squareFootagePrice: getNumber("Square Footage Price"),
     pricingPolicy: get("Pricing Policy"),
     recurringScheduleId: get("Recurring Schedule ID"),
+    occurrenceNumber: getNumber("Occurrence Number"),
   };
 }
 
@@ -229,6 +232,84 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
   async bookingIdExists(bookingId: string): Promise<boolean> {
     const rows = await getRange(columnRange("Booking ID"));
     return rows.some((row) => row[0] === bookingId);
+  }
+
+  async listScheduleBookings(scheduleId: string): Promise<ScheduleBookingRow[]> {
+    if (!scheduleId) return [];
+    const [
+      ids,
+      scheduleIds,
+      occurrences,
+      bookingStatuses,
+      paymentStatuses,
+      serviceDates,
+      startTimes,
+      completedAts,
+      chargeAts,
+      durations,
+      chargeAmounts,
+      discounts,
+      customerStatuses,
+      internalStatuses,
+      submittedAts,
+    ] = await batchGetRanges([
+      columnRange("Booking ID"),
+      columnRange("Recurring Schedule ID"),
+      columnRange("Occurrence Number"),
+      columnRange("Booking Status"),
+      columnRange("Payment Status"),
+      columnRange("Service Date"),
+      columnRange("Service Start Time"),
+      columnRange("Completed At"),
+      columnRange("Scheduled Charge At"),
+      columnRange("Estimated Duration Minutes"),
+      columnRange("Charge Amount"),
+      columnRange("Frequency Discount"),
+      columnRange("Customer Confirmation Status"),
+      columnRange("Internal Notification Status"),
+      columnRange("Submitted At"),
+    ]);
+
+    const rows: ScheduleBookingRow[] = [];
+    for (let i = 0; i < ids.length; i++) {
+      if ((scheduleIds[i]?.[0] ?? "") !== scheduleId) continue;
+      rows.push({
+        bookingId: ids[i]?.[0] ?? "",
+        occurrenceNumber: Number(occurrences[i]?.[0] || 0),
+        bookingStatus: bookingStatuses[i]?.[0] ?? "",
+        paymentStatus: paymentStatuses[i]?.[0] ?? "",
+        serviceDate: serviceDates[i]?.[0] ?? "",
+        serviceStartTime: startTimes[i]?.[0] ?? "",
+        completedAt: completedAts[i]?.[0] ?? "",
+        scheduledChargeAt: chargeAts[i]?.[0] ?? "",
+        estimatedDurationMinutes: Number(durations[i]?.[0] || 0),
+        chargeAmount: Number(chargeAmounts[i]?.[0] || 0),
+        frequencyDiscount: Number(discounts[i]?.[0] || 0),
+        customerConfirmationStatus: customerStatuses[i]?.[0] ?? "",
+        internalNotificationStatus: internalStatuses[i]?.[0] ?? "",
+        submittedAt: submittedAts[i]?.[0] ?? "",
+      });
+    }
+    return rows;
+  }
+
+  async linkBookingToRecurringSchedule(bookingId: string, scheduleId: string, occurrenceNumber: number): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) throw new Error("Booking ID not found when linking to a recurring schedule.");
+    const sheetRow = rowIndex + 2;
+    await batchUpdateRanges([
+      { range: `${BOOKINGS_SHEET_NAME}!${columnLetter("Recurring Schedule ID")}${sheetRow}`, row: [scheduleId] },
+      { range: `${BOOKINGS_SHEET_NAME}!${columnLetter("Occurrence Number")}${sheetRow}`, row: [occurrenceNumber] },
+    ]);
+  }
+
+  async updateManageTokenHash(bookingId: string, tokenHash: string): Promise<void> {
+    const idRows = await getRange(columnRange("Booking ID"));
+    const rowIndex = idRows.findIndex((row) => row[0] === bookingId);
+    if (rowIndex === -1) throw new Error("Booking ID not found when updating manage token hash.");
+    const letter = columnLetter("Manage Booking Token Hash");
+    await updateRange(`${BOOKINGS_SHEET_NAME}!${letter}${rowIndex + 2}`, [tokenHash]);
   }
 
   async updateNotificationStatus(bookingId: string, update: NotificationStatusUpdate): Promise<void> {
@@ -316,6 +397,8 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
       attemptCounts,
       nextAttemptAts,
       manualOverrides,
+      scheduleIds,
+      occurrenceNumbers,
     ] = await batchGetRanges([
       columnRange("Booking ID"),
       columnRange("Booking Status"),
@@ -330,6 +413,8 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
       columnRange("Payment Attempt Count"),
       columnRange("Next Payment Attempt At"),
       columnRange("Manual Amount Override"),
+      columnRange("Recurring Schedule ID"),
+      columnRange("Occurrence Number"),
     ]);
 
     const rowIndex = ids.findIndex((row) => row[0] === bookingId);
@@ -349,6 +434,8 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
       paymentAttemptCount: Number(attemptCounts[rowIndex]?.[0] ?? 0),
       nextPaymentAttemptAt: nextAttemptAts[rowIndex]?.[0] ?? "",
       manualAmountOverride: parseSheetBoolean(manualOverrides[rowIndex]?.[0]),
+      recurringScheduleId: scheduleIds[rowIndex]?.[0] ?? "",
+      occurrenceNumber: Number(occurrenceNumbers[rowIndex]?.[0] || 0),
     };
   }
 

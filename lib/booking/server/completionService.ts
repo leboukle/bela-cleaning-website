@@ -7,7 +7,7 @@
 // never infers completion from elapsed/scheduled time — see the
 // architecture report §8's explicit requirement.
 import "server-only";
-import { BOOKING_STATUS } from "./bookingsSheetSchema";
+import { BOOKING_STATUS, PAYMENT_STATUS } from "./bookingsSheetSchema";
 import { ASSIGNMENT_STATUS } from "./cleanerSheetSchema";
 import { formatOperationalTimestamp } from "./dateUtils";
 import type { BookingRepository } from "./repository";
@@ -32,6 +32,44 @@ export async function markBookingComplete(bookingId: string, bookingRepository: 
   const completedAt = formatOperationalTimestamp(now);
   await bookingRepository.markBookingCompleted(bookingId, completedAt);
   return { outcome: "completed", completedAt };
+}
+
+export type MarkUnperformedOutcome =
+  | { outcome: "not-found" }
+  | { outcome: "already-cancelled" }
+  | { outcome: "already-completed"; completedAt: string }
+  | { outcome: "already-charged"; paymentStatus: string }
+  | { outcome: "marked-unperformed"; cancelledAt: string };
+
+/**
+ * BeLa-initiated only: records that a scheduled visit did NOT take place, so
+ * it can never receive a normal service charge. Implemented as a free,
+ * no-charge cancellation (Booking Status Cancelled, Payment Status
+ * "Cancelled — No Charge") — the one state every downstream consumer
+ * (payment scheduler, reminders, capacity, payouts) already treats as "do
+ * nothing". Only possible BEFORE the scheduled charge has been attempted:
+ * once a charge is in flight or taken, it is a refund decision for the
+ * owner in Stripe, not something this action can undo.
+ */
+export async function markBookingUnperformed(
+  bookingId: string,
+  bookingRepository: BookingRepository,
+  now: Date = new Date(),
+): Promise<MarkUnperformedOutcome> {
+  const record = await bookingRepository.getFullBookingRecord(bookingId);
+  if (!record) return { outcome: "not-found" };
+  if (record.bookingStatus === BOOKING_STATUS.CANCELLED) return { outcome: "already-cancelled" };
+  if (record.completedAt) return { outcome: "already-completed", completedAt: record.completedAt };
+  if (record.paymentStatus !== PAYMENT_STATUS.SCHEDULED) {
+    return { outcome: "already-charged", paymentStatus: record.paymentStatus };
+  }
+  const cancelledAt = formatOperationalTimestamp(now);
+  await bookingRepository.markBookingCancelled(bookingId, {
+    paymentStatus: PAYMENT_STATUS.CANCELLED_NO_CHARGE,
+    cancelledAt,
+    cancellationFeeAmount: 0,
+  });
+  return { outcome: "marked-unperformed", cancelledAt };
 }
 
 export type ProcessPayoutStatementOutcome =
