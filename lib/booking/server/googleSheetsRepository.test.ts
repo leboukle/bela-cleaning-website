@@ -187,6 +187,10 @@ describe("GoogleSheetsBookingRepository", () => {
       [["2026-09-01"], ["2026-09-22"]], // Service Date
       [["Morning"], [""]], // Arrival Window
       [[""], ["14:00"]], // Service Start Time
+      [["Standard cleaning"], ["Deep cleaning"]], // Cleaning Type
+      [["One time"], ["Weekly"]], // Frequency
+      [[""], ["0"]], // Frequency Discount
+      [[""], ["first-visit-full-price-v1"]], // Pricing Policy
     ]);
     const repo = new GoogleSheetsBookingRepository();
     const found = await repo.findRecentBookingByIdempotencyToken("match-me");
@@ -197,6 +201,10 @@ describe("GoogleSheetsBookingRepository", () => {
       serviceDate: "2026-09-22",
       arrivalWindow: "",
       serviceStartTime: "14:00",
+      cleaningType: "Deep cleaning",
+      frequency: "Weekly",
+      frequencyDiscount: 0,
+      pricingPolicy: "first-visit-full-price-v1",
     });
   });
 

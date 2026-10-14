@@ -22,7 +22,12 @@ import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { generateManageToken, hashManageToken } from "./manageToken";
 import { formatOperationalTimestamp } from "./dateUtils";
 import { resolveFollowUpEligibility } from "./followUpEligibility";
-import { FIRST_VISIT_PRICING_POLICY, isRecurringFrequency } from "@/lib/booking/recurringPricing";
+import {
+  FIRST_VISIT_PRICING_POLICY,
+  getSavedQuoteKind,
+  isRecurringFrequency,
+  type QuoteKind,
+} from "@/lib/booking/recurringPricing";
 import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
@@ -62,7 +67,40 @@ export type BookingSubmissionSuccess = {
   // email already sent on the original attempt is the customer's real
   // record of it.
   manageToken: string | null;
+  // The SAVED booking's own pricing facts, on the fresh path and on the
+  // idempotent-replay path alike, so the confirmation always describes
+  // what was actually stored — never whatever the browser now holds
+  // (e.g. a frequency changed after the booking was submitted).
+  saved: SavedBookingSummary;
 };
+
+export type SavedBookingSummary = {
+  cleaningType: string;
+  /** Saved frequency label, e.g. "Weekly" or "One time". */
+  frequency: string;
+  /** Saved frequency discount in dollars (0 for a first cleaning / one-time). */
+  frequencyDiscount: number;
+  /** What the saved total represents; see getSavedQuoteKind. */
+  quoteKind: QuoteKind;
+};
+
+function summarizeSavedBooking(saved: {
+  cleaningType: string;
+  frequency: string;
+  frequencyDiscount: number;
+  pricingPolicy: string;
+}): SavedBookingSummary {
+  return {
+    cleaningType: saved.cleaningType,
+    frequency: saved.frequency,
+    frequencyDiscount: saved.frequencyDiscount,
+    quoteKind: getSavedQuoteKind({
+      frequencyLabel: saved.frequency,
+      pricingPolicy: saved.pricingPolicy,
+      frequencyDiscount: saved.frequencyDiscount,
+    }),
+  };
+}
 
 export type BookingSubmissionFailure =
   | { ok: false; code: "validation"; issues: ValidationIssue[] }
@@ -279,6 +317,7 @@ export async function submitBooking(
         totalPrice: existing.totalPrice,
         estimatedDurationMinutes: existing.estimatedDurationMinutes,
         manageToken: null,
+        saved: summarizeSavedBooking(existing),
       };
     }
 
@@ -460,6 +499,7 @@ export async function submitBooking(
       totalPrice: pricing.totalPrice,
       estimatedDurationMinutes: pricing.estimatedDurationMinutes,
       manageToken,
+      saved: summarizeSavedBooking(record),
     };
   });
 }

@@ -251,7 +251,19 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
 
   async findRecentBookingByIdempotencyToken(token: string): Promise<IdempotentBookingResult | null> {
     const marker = `idempotency_token:${token}`;
-    const [notes, ids, totals, durations, dates, windows, startTimes] = await batchGetRanges([
+    const [
+      notes,
+      ids,
+      totals,
+      durations,
+      dates,
+      windows,
+      startTimes,
+      cleaningTypes,
+      frequencies,
+      frequencyDiscounts,
+      pricingPolicies,
+    ] = await batchGetRanges([
       columnRange("Internal Notes"),
       columnRange("Booking ID"),
       columnRange("Total Price"),
@@ -259,6 +271,10 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
       columnRange("Service Date"),
       columnRange("Arrival Window"),
       columnRange("Service Start Time"),
+      columnRange("Cleaning Type"),
+      columnRange("Frequency"),
+      columnRange("Frequency Discount"),
+      columnRange("Pricing Policy"),
     ]);
 
     const rowCount = notes.length;
@@ -275,6 +291,10 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
           serviceDate: dates[i]?.[0] ?? "",
           arrivalWindow: windows[i]?.[0] ?? "",
           serviceStartTime: startTimes[i]?.[0] ?? "",
+          cleaningType: cleaningTypes[i]?.[0] ?? "",
+          frequency: frequencies[i]?.[0] ?? "",
+          frequencyDiscount: Number(frequencyDiscounts[i]?.[0] ?? 0) || 0,
+          pricingPolicy: pricingPolicies[i]?.[0] ?? "",
         };
       }
     }

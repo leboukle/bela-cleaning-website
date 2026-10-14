@@ -41,6 +41,10 @@ class Repo {
         serviceDate: record.serviceDate,
         arrivalWindow: record.arrivalWindow,
         serviceStartTime: record.serviceStartTime,
+        cleaningType: record.cleaningType,
+        frequency: record.frequency,
+        frequencyDiscount: record.frequencyDiscount,
+        pricingPolicy: record.pricingPolicy,
       });
     }
   }
@@ -478,5 +482,158 @@ describe("resolveFollowUpEligibility", () => {
       eligible: false,
       reason: "earlier-booking-not-recurring",
     });
+  });
+});
+
+describe("eligibility behaviour for reused links, later bookings, cadence changes and longer series (documents CURRENT behaviour)", () => {
+  async function completedFirst(repo: Repo, frequency: "weekly" | "biweekly" | "monthly" = "monthly") {
+    const first = await book(repo, { frequency });
+    if (!first.ok || !first.manageToken) throw new Error("first booking should succeed");
+    repo.records[0].completedAt = "01/05/2026, 12:00:00 PM EST"; // months before any follow-up below
+    return first.manageToken;
+  }
+
+  it("the same completed link can be reused for multiple future bookings - it is not consumed", async () => {
+    const repo = new Repo();
+    const token = await completedFirst(repo, "weekly");
+    for (let i = 0; i < 3; i++) {
+      const r = await book(repo, { frequency: "weekly", followUpToken: token, clientTotalPrice: FOLLOW_UP_WEEKLY });
+      expect(r.ok).toBe(true);
+      expect(lastRecord(repo).totalPrice).toBe(FOLLOW_UP_WEEKLY);
+      expect(lastRecord(repo).frequencyDiscount).toBe(WEEKLY_DISCOUNT);
+      expect(lastRecord(repo).recurringScheduleId).toBe(repo.records[0].bookingId);
+    }
+  });
+
+  it("a follow-up booked months after completion still qualifies - there is no expiry or date check", async () => {
+    const repo = new Repo();
+    const token = await completedFirst(repo, "weekly"); // completed 01/05/2026
+    const r = await book(repo, { frequency: "weekly", followUpToken: token, serviceDate: futureDateKey(240), clientTotalPrice: FOLLOW_UP_WEEKLY });
+    expect(r.ok).toBe(true);
+    expect(lastRecord(repo).frequencyDiscount).toBe(WEEKLY_DISCOUNT);
+  });
+
+  it("the discount follows the frequency SELECTED on the follow-up, not the parent's: monthly parent, weekly follow-up gets 15%", async () => {
+    const repo = new Repo();
+    const token = await completedFirst(repo, "monthly");
+    expect(repo.records[0].frequency).toBe("Monthly");
+    const r = await book(repo, { frequency: "weekly", followUpToken: token, clientTotalPrice: FOLLOW_UP_WEEKLY });
+    expect(r.ok).toBe(true);
+    expect(lastRecord(repo).frequency).toBe("Weekly");
+    expect(lastRecord(repo).frequencyDiscount).toBe(WEEKLY_DISCOUNT);
+  });
+
+  it("choosing one-time on a follow-up link gets no discount and does not join the schedule", async () => {
+    const repo = new Repo();
+    const token = await completedFirst(repo, "weekly");
+    const r = await book(repo, { frequency: "one-time", followUpToken: token, clientTotalPrice: REGULAR });
+    expect(r.ok).toBe(true);
+    expect(lastRecord(repo).frequencyDiscount).toBe(0);
+    expect(lastRecord(repo).recurringScheduleId).toBe("");
+  });
+
+  it("a series continues beyond the second cleaning only while each next link's own booking is completed", async () => {
+    const repo = new Repo();
+    const token1 = await completedFirst(repo, "weekly");
+    const second = await book(repo, { frequency: "weekly", followUpToken: token1, clientTotalPrice: FOLLOW_UP_WEEKLY });
+    if (!second.ok || !second.manageToken) throw new Error("second booking should succeed");
+    expect(lastRecord(repo).recurringScheduleId).toBe(repo.records[0].bookingId);
+
+    // The second cleaning's own link is NOT yet eligible: BeLa has not marked it complete.
+    const early = await book(repo, { frequency: "weekly", followUpToken: second.manageToken, clientTotalPrice: FOLLOW_UP_WEEKLY });
+    expect(early.ok).toBe(false);
+    if (!early.ok) expect(early.code).toBe("price-changed"); // quoted discounted, server says regular price
+
+    repo.records[1].completedAt = "02/05/2026, 12:00:00 PM EST";
+    const third = await book(repo, { frequency: "weekly", followUpToken: second.manageToken, clientTotalPrice: FOLLOW_UP_WEEKLY });
+    expect(third.ok).toBe(true);
+    expect(lastRecord(repo).frequencyDiscount).toBe(WEEKLY_DISCOUNT);
+    expect(lastRecord(repo).recurringScheduleId).toBe(repo.records[0].bookingId); // same schedule, third cleaning
+  });
+});
+
+describe("confirmation reflects the authoritative SAVED booking (including an idempotent replay)", () => {
+  it("a fresh first cleaning returns the saved frequency, zero discount, total and kind", async () => {
+    const repo = new Repo();
+    const result = await book(repo, { frequency: "weekly" });
+    if (!result.ok) throw new Error("should succeed");
+    expect(result.totalPrice).toBe(REGULAR);
+    expect(result.saved).toEqual({
+      cleaningType: "Standard cleaning",
+      frequency: "Weekly",
+      frequencyDiscount: 0,
+      quoteKind: "first-cleaning",
+    });
+  });
+
+  it("a fresh eligible follow-up returns its actual discount and kind 'follow-up'", async () => {
+    const repo = new Repo();
+    const first = await book(repo, { frequency: "weekly" });
+    if (!first.ok || !first.manageToken) throw new Error("first booking should succeed");
+    repo.records[0].completedAt = "10/01/2026, 12:00:00 PM EDT";
+    const result = await book(repo, { frequency: "weekly", followUpToken: first.manageToken, clientTotalPrice: FOLLOW_UP_WEEKLY });
+    if (!result.ok) throw new Error("should succeed");
+    expect(result.saved).toEqual({
+      cleaningType: "Standard cleaning",
+      frequency: "Weekly",
+      frequencyDiscount: WEEKLY_DISCOUNT,
+      quoteKind: "follow-up",
+    });
+  });
+
+  it.each([
+    ["from the in-memory fast path", false],
+    ["from the saved row (cache cleared, e.g. another server instance)", true],
+  ])("a replay with DIFFERENT browser values returns the saved booking, not the new values - %s", async (_name, clearCache) => {
+    const repo = new Repo();
+    const original = await submitBooking(
+      input({ idempotencyToken: "replay-token", frequency: "weekly", clientTotalPrice: REGULAR }),
+      repo.as(),
+      notifications(),
+    );
+    if (!original.ok) throw new Error("original should succeed");
+    if (clearCache) resetIdempotencyFastPathForTests();
+
+    // The browser has since changed frequency, cleaning type and the quoted total.
+    const replay = await submitBooking(
+      input({ idempotencyToken: "replay-token", frequency: "monthly", cleaningType: "deep", clientTotalPrice: 999 }),
+      repo.as(),
+      notifications(),
+    );
+    if (!replay.ok) throw new Error("replay should resolve to the saved booking");
+
+    expect(repo.records).toHaveLength(1); // no second row
+    expect(replay.bookingId).toBe(original.bookingId);
+    expect(replay.totalPrice).toBe(REGULAR);
+    expect(replay.saved).toEqual({
+      cleaningType: "Standard cleaning",
+      frequency: "Weekly",
+      frequencyDiscount: 0,
+      quoteKind: "first-cleaning",
+    });
+  });
+
+  it("an idempotent replay of a follow-up still reports the saved discount", async () => {
+    const repo = new Repo();
+    const first = await book(repo, { frequency: "weekly" });
+    if (!first.ok || !first.manageToken) throw new Error("first booking should succeed");
+    repo.records[0].completedAt = "10/01/2026, 12:00:00 PM EDT";
+    const original = await submitBooking(
+      input({ idempotencyToken: "replay-follow-up", frequency: "weekly", followUpToken: first.manageToken, clientTotalPrice: FOLLOW_UP_WEEKLY }),
+      repo.as(),
+      notifications(),
+    );
+    if (!original.ok) throw new Error("original should succeed");
+    resetIdempotencyFastPathForTests();
+    const replay = await submitBooking(
+      input({ idempotencyToken: "replay-follow-up", frequency: "one-time", clientTotalPrice: REGULAR }),
+      repo.as(),
+      notifications(),
+    );
+    if (!replay.ok) throw new Error("replay should succeed");
+    expect(replay.totalPrice).toBe(FOLLOW_UP_WEEKLY);
+    expect(replay.saved.quoteKind).toBe("follow-up");
+    expect(replay.saved.frequency).toBe("Weekly");
+    expect(replay.saved.frequencyDiscount).toBe(WEEKLY_DISCOUNT);
   });
 });

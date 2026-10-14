@@ -2,6 +2,7 @@
 
 import { FREQUENCY_OPTIONS } from "@/lib/booking/config";
 import type { FrequencyId } from "@/lib/booking/types";
+import { FIRST_CLEANING_NOTICE } from "@/lib/booking/recurringPricing";
 import type { FollowUpEligibilityState } from "@/components/booking/useFollowUpEligibility";
 import SelectionCard from "@/components/booking/SelectionCard";
 import StepShell from "@/components/booking/StepShell";
@@ -17,7 +18,7 @@ type FrequencyStepProps = {
 export default function FrequencyStep({ value, onSelect, onBack, followUp = { status: "none" } }: FrequencyStepProps) {
   const applied = followUp.status === "eligible";
 
-  let note = "Your first cleaning is charged at the regular price. Your discount starts with your second cleaning.";
+  let note = FIRST_CLEANING_NOTICE;
   if (applied) {
     note = "This is a follow-up cleaning, so your recurring discount applies to this visit.";
   } else if (followUp.status === "ineligible") {
@@ -39,7 +40,7 @@ export default function FrequencyStep({ value, onSelect, onBack, followUp = { st
                 ? undefined
                 : applied
                   ? `${option.discountLabel} on this cleaning`
-                  : `${option.discountLabel} from your 2nd cleaning`
+                  : `${option.discountLabel} after your first cleaning`
             }
             selected={value === option.id}
             onSelect={() => onSelect(option.id)}

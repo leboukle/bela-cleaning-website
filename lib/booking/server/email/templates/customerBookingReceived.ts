@@ -11,9 +11,10 @@ import { formatCurrency, formatDuration } from "@/lib/booking/calculate";
 import { formatReadableDate, getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import { getCleaningTypeIdForLabel } from "@/lib/booking/config";
 import {
-  BOOK_NEXT_CLEANING_INSTRUCTION,
-  FIRST_VISIT_PRICING_POLICY,
-  firstCleaningNoticeForLabel,
+  FIRST_CLEANING_NOTICE,
+  followUpAppliedNoticeForLabel,
+  getSavedQuoteKind,
+  getTotalLabel,
 } from "@/lib/booking/recurringPricing";
 import { getServiceScope, isAddOnType } from "@/lib/serviceDefinitions";
 import { describeExtras } from "../../extrasDescription";
@@ -47,15 +48,24 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
   const extras = describeExtras(record.extras);
   const isRecurring = record.frequency !== "One time";
   const scope = resolveServiceScope(record);
-  // Bookings created under the first-cleaning-at-full-price policy: a
-  // recurring booking saved with no frequency discount IS the first
-  // cleaning, and the customer is told so. Older rows (blank policy) and
-  // discounted follow-ups keep the plain "Estimated total" wording.
-  const isFirstCleaning = isRecurring && record.pricingPolicy === FIRST_VISIT_PRICING_POLICY && record.frequencyDiscount === 0;
-  const totalLabel = isFirstCleaning ? "First cleaning total" : "Estimated total";
-  const firstCleaningLines = isFirstCleaning
-    ? [firstCleaningNoticeForLabel(record.frequency), BOOK_NEXT_CLEANING_INSTRUCTION]
-    : [];
+  // Wording follows what was SAVED. A recurring booking saved under the
+  // first-cleaning-at-full-price policy with no frequency discount IS the
+  // first cleaning and is told so. A discounted follow-up shows its actual
+  // discount and total and never claims to be a first cleaning. Older rows
+  // (blank policy) keep the plain "Estimated total" wording.
+  const quoteKind = getSavedQuoteKind({
+    frequencyLabel: record.frequency,
+    pricingPolicy: record.pricingPolicy,
+    frequencyDiscount: record.frequencyDiscount,
+  });
+  const isFirstCleaning = quoteKind === "first-cleaning";
+  const isFollowUp = quoteKind === "follow-up";
+  const totalLabel = getTotalLabel(quoteKind);
+  const policyLines = isFirstCleaning
+    ? [FIRST_CLEANING_NOTICE]
+    : isFollowUp
+      ? [followUpAppliedNoticeForLabel(record.frequency)]
+      : [];
 
   const lines: string[] = [
     `Hi ${record.firstName},`,
@@ -71,6 +81,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     `${totalLabel}: ${formatCurrency(record.totalPrice)}`,
   ];
   if (isRecurring) lines.push(`Frequency: ${record.frequency}`);
+  if (isFollowUp) lines.push(`${record.frequency} discount applied: -${formatCurrency(record.frequencyDiscount)}`);
   if (extras.length > 0) lines.push(`Extras: ${extras.join(", ")}`);
 
   lines.push(
@@ -78,7 +89,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     `Status: ${record.bookingStatus}. Your payment method has been saved securely — you have not been charged.`,
     `The estimated total above will be charged automatically starting 1 hour after your cleaning's scheduled`,
     "end time. Please keep your Booking ID for reference.",
-    ...(firstCleaningLines.length > 0 ? ["", ...firstCleaningLines] : []),
+    ...(policyLines.length > 0 ? ["", ...policyLines] : []),
     "",
     "Need to change or cancel your appointment? Manage your booking here:",
     manageUrl,
@@ -120,6 +131,9 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
   const frequencyRow = isRecurring
     ? `<tr><td style="padding:4px 0;color:#8A7A6B;">Frequency</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(record.frequency)}</td></tr>`
     : "";
+  const discountRow = isFollowUp
+    ? `<tr><td style="padding:4px 0;color:#8A7A6B;">${escapeHtml(record.frequency)} discount applied</td><td style="padding:4px 0;text-align:right;font-weight:600;">-${escapeHtml(formatCurrency(record.frequencyDiscount))}</td></tr>`
+    : "";
 
   const scopeSectionHtml = scope
     ? `
@@ -155,6 +169,7 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     <tr><td style="padding:4px 0;color:#8A7A6B;">Estimated duration</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatDuration(record.estimatedDurationMinutes))}</td></tr>
     <tr><td style="padding:4px 0;color:#8A7A6B;">${escapeHtml(totalLabel)}</td><td style="padding:4px 0;text-align:right;font-weight:600;">${escapeHtml(formatCurrency(record.totalPrice))}</td></tr>
     ${frequencyRow}
+    ${discountRow}
     ${extrasRow}
   </table>
   <p style="font-size:14px;color:#6B5B4C;">
@@ -163,8 +178,8 @@ export function buildCustomerBookingReceivedEmail(record: BookingRecord, manageT
     cleaning's scheduled end time. Please keep your Booking ID for reference.
   </p>
   ${
-    isFirstCleaning
-      ? `<p style="font-size:14px;color:#6B5B4C;">${escapeHtml(firstCleaningLines.join(" "))}</p>`
+    policyLines.length > 0
+      ? `<p style="font-size:14px;color:#6B5B4C;">${escapeHtml(policyLines.join(" "))}</p>`
       : ""
   }
   <p style="text-align:center;margin:24px 0;">

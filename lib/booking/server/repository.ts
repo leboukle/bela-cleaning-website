@@ -25,6 +25,13 @@ export type IdempotentBookingResult = {
   serviceDate: string;
   arrivalWindow: string;
   serviceStartTime: string;
+  // What was actually saved for this booking's pricing, so a replayed
+  // submission can be confirmed from the authoritative record (never from
+  // whatever the browser now holds).
+  cleaningType: string;
+  frequency: string;
+  frequencyDiscount: number;
+  pricingPolicy: string;
 };
 
 export interface BookingRepository {

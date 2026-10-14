@@ -27,12 +27,34 @@ export function isRecurringFrequency(frequency: FrequencyId | null | undefined):
   return Boolean(frequency) && frequency !== "one-time";
 }
 
-/** What the amount currently being quoted represents. */
-export type QuoteKind = "one-time" | "first-cleaning" | "follow-up";
+/**
+ * What the amount currently being quoted (or saved) represents.
+ *  - "first-cleaning": a recurring schedule's initial visit, at regular price.
+ *  - "follow-up": a recurring visit that received the frequency discount.
+ *  - "legacy": a recurring booking saved before this policy with no
+ *    discount recorded — makes no first-cleaning or discount claim.
+ */
+export type QuoteKind = "one-time" | "first-cleaning" | "follow-up" | "legacy";
 
 export function getQuoteKind(frequency: FrequencyId | null | undefined, discountApplied: boolean): QuoteKind {
   if (!isRecurringFrequency(frequency)) return "one-time";
   return discountApplied ? "follow-up" : "first-cleaning";
+}
+
+/**
+ * Same classification, derived from what was actually SAVED for a booking
+ * (its frequency label, pricing policy and frequency discount) rather than
+ * from browser state. Confirmation page and emails use this so they always
+ * describe the saved booking.
+ */
+export function getSavedQuoteKind(saved: {
+  frequencyLabel: string;
+  pricingPolicy: string;
+  frequencyDiscount: number;
+}): QuoteKind {
+  if (saved.frequencyLabel === getFrequencyOption("one-time").label) return "one-time";
+  if (saved.frequencyDiscount > 0) return "follow-up";
+  return saved.pricingPolicy === FIRST_VISIT_PRICING_POLICY ? "first-cleaning" : "legacy";
 }
 
 /** Label for the amount charged for THE APPOINTMENT BEING BOOKED. */
@@ -40,24 +62,23 @@ export function getTotalLabel(kind: QuoteKind): string {
   return kind === "first-cleaning" ? "First cleaning total" : "Estimated total";
 }
 
+/**
+ * The one explicit statement of the policy, shown ONLY for an initial
+ * recurring booking (never for a follow-up that already has its discount).
+ */
+export const FIRST_CLEANING_NOTICE =
+  "Your first cleaning is charged at the regular price. After it is completed, use ‘Book your next cleaning’ in Manage Booking to receive your recurring discount. Future visits are booked separately.";
+
 /** "Weekly" -> "weekly", "Every other week" -> "every other week". */
 function frequencyPhrase(frequency: FrequencyId): string {
   return getFrequencyOption(frequency).label.toLowerCase();
-}
-
-/** Same sentence, for places that only have the persisted label ("Weekly"). */
-export function firstCleaningNoticeForLabel(frequencyLabel: string): string {
-  return `Your first cleaning is charged at the regular price. Your ${frequencyLabel.toLowerCase()} discount starts with your second cleaning.`;
-}
-
-export function firstCleaningNotice(frequency: FrequencyId): string {
-  return firstCleaningNoticeForLabel(getFrequencyOption(frequency).label);
 }
 
 export function followUpAppliedNotice(frequency: FrequencyId): string {
   return `Your ${frequencyPhrase(frequency)} discount is applied to this cleaning.`;
 }
 
-/** Explains how to get the discount on the next visit; used in the confirmation page/email. */
-export const BOOK_NEXT_CLEANING_INSTRUCTION =
-  "After your first cleaning is completed, open your Manage Booking link and choose “Book your next cleaning” to receive your discount.";
+/** Same sentence for places that only have the persisted label ("Weekly"). */
+export function followUpAppliedNoticeForLabel(frequencyLabel: string): string {
+  return `Your ${frequencyLabel.toLowerCase()} discount is applied to this cleaning.`;
+}

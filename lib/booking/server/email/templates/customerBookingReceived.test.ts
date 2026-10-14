@@ -145,7 +145,8 @@ describe("buildCustomerBookingReceivedEmail", () => {
 
 describe("buildCustomerBookingReceivedEmail — first-cleaning-at-full-price wording", () => {
   const NEW_POLICY = "first-visit-full-price-v1";
-  const NOTICE = "Your first cleaning is charged at the regular price. Your weekly discount starts with your second cleaning.";
+  const NOTICE =
+    "Your first cleaning is charged at the regular price. After it is completed, use \u2018Book your next cleaning\u2019 in Manage Booking to receive your recurring discount. Future visits are booked separately.";
 
   it("a recurring first cleaning (new policy, no discount) is labelled 'First cleaning total' with the notice and how to book the follow-up", () => {
     const record = sampleBookingRecord({
@@ -159,25 +160,27 @@ describe("buildCustomerBookingReceivedEmail — first-cleaning-at-full-price wor
     for (const body of [email.text, email.html]) {
       expect(body).toContain("First cleaning total");
       expect(body).toContain(NOTICE);
-      expect(body).toContain("Book your next cleaning");
     }
     expect(email.text).toContain("First cleaning total: $225");
     expect(email.text).not.toContain("Estimated total:");
   });
 
-  it("uses the frequency's own wording (e.g. 'every other week')", () => {
+  it("uses the same explicit notice for every recurring frequency", () => {
     const record = sampleBookingRecord({ frequency: "Every other week", pricingPolicy: NEW_POLICY, frequencyDiscount: 0 });
-    expect(buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN).text).toContain(
-      "Your every other week discount starts with your second cleaning.",
-    );
+    expect(buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN).text).toContain(NOTICE);
   });
 
-  it("a discounted follow-up keeps the plain 'Estimated total' wording and makes no first-cleaning claim", () => {
+  it("an eligible follow-up shows its actual discount and total and makes no first-cleaning claim", () => {
     const record = sampleBookingRecord({ frequency: "Weekly", pricingPolicy: NEW_POLICY, frequencyDiscount: 19.5, totalPrice: 205.5 });
     const email = buildCustomerBookingReceivedEmail(record, MANAGE_TOKEN);
+    for (const body of [email.text, email.html]) {
+      expect(body).not.toContain("First cleaning total");
+      expect(body).not.toMatch(/first cleaning/i);
+      expect(body).toContain("Your weekly discount is applied to this cleaning.");
+    }
     expect(email.text).toContain("Estimated total: $205.50");
-    expect(email.text).not.toContain("First cleaning total");
-    expect(email.text).not.toContain("discount starts with your second cleaning");
+    expect(email.text).toContain("Weekly discount applied: -$19.50");
+    expect(email.html).toContain("Weekly discount applied");
   });
 
   it("a pre-policy (legacy) recurring booking's email is unchanged", () => {

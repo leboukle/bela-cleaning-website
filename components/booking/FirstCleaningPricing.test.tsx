@@ -17,8 +17,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const NOTICE = (frequency: string) =>
-  `Your first cleaning is charged at the regular price. Your ${frequency} discount starts with your second cleaning.`;
+// The exact customer-facing policy statement (frequency-independent).
+const NOTICE =
+  "Your first cleaning is charged at the regular price. After it is completed, use ‘Book your next cleaning’ in Manage Booking to receive your recurring discount. Future visits are booked separately.";
 
 function completeState(overrides: Partial<BookingState> = {}): BookingState {
   return {
@@ -73,20 +74,20 @@ describe("Review step — what the customer is shown", () => {
     renderReview(completeState({ frequency: "weekly" }));
     expect(screen.getByText("First cleaning total")).toBeTruthy();
     expect(screen.getByText("$165")).toBeTruthy(); // regular price — never the discounted figure
-    expect(screen.getByText(NOTICE("weekly"))).toBeTruthy();
+    expect(screen.getByText(NOTICE)).toBeTruthy();
     // The ongoing figure is labelled as later cleanings, not presented as this appointment's charge.
     expect(screen.getByText(/Estimated total for later cleanings: \$145\.50 each, if your cleaning details stay the same\./)).toBeTruthy();
     expect(screen.queryByText("Estimated total")).toBeNull();
   });
 
-  it("uses the selected frequency's own wording in the notice", () => {
+  it("shows the same explicit notice whichever recurring frequency is selected", () => {
     renderReview(completeState({ frequency: "biweekly" }));
-    expect(screen.getByText(NOTICE("every other week"))).toBeTruthy();
+    expect(screen.getByText(NOTICE)).toBeTruthy();
   });
 
   it("states that the discount begins with the second cleaning in the Frequency section", () => {
     renderReview(completeState({ frequency: "monthly" }));
-    expect(screen.getByText("5% discount, from your 2nd cleaning")).toBeTruthy();
+    expect(screen.getByText("5% discount, after your first cleaning")).toBeTruthy();
   });
 
   it("a one-time booking is unchanged: 'Estimated total', no recurring notice, no ongoing estimate", () => {
@@ -110,11 +111,9 @@ describe("Review step — what the customer is shown", () => {
 describe("Frequency selector", () => {
   it("explains the policy and labels each discount as starting with the 2nd cleaning", () => {
     render(<FrequencyStep value={null} onSelect={() => {}} onBack={() => {}} />);
-    expect(
-      screen.getByText("Your first cleaning is charged at the regular price. Your discount starts with your second cleaning."),
-    ).toBeTruthy();
-    expect(screen.getByRole("radio", { name: /Weekly/ }).textContent).toContain("15% discount from your 2nd cleaning");
-    expect(screen.getByRole("radio", { name: /Every other week/ }).textContent).toContain("10% discount from your 2nd cleaning");
+    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(screen.getByRole("radio", { name: /Weekly/ }).textContent).toContain("15% discount after your first cleaning");
+    expect(screen.getByRole("radio", { name: /Every other week/ }).textContent).toContain("10% discount after your first cleaning");
     expect(screen.getByRole("radio", { name: /One time/ }).textContent).not.toContain("discount");
   });
 
@@ -123,6 +122,8 @@ describe("Frequency selector", () => {
       <FrequencyStep value={null} onSelect={() => {}} onBack={() => {}} followUp={{ status: "eligible" }} />,
     );
     expect(screen.getByText(/follow-up cleaning, so your recurring discount applies to this visit/i)).toBeTruthy();
+    // An eligible follow-up is never told this is a first cleaning.
+    expect(screen.queryByText(NOTICE)).toBeNull();
 
     rerender(
       <FrequencyStep
@@ -137,26 +138,59 @@ describe("Frequency selector", () => {
 });
 
 describe("Confirmation page", () => {
-  const submission = {
+  const base = {
     bookingId: "BELA-20261201-ABCDEF",
     serviceDate: "2026-12-01",
     serviceStartTime: "9:00 AM",
     totalPrice: 165,
     estimatedDurationMinutes: 225,
   };
+  const firstCleaning = {
+    ...base,
+    saved: { cleaningType: "Standard cleaning", frequency: "Weekly", frequencyDiscount: 0, quoteKind: "first-cleaning" as const },
+  };
+  const followUp = {
+    ...base,
+    totalPrice: 145.5,
+    saved: { cleaningType: "Standard cleaning", frequency: "Weekly", frequencyDiscount: 19.5, quoteKind: "follow-up" as const },
+  };
+  const oneTime = {
+    ...base,
+    saved: { cleaningType: "Standard cleaning", frequency: "One time", frequencyDiscount: 0, quoteKind: "one-time" as const },
+  };
 
-  it("labels the amount 'First cleaning total' and repeats the notice plus how to book the discounted follow-up", () => {
-    render(<BookingConfirmation state={completeState({ frequency: "weekly" })} submission={submission} />);
+  it("an initial recurring booking is labelled 'First cleaning total' and gets the explicit policy notice", () => {
+    render(<BookingConfirmation state={completeState({ frequency: "weekly" })} submission={firstCleaning} />);
     expect(screen.getByText("First cleaning total")).toBeTruthy();
     expect(screen.getByText("$165")).toBeTruthy();
-    expect(screen.getByText(/Your first cleaning is charged at the regular price\. Your weekly discount starts with your second cleaning\./)).toBeTruthy();
-    expect(screen.getByText(/Book your next cleaning/)).toBeTruthy();
+    expect(screen.getByText(NOTICE)).toBeTruthy();
+  });
+
+  it("an eligible follow-up shows its actual discount and total and never says this is a first cleaning", () => {
+    render(<BookingConfirmation state={completeState({ frequency: "weekly" })} submission={followUp} />);
+    expect(screen.getByText("$145.50")).toBeTruthy();
+    expect(screen.getByText("Weekly discount applied")).toBeTruthy();
+    expect(screen.getByText("-$19.50")).toBeTruthy();
+    expect(screen.getByText("Your weekly discount is applied to this cleaning.")).toBeTruthy();
+    expect(screen.queryByText("First cleaning total")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/first cleaning/i);
   });
 
   it("is unchanged for a one-time booking", () => {
-    render(<BookingConfirmation state={completeState({ frequency: "one-time" })} submission={submission} />);
+    render(<BookingConfirmation state={completeState({ frequency: "one-time" })} submission={oneTime} />);
     expect(screen.getByText("Estimated total")).toBeTruthy();
     expect(screen.queryByText(/first cleaning is charged/i)).toBeNull();
+  });
+
+  it("describes the SAVED booking even when the browser's form state has since changed", () => {
+    // Saved as a weekly Standard first cleaning at $165; the form state now
+    // says monthly + deep. The confirmation must still say what was saved.
+    render(<BookingConfirmation state={completeState({ frequency: "monthly", cleaningType: "deep" })} submission={firstCleaning} />);
+    expect(screen.getByText("Weekly")).toBeTruthy();
+    expect(screen.queryByText("Monthly")).toBeNull();
+    expect(screen.getByText("Standard cleaning")).toBeTruthy();
+    expect(screen.getByText("$165")).toBeTruthy();
+    expect(screen.getByText("First cleaning total")).toBeTruthy();
   });
 });
 

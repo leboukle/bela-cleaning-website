@@ -138,6 +138,20 @@ Notification Attempt At
 > never repriced (a link from such a recurring booking continues its
 > schedule with the discount). Both headers must exist on the live sheet
 > before code that writes them is deployed.
+>
+> **What a follow-up link does and does not enforce** (current behaviour,
+> covered by `recurringDiscount.test.ts`): the link is not consumed and has
+> no expiry, so one completed booking's link keeps qualifying later
+> bookings; the discount percentage is that of the frequency *selected on
+> the follow-up* (the earlier booking's cadence is not compared); and a
+> follow-up of a follow-up qualifies only once BeLa has marked the
+> intermediate cleaning complete. No cadence is enforced.
+>
+> **Confirmation source of truth:** the success response of
+> `POST /api/booking` — on a fresh save *and* on an idempotent replay —
+> carries `saved` (cleaning type, saved frequency label, saved frequency
+> discount, and the derived `quoteKind`), read from the stored row. The
+> confirmation page and email render from that, never from browser state.
 
 The last 3 columns of the original listing were added in Milestone 4 — see
 [`docs/notifications.md`](./notifications.md) §7 for the full detail

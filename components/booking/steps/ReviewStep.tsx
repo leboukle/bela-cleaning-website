@@ -5,7 +5,7 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getFrequencyOption } from "@/lib/booking/config";
-import { firstCleaningNotice, followUpAppliedNotice, getQuoteKind, getTotalLabel } from "@/lib/booking/recurringPricing";
+import { FIRST_CLEANING_NOTICE, followUpAppliedNotice, getQuoteKind, getTotalLabel } from "@/lib/booking/recurringPricing";
 import { getSummaryLines } from "@/lib/booking/summary";
 import { formatExactTime, formatReadableDate } from "@/lib/booking/schedule";
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
@@ -94,7 +94,7 @@ export default function ReviewStep({
   onBack,
 }: ReviewStepProps) {
   if (submission.status === "success") {
-    return <BookingConfirmation state={state} submission={submission} discountApplied={followUpDiscountApplied} />;
+    return <BookingConfirmation state={state} submission={submission} />;
   }
 
   const lines = getSummaryLines(state);
@@ -175,7 +175,7 @@ export default function ReviewStep({
               value={
                 followUpDiscountApplied
                   ? `${frequencyOption.discountLabel} (applied to this cleaning)`
-                  : `${frequencyOption.discountLabel}, from your 2nd cleaning`
+                  : `${frequencyOption.discountLabel}, after your first cleaning`
               }
             />
           )}
@@ -220,7 +220,7 @@ export default function ReviewStep({
           </p>
           {quoteKind === "first-cleaning" && state.frequency && (
             <>
-              <p className="mt-3 text-sm font-medium text-[#3B2F27]">{firstCleaningNotice(state.frequency)}</p>
+              <p className="mt-3 text-sm font-medium text-[#3B2F27]">{FIRST_CLEANING_NOTICE}</p>
               {estimate && estimate.ongoingVisitDiscount > 0 && (
                 <p className="mt-2 text-sm text-[#6B5B4C]">
                   Estimated total for later cleanings: {formatCurrency(estimate.ongoingVisitTotal)} each, if your

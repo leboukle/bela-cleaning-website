@@ -63,6 +63,10 @@ class InMemoryBookingRepository implements BookingRepository {
         serviceDate: record.serviceDate,
         arrivalWindow: record.arrivalWindow,
         serviceStartTime: record.serviceStartTime,
+        cleaningType: record.cleaningType,
+        frequency: record.frequency,
+        frequencyDiscount: record.frequencyDiscount,
+        pricingPolicy: record.pricingPolicy,
       });
     }
   }

@@ -54,6 +54,25 @@ import SpecialInstructionsStep from "@/components/booking/steps/SpecialInstructi
 import PaymentStep from "@/components/booking/steps/PaymentStep";
 import ReviewStep from "@/components/booking/steps/ReviewStep";
 
+type SavedSummary = Extract<BookingSubmissionUiState, { status: "success" }>["saved"];
+const SAVED_QUOTE_KINDS: ReadonlySet<string> = new Set(["one-time", "first-cleaning", "follow-up", "legacy"]);
+
+// Reads the saved-booking facts the server returned. Anything missing or
+// malformed degrades to a neutral "legacy" summary that makes no
+// first-cleaning or discount claim — it never falls back to browser state.
+function parseSavedSummary(raw: unknown): SavedSummary {
+  const neutral: SavedSummary = { cleaningType: "", frequency: "", frequencyDiscount: 0, quoteKind: "legacy" };
+  if (typeof raw !== "object" || raw === null) return neutral;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.quoteKind !== "string" || !SAVED_QUOTE_KINDS.has(r.quoteKind)) return neutral;
+  return {
+    cleaningType: typeof r.cleaningType === "string" ? r.cleaningType : "",
+    frequency: typeof r.frequency === "string" ? r.frequency : "",
+    frequencyDiscount: Number.isFinite(Number(r.frequencyDiscount)) ? Number(r.frequencyDiscount) : 0,
+    quoteKind: r.quoteKind as SavedSummary["quoteKind"],
+  };
+}
+
 const CUSTOM_ESTIMATE_MESSAGES: Record<"square-footage" | "bedrooms" | "bathrooms", string> = {
   "square-footage":
     "Your home is a bit larger than we can price instantly — let's put together a custom estimate for you.",
@@ -357,6 +376,7 @@ export default function BookingFlow({ followUpToken = null }: { followUpToken?: 
         serviceStartTime: String(body.serviceStartTime),
         totalPrice: Number(body.totalPrice),
         estimatedDurationMinutes: Number(body.estimatedDurationMinutes),
+        saved: parseSavedSummary(body.saved),
       });
       return;
     }
