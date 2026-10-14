@@ -52,6 +52,25 @@ import SpecialInstructionsStep from "@/components/booking/steps/SpecialInstructi
 import PaymentStep from "@/components/booking/steps/PaymentStep";
 import ReviewStep from "@/components/booking/steps/ReviewStep";
 
+type SavedSummary = Extract<BookingSubmissionUiState, { status: "success" }>["saved"];
+const SAVED_QUOTE_KINDS: ReadonlySet<string> = new Set(["one-time", "first-cleaning", "follow-up", "legacy"]);
+
+// Reads the saved-booking facts the server returned. Anything missing or
+// malformed degrades to a neutral "legacy" summary that makes no
+// first-cleaning or discount claim — it never falls back to browser state.
+function parseSavedSummary(raw: unknown): SavedSummary {
+  const neutral: SavedSummary = { cleaningType: "", frequency: "", frequencyDiscount: 0, quoteKind: "legacy" };
+  if (typeof raw !== "object" || raw === null) return neutral;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.quoteKind !== "string" || !SAVED_QUOTE_KINDS.has(r.quoteKind)) return neutral;
+  return {
+    cleaningType: typeof r.cleaningType === "string" ? r.cleaningType : "",
+    frequency: typeof r.frequency === "string" ? r.frequency : "",
+    frequencyDiscount: Number.isFinite(Number(r.frequencyDiscount)) ? Number(r.frequencyDiscount) : 0,
+    quoteKind: r.quoteKind as SavedSummary["quoteKind"],
+  };
+}
+
 const CUSTOM_ESTIMATE_MESSAGES: Record<"square-footage" | "bedrooms" | "bathrooms", string> = {
   "square-footage":
     "Your home is a bit larger than we can price instantly — let's put together a custom estimate for you.",
@@ -85,7 +104,11 @@ export default function BookingFlow() {
   const [switchedToDeepCleaning, setSwitchedToDeepCleaning] = useState(false);
 
   const currentStepId = STEP_ORDER[state.stepIndex];
-  const estimate = useMemo(() => calculateEstimate(state), [state]);
+  // A submission is always the FIRST appointment of whatever it starts, so
+  // the frequency discount is never applied to this quote; later
+  // appointments of a recurring schedule are generated (and priced) by the
+  // server after a cleaning has been performed.
+  const estimate = useMemo(() => calculateEstimate({ ...state, applyFrequencyDiscount: false }), [state]);
 
   // Any selection that lengthens the estimated duration (square footage,
   // cleaning type, extras, the Standard -> Deep switch, ...) re-checks an
@@ -264,6 +287,7 @@ export default function BookingFlow() {
 
   // --- Review & policy ---
   const setAgreedToPolicy = (agreed: boolean) => setState((s) => ({ ...s, agreedToPolicy: agreed }));
+  const setRecurringConsent = (consented: boolean) => setState((s) => ({ ...s, recurringConsent: consented }));
 
   // --- Payment (Milestone 5) ---
   const handleSetupComplete = (setupIntentId: string) => {
@@ -309,6 +333,7 @@ export default function BookingFlow() {
       specialInstructions: state.specialInstructions,
       agreedToPolicy: state.agreedToPolicy,
       setupIntentId: state.setupIntentId,
+      recurringConsent: state.recurringConsent,
       clientTotalPrice: estimate?.totalPrice ?? null,
       clientDurationMinutes: estimate?.totalDurationMinutes ?? null,
     };
@@ -344,12 +369,24 @@ export default function BookingFlow() {
         serviceStartTime: String(body.serviceStartTime),
         totalPrice: Number(body.totalPrice),
         estimatedDurationMinutes: Number(body.estimatedDurationMinutes),
+        saved: parseSavedSummary(body.saved),
       });
       return;
     }
 
     if (body.code === "date-unavailable") {
       setSubmission({ status: "date-unavailable", message: String(body.message) });
+      return;
+    }
+
+    if (body.code === "price-changed") {
+      // The server's authoritative total differs from the one shown.
+      // Nothing was saved. The price configuration changed underneath this
+      // session, which only a reload can pick up.
+      setSubmission({
+        status: "error",
+        message: "The price for your booking has changed. Please reload this page to see the current price.",
+      });
       return;
     }
 
@@ -431,7 +468,9 @@ export default function BookingFlow() {
           <ExtrasStep extras={state.extras} onChange={setExtras} onContinue={advance} onBack={goBack} />
         );
       case "frequency":
-        return <FrequencyStep value={state.frequency} onSelect={selectFrequency} onBack={goBack} />;
+        return (
+          <FrequencyStep value={state.frequency} onSelect={selectFrequency} onBack={goBack} />
+        );
       case "location":
         return (
           <LocationStep
@@ -527,6 +566,7 @@ export default function BookingFlow() {
             switchedToDeepCleaning={switchedToDeepCleaning}
             appointmentNoLongerFits={appointmentNoLongerFits && !state.serviceStartTime}
             appointmentCheckPending={appointmentRevalidation.isChecking}
+            onRecurringConsentChange={setRecurringConsent}
             onChooseNewTime={() => editSection("arrival-window")}
             onPickNewDate={pickNewDate}
             onRedoPayment={redoPayment}

@@ -10,6 +10,7 @@ import { GoogleSheetsBookingRepository } from "@/lib/booking/server/googleSheets
 import { NotificationService } from "@/lib/booking/server/notificationService";
 import { GmailApiTransport } from "@/lib/booking/server/email/gmailTransport";
 import { isRateLimited } from "@/lib/booking/server/rateLimit";
+import { getRecurringDeps } from "@/lib/booking/server/recurringRuntime";
 
 export const runtime = "nodejs";
 
@@ -30,7 +31,7 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
   const { token } = await context.params;
 
   try {
-    const result = await getManageBookingView(token, repository, notificationService);
+    const result = await getManageBookingView(token, repository, notificationService, new Date(), getRecurringDeps());
     if (!result.ok) {
       return NextResponse.json({ ok: false, message: "This booking link is invalid or has expired." }, { status: 404 });
     }

@@ -145,3 +145,26 @@ describe("buildManageBookingView", () => {
     expect(withExtras.extras).toEqual(["Inside kitchen cabinets", "Interior windows × 2"]);
   });
 });
+
+describe("buildManageBookingView — recurring context", () => {
+  it("has no recurring context by default (it is attached by manageBookingAccess for a schedule's appointments)", async () => {
+    const view = await buildManageBookingView(activeRecord({ frequency: "Weekly" }), MORE_THAN_24H_BEFORE);
+    expect(view.recurring).toBeNull();
+  });
+
+  it("never exposes the schedule ID, pricing policy or occurrence number", async () => {
+    const view = await buildManageBookingView(
+      activeRecord({
+        frequency: "Weekly",
+        pricingPolicy: "first-visit-full-price-v1",
+        recurringScheduleId: "BELA-SECRET-SCHEDULE",
+        occurrenceNumber: 3,
+      }),
+      MORE_THAN_24H_BEFORE,
+    );
+    const serialized = JSON.stringify(view);
+    expect(serialized).not.toContain("BELA-SECRET-SCHEDULE");
+    expect(serialized).not.toContain("first-visit-full-price-v1");
+    expect(serialized).not.toContain("occurrenceNumber");
+  });
+});

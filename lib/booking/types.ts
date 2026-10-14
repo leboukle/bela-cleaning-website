@@ -131,6 +131,8 @@ export type BookingState = {
   specialInstructions: string;
 
   agreedToPolicy: boolean;
+  /** Explicit consent to automatically scheduled, automatically charged recurring cleanings (recurring frequencies only). */
+  recurringConsent: boolean;
 
   // Milestone 5: the confirmed Stripe SetupIntent ID from the Payment
   // step, carried into the final /api/booking submission. Never anything
@@ -189,6 +191,7 @@ export const initialBookingState: BookingState = {
   specialInstructions: "",
 
   agreedToPolicy: false,
+  recurringConsent: false,
 
   setupIntentId: null,
 

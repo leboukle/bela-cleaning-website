@@ -12,6 +12,7 @@ import { GoogleSheetsBookingRepository } from "@/lib/booking/server/googleSheets
 import { NotificationService } from "@/lib/booking/server/notificationService";
 import { GmailApiTransport } from "@/lib/booking/server/email/gmailTransport";
 import { isRateLimited } from "@/lib/booking/server/rateLimit";
+import { advanceScheduleAfterChange } from "@/lib/booking/server/recurringRuntime";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,11 @@ export async function POST(request: Request, context: { params: Promise<{ token:
 
   try {
     const result = await cancelBookingByToken(token, repository, notificationService);
+    // "Cancel this cleaning only": the schedule stays active and moves on
+    // to its next regular occurrence (a no-op for non-recurring bookings).
+    if (result.bookingId && STATUS_BY_OUTCOME[result.outcome] < 400) {
+      await advanceScheduleAfterChange(result.bookingId);
+    }
     return NextResponse.json(
       { ok: STATUS_BY_OUTCOME[result.outcome] < 400, outcome: result.outcome, message: MESSAGE_BY_OUTCOME[result.outcome] },
       { status: STATUS_BY_OUTCOME[result.outcome] },

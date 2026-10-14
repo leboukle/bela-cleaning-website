@@ -12,6 +12,15 @@ export type BookingSubmissionUiState =
       serviceStartTime: string;
       totalPrice: number;
       estimatedDurationMinutes: number;
+      // The saved booking's own pricing facts, as returned by the server
+      // (fresh submission or idempotent replay). The confirmation renders
+      // from these, never from whatever the browser's form state now holds.
+      saved: {
+        cleaningType: string;
+        frequency: string;
+        frequencyDiscount: number;
+        quoteKind: "one-time" | "first-cleaning" | "follow-up" | "legacy";
+      };
     }
   | { status: "error"; message: string }
   | { status: "date-unavailable"; message: string }

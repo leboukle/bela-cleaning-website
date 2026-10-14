@@ -78,15 +78,42 @@ export async function batchGetRanges(ranges: string[]): Promise<string[][][]> {
   return (data.valueRanges ?? []).map((vr) => vr.values ?? []);
 }
 
-/** Appends exactly one row to the given A1-notation range/sheet. */
-export async function appendRow(range: string, row: SheetValue[]): Promise<void> {
-  await sheetsFetch(
+/**
+ * Appends exactly one row to the given A1-notation range/sheet
+ * (insertDataOption=INSERT_ROWS: Sheets inserts a NEW row after the last
+ * row of the table, so concurrent appends never overwrite each other).
+ *
+ * Returns the 1-based sheet row the row landed on, parsed from the API's
+ * own `updates.updatedRange` ("Tab!A12:BS12") — the append response is the
+ * authoritative statement of where THIS request's row went, which is what
+ * lets recurring-schedule arbitration compare "my row" with "the first row
+ * for this key" without relying on content alone. `null` if the response
+ * did not include it.
+ */
+export async function appendRow(range: string, row: SheetValue[]): Promise<{ rowNumber: number | null }> {
+  const data = (await sheetsFetch(
     `/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
       body: JSON.stringify({ values: [row] }),
     },
-  );
+  )) as { updates?: { updatedRange?: string } } | undefined;
+  const match = /![A-Z]+(\d+)(?::[A-Z]+\d+)?$/.exec(data?.updates?.updatedRange ?? "");
+  return { rowNumber: match ? Number(match[1]) : null };
+}
+
+/** Title of the spreadsheet and its tab names — used by the owner setup check to prove WHICH sheet is configured. */
+export async function getSpreadsheetOverview(): Promise<{ title: string; tabTitles: string[]; idSuffix: string }> {
+  const data = (await sheetsFetch(`?fields=properties.title,sheets.properties.title`)) as {
+    properties?: { title?: string };
+    sheets?: Array<{ properties?: { title?: string } }>;
+  };
+  const id = getSpreadsheetId();
+  return {
+    title: data.properties?.title ?? "",
+    tabTitles: (data.sheets ?? []).map((s) => s.properties?.title ?? "").filter(Boolean),
+    idSuffix: id.slice(-6),
+  };
 }
 
 /**

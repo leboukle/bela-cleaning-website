@@ -162,6 +162,26 @@ export default function TermsPage() {
           BeLa Cleaning may waive or reduce a late-cancellation fee at its discretion in
           exceptional circumstances.
         </p>
+        <p>
+          <strong>Recurring cleanings.</strong> If you book a recurring schedule, Manage
+          Booking offers two different actions:
+        </p>
+        <ul>
+          <li>
+            <strong>Cancel one cleaning</strong> cancels only that appointment. Your
+            recurring schedule continues and the next regular appointment is scheduled.
+            The cancellation rules above apply to that appointment.
+          </li>
+          <li>
+            <strong>Stop recurring cleanings</strong> ends your recurring schedule so no
+            further appointments are scheduled. Stopping itself has no fee. Your
+            already-scheduled upcoming appointment is cancelled at the same time under the
+            rules above: free if it is more than 24 hours before its scheduled start
+            time; if it is within 24 hours, the late-cancellation fee for that
+            appointment applies. Manage Booking shows that appointment and any fee before
+            you confirm.
+          </li>
+        </ul>
       </LegalSection>
 
       <LegalSection id="payment" number={8} title="Payment">
@@ -186,6 +206,20 @@ export default function TermsPage() {
           Your saved payment method may also be charged a late-cancellation fee, as
           described in Section 7 (Cancellations and Rescheduling), if you cancel within
           24 hours of your scheduled start time.
+        </p>
+        <p>
+          <strong>Recurring cleanings.</strong> If you choose a weekly, every-other-week,
+          or monthly frequency, you authorize BeLa Cleaning to schedule each next cleaning
+          on your recurring schedule automatically and to charge the saved payment method
+          for each cleaning, starting one hour after its scheduled end time, in the
+          amount shown for that cleaning, until you stop recurring cleanings. Your first
+          cleaning is charged at the regular price; once a cleaning has been performed,
+          later cleanings receive the recurring discount for your selected frequency,
+          based on the service details you booked. If your service details change, the
+          price of later cleanings may change, and BeLa Cleaning will tell you before it
+          is charged. We email you when each cleaning is scheduled and again before it
+          takes place. You may stop recurring cleanings at any time as described in
+          Section 7.
         </p>
       </LegalSection>
 

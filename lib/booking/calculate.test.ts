@@ -53,13 +53,13 @@ describe("square-footage price modifier", () => {
 
   it("never applies the recurring discount to the square-footage addition", () => {
     // Weekly = 15% off the BEDROOM BASE only: 130 * 0.85 = 110.50.
-    const weekly = estimate({ frequency: "weekly", squareFootage: "3001-4000" });
+    const weekly = estimate({ frequency: "weekly", squareFootage: "3001-4000", applyFrequencyDiscount: true });
     expect(weekly.discountedBedroomBasePrice).toBe(110.5);
     // 110.50 + 20 bathrooms + 35 square footage, undiscounted.
     expect(weekly.totalPrice).toBe(165.5);
 
     // Same discount amount regardless of which square-footage tier is chosen.
-    const smallWeekly = estimate({ frequency: "weekly", squareFootage: "up-to-1000" });
+    const smallWeekly = estimate({ frequency: "weekly", squareFootage: "up-to-1000", applyFrequencyDiscount: true });
     expect(weekly.bedroomBasePrice - weekly.discountedBedroomBasePrice).toBe(
       smallWeekly.bedroomBasePrice - smallWeekly.discountedBedroomBasePrice,
     );
@@ -116,5 +116,46 @@ describe("Standard -> Deep Cleaning switch (notes safeguard)", () => {
     expect(deep.squareFootageAddition).toBe(standard.squareFootageAddition);
     expect(deep.bathroomAddition).toBe(standard.bathroomAddition);
     expect(deep.discountedBedroomBasePrice).toBe(standard.discountedBedroomBasePrice);
+  });
+});
+
+describe("first cleaning at full price (recurring discount policy)", () => {
+  it.each([
+    ["weekly", 0.15],
+    ["biweekly", 0.1],
+    ["monthly", 0.05],
+  ] as const)("%s: the FIRST cleaning carries no discount, and the existing rate (%s) is unchanged for follow-ups", (frequency, rate) => {
+    const first = estimate({ frequency }); // applyFrequencyDiscount omitted -> safe default (none)
+    const followUp = estimate({ frequency, applyFrequencyDiscount: true });
+    const oneTime = estimate({ frequency: "one-time" });
+
+    expect(first.totalPrice).toBe(oneTime.totalPrice); // full regular price
+    expect(first.discountedBedroomBasePrice).toBe(first.bedroomBasePrice);
+    // The follow-up gets exactly the existing percentage of the bedroom base.
+    expect(followUp.bedroomBasePrice - followUp.discountedBedroomBasePrice).toBeCloseTo(followUp.bedroomBasePrice * rate, 2);
+    expect(followUp.totalPrice).toBeLessThan(first.totalPrice);
+  });
+
+  it("defaults to NO discount when the flag is omitted, so a forgotten argument can never grant one", () => {
+    expect(estimate({ frequency: "weekly" }).totalPrice).toBe(estimate({ frequency: "one-time" }).totalPrice);
+    expect(estimate({ frequency: "weekly", applyFrequencyDiscount: false }).totalPrice).toBe(
+      estimate({ frequency: "one-time" }).totalPrice,
+    );
+  });
+
+  it("reports the ongoing (second cleaning onward) amount without changing what THIS appointment costs", () => {
+    const first = estimate({ frequency: "weekly" });
+    const followUp = estimate({ frequency: "weekly", applyFrequencyDiscount: true });
+    expect(first.ongoingVisitTotal).toBe(followUp.totalPrice);
+    expect(first.ongoingVisitDiscount).toBe(19.5); // 15% of the $130 bedroom base
+    expect(first.totalPrice).toBe(165); // $130 + $20 + $15 — the regular price
+    expect(followUp.ongoingVisitTotal).toBe(followUp.totalPrice);
+  });
+
+  it("one-time bookings: no discount and no ongoing difference", () => {
+    const oneTime = estimate({ frequency: "one-time" });
+    expect(oneTime.ongoingVisitDiscount).toBe(0);
+    expect(oneTime.ongoingVisitTotal).toBe(oneTime.totalPrice);
+    expect(estimate({ frequency: "one-time", applyFrequencyDiscount: true }).totalPrice).toBe(oneTime.totalPrice);
   });
 });

@@ -37,6 +37,12 @@ const SUBMISSION = {
   serviceStartTime: "9:00 AM",
   totalPrice: 190.5,
   estimatedDurationMinutes: 270,
+  // What the server saved — the confirmation renders from this, not from form state.
+  saved: { cleaningType: "Standard cleaning", frequency: "Weekly", frequencyDiscount: 0, quoteKind: "first-cleaning" as const },
+};
+const ONE_TIME_SUBMISSION = {
+  ...SUBMISSION,
+  saved: { cleaningType: "Standard cleaning", frequency: "One time", frequencyDiscount: 0, quoteKind: "one-time" as const },
 };
 
 describe("BookingConfirmation", () => {
@@ -83,7 +89,7 @@ describe("BookingConfirmation", () => {
 
   it("hides frequency when one-time", () => {
     const state = sampleState({ frequency: "one-time" });
-    render(<BookingConfirmation state={state} submission={SUBMISSION} />);
+    render(<BookingConfirmation state={state} submission={ONE_TIME_SUBMISSION} />);
     expect(screen.queryByText("Frequency")).toBeNull();
   });
 

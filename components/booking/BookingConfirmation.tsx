@@ -2,22 +2,20 @@
 
 import { Check } from "lucide-react";
 import { formatCurrency, formatDuration } from "@/lib/booking/calculate";
-import { getCleaningTypeOption, getFrequencyOption } from "@/lib/booking/config";
+
+import { FIRST_CLEANING_NOTICE, followUpAppliedNoticeForLabel, getTotalLabel } from "@/lib/booking/recurringPricing";
 import { formatReadableDate } from "@/lib/booking/schedule";
 import { businessConfig } from "@/lib/config";
 import type { BookingState } from "@/lib/booking/types";
+import type { BookingSubmissionUiState } from "@/lib/booking/submissionState";
 
-type BookingConfirmationSubmission = {
-  bookingId: string;
-  serviceDate: string;
-  serviceStartTime: string;
-  totalPrice: number;
-  estimatedDurationMinutes: number;
-};
-
+// The booking's saved facts (date, time, duration, total, cleaning type,
+// frequency, discount) come from the SERVER's response; `state` supplies
+// only what the customer typed and the server never echoes (name, address,
+// extras), none of which affects the price.
 type BookingConfirmationProps = {
   state: BookingState;
-  submission: BookingConfirmationSubmission;
+  submission: Omit<Extract<BookingSubmissionUiState, { status: "success" }>, "status">;
 };
 
 // Only the 5 states this prototype's service area ever offers (US_STATES
@@ -43,9 +41,10 @@ const WHAT_HAPPENS_NEXT = [
 ];
 
 export default function BookingConfirmation({ state, submission }: BookingConfirmationProps) {
-  const cleaningTypeLabel = state.cleaningType ? getCleaningTypeOption(state.cleaningType).label : "—";
-  const frequencyOption = state.frequency ? getFrequencyOption(state.frequency) : null;
-  const isRecurring = Boolean(frequencyOption && frequencyOption.id !== "one-time");
+  const { saved } = submission;
+  const cleaningTypeLabel = saved.cleaningType || "—";
+  const isRecurring = saved.quoteKind !== "one-time" && saved.frequency !== "";
+  const quoteKind = saved.quoteKind;
 
   const extraLabels: string[] = [];
   if (!state.extras.noExtras) {
@@ -90,8 +89,11 @@ export default function BookingConfirmation({ state, submission }: BookingConfir
           <ConfirmationLine label="Appointment time" value={submission.serviceStartTime} />
           <ConfirmationLine label="Service address" value={addressLine || "—"} />
           <ConfirmationLine label="Estimated duration" value={formatDuration(submission.estimatedDurationMinutes)} />
-          <ConfirmationLine label="Estimated total" value={formatCurrency(submission.totalPrice)} />
-          {isRecurring && frequencyOption && <ConfirmationLine label="Frequency" value={frequencyOption.label} />}
+          <ConfirmationLine label={getTotalLabel(quoteKind)} value={formatCurrency(submission.totalPrice)} />
+          {isRecurring && <ConfirmationLine label="Frequency" value={saved.frequency} />}
+          {quoteKind === "follow-up" && (
+            <ConfirmationLine label={`${saved.frequency} discount applied`} value={`-${formatCurrency(saved.frequencyDiscount)}`} />
+          )}
           {extraLabels.length > 0 && <ConfirmationLine label="Extras" value={extraLabels.join(", ")} />}
         </dl>
       </div>
@@ -102,6 +104,10 @@ export default function BookingConfirmation({ state, submission }: BookingConfir
           method has been saved securely — you have not been charged. The estimated total above will be charged
           automatically starting 1 hour after your cleaning&rsquo;s scheduled end time.
         </p>
+        {quoteKind === "first-cleaning" && <p className="mt-3 text-sm text-[#6B5B4C]">{FIRST_CLEANING_NOTICE}</p>}
+        {quoteKind === "follow-up" && (
+          <p className="mt-3 text-sm text-[#6B5B4C]">{followUpAppliedNoticeForLabel(saved.frequency)}</p>
+        )}
       </div>
 
       <div className="rounded-2xl border border-[#E7DECE] bg-white p-6 shadow-[0_1px_3px_-1px_rgba(59,47,39,0.08)]">

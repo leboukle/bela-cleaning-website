@@ -216,6 +216,18 @@ export function validateSubmission(input: BookingSubmissionInput): ValidationRes
     addIssue("agreedToPolicy", "You must agree to the Service Policy and Terms & Conditions.");
   }
 
+  // --- Recurring consent ---
+  // A recurring frequency creates ongoing automatically-scheduled,
+  // automatically-charged appointments, so it needs its own explicit
+  // consent. One-time bookings never record it, whatever the client sent.
+  const isRecurring = frequency !== "one-time";
+  if (isRecurring && input.recurringConsent !== true) {
+    addIssue(
+      "recurringConsent",
+      "Please confirm that you authorize your recurring cleanings to be scheduled and charged automatically.",
+    );
+  }
+
   if (issues.length > 0) {
     return { ok: false, issues };
   }
@@ -247,6 +259,7 @@ export function validateSubmission(input: BookingSubmissionInput): ValidationRes
     agreedToPolicy: true,
     idempotencyToken,
     setupIntentId,
+    recurringConsent: isRecurring && input.recurringConsent === true,
   };
 
   return { ok: true, booking };

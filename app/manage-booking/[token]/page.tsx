@@ -6,6 +6,7 @@ import { NotificationService } from "@/lib/booking/server/notificationService";
 import { GmailApiTransport } from "@/lib/booking/server/email/gmailTransport";
 import ManageBookingActions from "@/components/manageBooking/ManageBookingActions";
 import { businessConfig } from "@/lib/config";
+import { getRecurringDeps } from "@/lib/booking/server/recurringRuntime";
 
 // robots: noindex — this path segment carries a per-booking access token in
 // the URL and must never be crawled, cached, or surfaced in search results.
@@ -21,12 +22,23 @@ export const metadata: Metadata = {
 const repository = new GoogleSheetsBookingRepository();
 const notificationService = new NotificationService(new GmailApiTransport());
 
-export default async function ManageBookingPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function ManageBookingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ action?: string | string[] }>;
+}) {
   const { token } = await params;
+  // Deep links from emails ("Cancel this cleaning only" / "Stop recurring
+  // cleanings") open the matching confirmation. Only a hint for the UI: the
+  // action itself still requires the customer's explicit confirmation.
+  const { action } = await searchParams;
+  const initialAction = action === "cancel-one" || action === "stop" ? action : null;
 
   let result;
   try {
-    result = await getManageBookingView(token, repository, notificationService);
+    result = await getManageBookingView(token, repository, notificationService, new Date(), getRecurringDeps());
   } catch {
     result = { ok: false as const };
   }
@@ -35,7 +47,7 @@ export default async function ManageBookingPage({ params }: { params: Promise<{ 
     <div className="min-h-screen bg-[#FBF7EF]">
       <div className="mx-auto max-w-2xl px-5 py-10 sm:px-8 sm:py-14 lg:px-10 lg:py-16">
         {result.ok ? (
-          <ManageBookingActions token={token} initialBooking={result.view} />
+          <ManageBookingActions token={token} initialBooking={result.view} initialAction={initialAction} />
         ) : (
           <div className="rounded-2xl border border-[#E7DECE] bg-white p-7 text-center shadow-[0_1px_3px_-1px_rgba(59,47,39,0.08)]">
             <h1 className="font-heading text-2xl text-[#3B2F27]">This link is invalid or has expired</h1>

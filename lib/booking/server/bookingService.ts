@@ -22,6 +22,12 @@ import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { generateManageToken, hashManageToken } from "./manageToken";
 import { formatOperationalTimestamp } from "./dateUtils";
 import {
+  FIRST_VISIT_PRICING_POLICY,
+  getSavedQuoteKind,
+  isRecurringFrequency,
+  type QuoteKind,
+} from "@/lib/booking/recurringPricing";
+import {
   PROPERTY_TYPE_OPTIONS,
   SQUARE_FOOTAGE_OPTIONS,
   getBathroomOption,
@@ -31,6 +37,8 @@ import {
 } from "@/lib/booking/config";
 import { formatExactTime, getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import type { BookingRepository } from "./repository";
+import type { RecurringScheduleRepository } from "./recurringScheduleRepository";
+import { createScheduleFromInitialBooking } from "./recurringScheduleService";
 import type { BookingRecord, BookingSubmissionInput, ValidatedBooking, ValidationIssue } from "./types";
 
 // The subset of NotificationService this orchestrator actually calls.
@@ -60,12 +68,49 @@ export type BookingSubmissionSuccess = {
   // email already sent on the original attempt is the customer's real
   // record of it.
   manageToken: string | null;
+  // The SAVED booking's own pricing facts, on the fresh path and on the
+  // idempotent-replay path alike, so the confirmation always describes
+  // what was actually stored — never whatever the browser now holds
+  // (e.g. a frequency changed after the booking was submitted).
+  saved: SavedBookingSummary;
 };
+
+export type SavedBookingSummary = {
+  cleaningType: string;
+  /** Saved frequency label, e.g. "Weekly" or "One time". */
+  frequency: string;
+  /** Saved frequency discount in dollars (0 for a first cleaning / one-time). */
+  frequencyDiscount: number;
+  /** What the saved total represents; see getSavedQuoteKind. */
+  quoteKind: QuoteKind;
+};
+
+function summarizeSavedBooking(saved: {
+  cleaningType: string;
+  frequency: string;
+  frequencyDiscount: number;
+  pricingPolicy: string;
+}): SavedBookingSummary {
+  return {
+    cleaningType: saved.cleaningType,
+    frequency: saved.frequency,
+    frequencyDiscount: saved.frequencyDiscount,
+    quoteKind: getSavedQuoteKind({
+      frequencyLabel: saved.frequency,
+      pricingPolicy: saved.pricingPolicy,
+      frequencyDiscount: saved.frequencyDiscount,
+    }),
+  };
+}
 
 export type BookingSubmissionFailure =
   | { ok: false; code: "validation"; issues: ValidationIssue[] }
   | { ok: false; code: "date-unavailable"; message: string }
   | { ok: false; code: "payment-setup-invalid"; message: string }
+  // The total the customer was shown differs from the authoritative one
+  // (e.g. their follow-up eligibility changed since the quote was shown).
+  // Nothing is saved or charged; the client re-quotes and asks again.
+  | { ok: false; code: "price-changed"; message: string; totalPrice: number }
   | { ok: false; code: "server-error"; message: string };
 
 export type BookingSubmissionResult = BookingSubmissionSuccess | BookingSubmissionFailure;
@@ -146,6 +191,8 @@ function buildBookingRecord(
   setupIntent: ConfirmedSetupIntent,
   scheduledChargeAt: Date,
   manageToken: string,
+  recurringScheduleId: string,
+  occurrenceNumber: number,
 ): BookingRecord {
   const propertyTypeLabel = PROPERTY_TYPE_OPTIONS.find((o) => o.id === booking.propertyType)?.label ?? booking.propertyType;
   const squareFootageLabel = SQUARE_FOOTAGE_OPTIONS.find((o) => o.id === booking.squareFootage)?.label ?? booking.squareFootage;
@@ -226,6 +273,9 @@ function buildBookingRecord(
     serviceStartTime: booking.serviceStartTime,
     originalServiceStartTime: "",
     manageBookingReminderTokenHash: "",
+    pricingPolicy: FIRST_VISIT_PRICING_POLICY,
+    recurringScheduleId,
+    occurrenceNumber,
   };
 }
 
@@ -238,6 +288,10 @@ export async function submitBooking(
   input: BookingSubmissionInput,
   repository: BookingRepository,
   notificationService: NotificationSender,
+  // Persists the recurring schedule that a recurring first appointment
+  // starts. Optional so one-time-only callers (and most unit tests) need no
+  // schedule store; the booking API route always supplies it.
+  recurringSchedules?: RecurringScheduleRepository,
 ): Promise<BookingSubmissionResult> {
   let settings;
   try {
@@ -270,6 +324,7 @@ export async function submitBooking(
         totalPrice: existing.totalPrice,
         estimatedDurationMinutes: existing.estimatedDurationMinutes,
         manageToken: null,
+        saved: summarizeSavedBooking(existing),
       };
     }
 
@@ -294,13 +349,31 @@ export async function submitBooking(
       };
     }
 
+    // A submission is always the FIRST appointment of whatever it starts:
+    // the frequency discount is never applied here. Later appointments of a
+    // recurring schedule are generated server-side by
+    // recurringScheduleService.ts, which prices them from the schedule's
+    // agreed snapshot once a cleaning has actually been performed.
     let pricing;
     try {
-      pricing = calculateAuthoritativePricing(booking);
+      pricing = calculateAuthoritativePricing(booking, { applyFrequencyDiscount: false });
     } catch (error) {
       logServerError("calculateAuthoritativePricing", error);
       const message = error instanceof PricingError ? error.message : GENERIC_SERVER_ERROR_MESSAGE;
       return { ok: false, code: "server-error", message };
+    }
+
+    // The saved (and therefore charged) amount must be the one the
+    // customer saw. The client's figure is never used to price — only to
+    // refuse a mismatch rather than silently charge a different amount.
+    const shownTotal = input.clientTotalPrice;
+    if (typeof shownTotal === "number" && Number.isFinite(shownTotal) && Math.abs(shownTotal - pricing.totalPrice) > 0.005) {
+      return {
+        ok: false,
+        code: "price-changed",
+        message: "The price for your booking has been updated. Please review the new total and submit again.",
+        totalPrice: pricing.totalPrice,
+      };
     }
 
     // The authoritative, overlap/capacity-aware check — now that duration
@@ -382,6 +455,11 @@ export async function submitBooking(
       };
     }
 
+    // A recurring first cleaning starts its own schedule: its Booking ID is
+    // the schedule's ID and it is occurrence 1. One-time bookings have none.
+    const isRecurring = isRecurringFrequency(booking.frequency);
+    const recurringScheduleId = isRecurring ? bookingId : "";
+
     const manageToken = generateManageToken();
     const record = buildBookingRecord(
       booking,
@@ -392,12 +470,27 @@ export async function submitBooking(
       confirmedSetupIntent,
       scheduledChargeAt,
       manageToken,
+      recurringScheduleId,
+      isRecurring ? 1 : 0,
     );
     try {
       await repository.appendBooking(record);
     } catch (error) {
       logServerError("appendBooking", error);
       return { ok: false, code: "server-error", message: GENERIC_SERVER_ERROR_MESSAGE };
+    }
+
+    // Persist the schedule that continues this appointment. Best-effort by
+    // design: the booking is already durably saved, and the reconciliation
+    // scheduler recreates a missing schedule row from this appointment's
+    // own row (see recurringScheduleService.repairMissingSchedule), so a
+    // failure here is recoverable and never fails the customer's booking.
+    if (isRecurring && recurringSchedules) {
+      try {
+        await createScheduleFromInitialBooking(record, booking.recurringConsent, recurringSchedules, settings.timezone);
+      } catch (error) {
+        logServerError("createScheduleFromInitialBooking", error);
+      }
     }
 
     // The booking is now durably persisted — everything past this point is
@@ -414,6 +507,7 @@ export async function submitBooking(
       totalPrice: pricing.totalPrice,
       estimatedDurationMinutes: pricing.estimatedDurationMinutes,
       manageToken,
+      saved: summarizeSavedBooking(record),
     };
   });
 }

@@ -219,6 +219,46 @@ describe("rescheduleBookingByToken — successful reschedule", () => {
     expect(updated?.scheduledChargeAt).toBe(expectedChargeAt.toISOString());
   });
 
+  it.each([
+    ["Weekly", 19.5, 190.5],
+    ["Every other week", 13, 197],
+    ["Monthly", 6.5, 203.5],
+  ])(
+    "never reprices a pre-policy %s booking: its saved discount and amounts are identical after rescheduling",
+    async (frequency, frequencyDiscount, totalPrice) => {
+      const repo = new FakeRepository();
+      repo.records.set(
+        "BELA-1",
+        activeBooking({
+          frequency,
+          frequencyDiscount,
+          subtotal: totalPrice + frequencyDiscount,
+          totalPrice,
+          chargeAmount: totalPrice,
+          originalBookingTotal: totalPrice,
+          pricingPolicy: "",
+          recurringScheduleId: "",
+          occurrenceNumber: 0,
+        }),
+      );
+
+      const result = await rescheduleBookingByToken(RAW_TOKEN, NEW_DATE, NEW_TIME, repo, fakeNotifications(), MORE_THAN_24H_BEFORE);
+
+      expect(result.outcome).toBe("rescheduled");
+      const updated = repo.records.get("BELA-1");
+      expect(updated?.frequencyDiscount).toBe(frequencyDiscount);
+      expect(updated?.totalPrice).toBe(totalPrice);
+      expect(updated?.chargeAmount).toBe(totalPrice);
+      expect(updated?.originalBookingTotal).toBe(totalPrice);
+      expect(updated?.pricingPolicy).toBe("");
+      // …and the reschedule write itself never carries a price field.
+      const update = repo.rescheduleCalls[0].update as Record<string, unknown>;
+      for (const key of ["totalPrice", "chargeAmount", "originalBookingTotal", "frequencyDiscount", "subtotal", "pricingPolicy"]) {
+        expect(update).not.toHaveProperty(key);
+      }
+    },
+  );
+
   it("preserves the Stripe Customer/PaymentMethod and Booking ID", async () => {
     const repo = new FakeRepository();
     repo.records.set("BELA-1", activeBooking({ stripeCustomerId: "cus_keep", stripePaymentMethodId: "pm_keep" }));

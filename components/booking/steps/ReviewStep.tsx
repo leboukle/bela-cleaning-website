@@ -5,6 +5,13 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatCurrency, formatDuration, type EstimateBreakdown } from "@/lib/booking/calculate";
 import { getFrequencyOption } from "@/lib/booking/config";
+import {
+  FIRST_CLEANING_NOTICE,
+  RECURRING_CONSENT_TEXT,
+  RECURRING_CONTROLS_NOTICE,
+  getQuoteKind,
+  getTotalLabel,
+} from "@/lib/booking/recurringPricing";
 import { getSummaryLines } from "@/lib/booking/summary";
 import { formatExactTime, formatReadableDate } from "@/lib/booking/schedule";
 import { getCityForZip, isValidZipFormat, isZipSupported } from "@/lib/booking/serviceArea";
@@ -27,6 +34,8 @@ type ReviewStepProps = {
   appointmentNoLongerFits?: boolean;
   /** True while a live availability re-check of the selected time is still in flight. */
   appointmentCheckPending?: boolean;
+  /** Explicit consent to automatic recurring scheduling and per-visit charges (recurring frequencies only). */
+  onRecurringConsentChange?: (consented: boolean) => void;
   /** Routes the customer to the existing appointment-time step. */
   onChooseNewTime?: () => void;
   onPickNewDate: () => void;
@@ -79,6 +88,7 @@ export default function ReviewStep({
   switchedToDeepCleaning = false,
   appointmentNoLongerFits = false,
   appointmentCheckPending = false,
+  onRecurringConsentChange,
   onChooseNewTime,
   onPickNewDate,
   onRedoPayment,
@@ -96,6 +106,8 @@ export default function ReviewStep({
   const extrasLine = lines.find((l) => l.label === "Extras");
   const squareFootageLine = lines.find((l) => l.label === "Square footage");
   const frequencyOption = state.frequency ? getFrequencyOption(state.frequency) : null;
+  const quoteKind = getQuoteKind(state.frequency);
+  const isRecurring = quoteKind === "first-cleaning";
 
   const city = getCityForZip(state.zipCode);
 
@@ -129,6 +141,7 @@ export default function ReviewStep({
       addressZipValid &&
       state.someoneHome &&
       state.agreedToPolicy &&
+      (!isRecurring || state.recurringConsent) &&
       state.setupIntentId,
   );
 
@@ -162,7 +175,10 @@ export default function ReviewStep({
         <ReviewSection title="Frequency" onEdit={() => onEdit("frequency")}>
           <ReviewLine label="Frequency" value={frequencyOption?.label ?? "—"} />
           {frequencyOption && frequencyOption.discount > 0 && (
-            <ReviewLine label="Recurring discount" value={frequencyOption.discountLabel} />
+            <ReviewLine
+              label="Recurring discount"
+              value={`${frequencyOption.discountLabel}, after your first cleaning`}
+            />
           )}
         </ReviewSection>
 
@@ -196,13 +212,25 @@ export default function ReviewStep({
         </ReviewSection>
 
         <div className="rounded-2xl border border-[#E7DECE] bg-white p-7 shadow-[0_4px_24px_-8px_rgba(59,47,39,0.12)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A9998A]">Estimated total</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A9998A]">{getTotalLabel(quoteKind)}</p>
           <p className="mt-2 font-heading text-5xl leading-none text-[#3B2F27]">
             {estimate ? formatCurrency(estimate.totalPrice) : "Custom estimate"}
           </p>
           <p className="mt-4 text-sm text-[#6B5B4C]">
             {estimate ? `Estimated duration: ${formatDuration(estimate.totalDurationMinutes)}` : "Duration to be determined"}
           </p>
+          {quoteKind === "first-cleaning" && state.frequency && (
+            <>
+              <p className="mt-3 text-sm font-medium text-[#3B2F27]">{FIRST_CLEANING_NOTICE}</p>
+              <p className="mt-2 text-sm text-[#6B5B4C]">{RECURRING_CONTROLS_NOTICE}</p>
+              {estimate && estimate.ongoingVisitDiscount > 0 && (
+                <p className="mt-2 text-sm text-[#6B5B4C]">
+                  Estimated total for later cleanings: {formatCurrency(estimate.ongoingVisitTotal)} each, if your
+                  cleaning details stay the same.
+                </p>
+              )}
+            </>
+          )}
           {switchedToDeepCleaning && (
             <p className="mt-3 text-sm font-medium text-[#1E5B3A]" role="status">
               Your service is now Deep Cleaning. Please review the updated total and duration, then submit your booking.
@@ -214,7 +242,11 @@ export default function ReviewStep({
           <p className="text-sm font-semibold uppercase tracking-wide text-[#8A7A6B]">Before you book</p>
           <ul className="mt-3 space-y-2 text-sm text-[#6B5B4C]">
             <li>Every visit is completed by a professional, background-checked member of our team.</li>
-            <li>Transparent pricing, no hidden fees — the total above is exactly what you&rsquo;ll pay.</li>
+            <li>
+              {isRecurring
+                ? "Transparent pricing, no hidden fees — the total above is exactly what you’ll pay for this first cleaning."
+                : "Transparent pricing, no hidden fees — the total above is exactly what you’ll pay."}
+            </li>
             <li>We&rsquo;ll confirm your appointment and send a reminder before we arrive.</li>
             <li>
               Plans change — reschedule or cancel free of charge up to 24 hours before your visit.
@@ -247,6 +279,18 @@ export default function ReviewStep({
             .
           </span>
         </label>
+
+        {isRecurring && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E7DECE] bg-white p-5">
+            <input
+              type="checkbox"
+              checked={state.recurringConsent}
+              onChange={(event) => onRecurringConsentChange?.(event.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-[#C9BCA6] text-[#3B2F27] accent-[#3B2F27] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3B2F27]"
+            />
+            <span className="text-sm text-[#3B2F27]">{RECURRING_CONSENT_TEXT}</span>
+          </label>
+        )}
 
         {/* Honeypot: invisible to real customers (off-screen, unfocusable,
             hidden from assistive tech) but present in the DOM for bots

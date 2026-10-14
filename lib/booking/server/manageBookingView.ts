@@ -10,6 +10,7 @@ import { getBookingSettings } from "./settings";
 import { describeExtras } from "./extrasDescription";
 import { getScheduleDisplayLabel } from "@/lib/booking/schedule";
 import type { BookingRecord } from "./types";
+import type { RecurringManageContext } from "./recurringScheduleService";
 
 export type ManageBookingView = {
   bookingId: string;
@@ -30,6 +31,13 @@ export type ManageBookingView = {
   totalPrice: number;
   extras: string[];
   frequency: string;
+  /**
+   * Present only when this appointment belongs to a recurring schedule:
+   * what "Cancel this cleaning only" and "Stop recurring cleanings" would
+   * each affect, and any fee, so the customer sees the exact appointment
+   * before confirming. Display only — the server re-derives on every action.
+   */
+  recurring: RecurringManageContext | null;
   eligibility: {
     canCancel: boolean;
     canReschedule: boolean;
@@ -84,6 +92,7 @@ export async function buildManageBookingView(record: BookingRecord, now: Date = 
     totalPrice: record.chargeAmount,
     extras: describeExtras(record.extras),
     frequency: record.frequency,
+    recurring: null,
     eligibility: {
       canCancel,
       canReschedule,

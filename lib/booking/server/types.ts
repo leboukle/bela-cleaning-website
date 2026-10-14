@@ -66,8 +66,16 @@ export type BookingSubmissionInput = {
   // ever persisted. See docs/payments.md.
   setupIntentId?: unknown;
 
-  // Client-displayed values, used only for tamper detection — never
-  // trusted as the authoritative figures. See validateSubmission.ts.
+  // Required (true) when frequency is recurring: the customer's explicit
+  // consent to automatically scheduled ongoing appointments and automatic
+  // per-visit charges to the saved card. Stored on the recurring schedule
+  // together with the consent wording version.
+  recurringConsent?: unknown;
+
+  // Client-displayed values: the server never uses them to price, only to
+  // refuse a submission whose shown total differs from the authoritative
+  // one (see bookingService.ts), so a customer is never charged an amount
+  // other than the one they confirmed.
   clientTotalPrice?: unknown;
   clientDurationMinutes?: unknown;
 };
@@ -104,6 +112,8 @@ export type ValidatedBooking = {
   agreedToPolicy: true;
   idempotencyToken: string;
   setupIntentId: string;
+  /** True only when the customer gave the recurring-schedule consent (always false for one-time). */
+  recurringConsent: boolean;
 };
 
 export type ValidationIssue = {
@@ -220,6 +230,16 @@ export type BookingRecord = {
   // before it existed, which is correct — those bookings were priced
   // without it, and their Subtotal/Total/Charge Amount are never recomputed.
   squareFootagePrice: number;
+  // First-cleaning-at-full-price policy (see lib/booking/recurringPricing.ts).
+  // pricingPolicy: FIRST_VISIT_PRICING_POLICY for rows created under the
+  // rule; "" for every earlier row, which keeps its original policy and is
+  // never repriced. recurringScheduleId: groups the visits of one
+  // recurring schedule (the initial booking's own Booking ID; a follow-up
+  // carries the schedule it continues); "" for one-time and legacy rows.
+  pricingPolicy: string;
+  recurringScheduleId: string;
+  /** 1-based position within the recurring schedule; 0 when not part of one (blank in the sheet). */
+  occurrenceNumber: number;
 };
 
 /** Written by cancellationService.ts the moment a cancellation is confirmed — before any Stripe call. */
@@ -312,6 +332,9 @@ export type BookingPaymentState = {
   paymentAttemptCount: number;
   nextPaymentAttemptAt: string;
   manualAmountOverride: boolean;
+  /** Recurring-schedule linkage, read so a charge can be refused for a duplicated occurrence. */
+  recurringScheduleId: string;
+  occurrenceNumber: number;
 };
 
 /**

@@ -63,6 +63,10 @@ class InMemoryBookingRepository implements BookingRepository {
         serviceDate: record.serviceDate,
         arrivalWindow: record.arrivalWindow,
         serviceStartTime: record.serviceStartTime,
+        cleaningType: record.cleaningType,
+        frequency: record.frequency,
+        frequencyDiscount: record.frequencyDiscount,
+        pricingPolicy: record.pricingPolicy,
       });
     }
   }
@@ -102,6 +106,8 @@ class InMemoryBookingRepository implements BookingRepository {
       paymentAttemptCount: record.paymentAttemptCount,
       nextPaymentAttemptAt: record.nextPaymentAttemptAt,
       manualAmountOverride: record.manualAmountOverride,
+      recurringScheduleId: record.recurringScheduleId,
+      occurrenceNumber: record.occurrenceNumber,
     };
   }
 
@@ -320,6 +326,9 @@ function sampleRecordWithToken(token: string): BookingRecord {
     serviceStartTime: "",
     originalServiceStartTime: "",
     manageBookingReminderTokenHash: "",
+    pricingPolicy: "",
+    recurringScheduleId: "",
+    occurrenceNumber: 0,
   };
 }
 

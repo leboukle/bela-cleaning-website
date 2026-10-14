@@ -42,8 +42,8 @@ export default function IntroStep({ onStart }: IntroStepProps) {
       </button>
 
       <p className="mt-5 text-xs text-[#A9998A]">
-        This is a preview of BeLa Cleaning&rsquo;s upcoming booking experience. No appointment is
-        created and no information is saved yet.
+        Submitting this form creates your appointment request and saves your payment method securely.
+        You are not charged until one hour after your cleaning ends.
       </p>
     </div>
   );

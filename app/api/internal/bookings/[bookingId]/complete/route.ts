@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { verifyInternalAdminAccess, InternalAdminAuthError } from "@/lib/booking/server/adminAccess";
 import { markBookingComplete, type MarkCompleteOutcome } from "@/lib/booking/server/completionService";
 import { GoogleSheetsBookingRepository } from "@/lib/booking/server/googleSheetsRepository";
+import { advanceScheduleAfterChange } from "@/lib/booking/server/recurringRuntime";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,13 @@ export async function POST(request: Request, context: { params: Promise<{ bookin
 
   try {
     const result = await markBookingComplete(bookingId, bookingRepository);
+    // Marking complete is NOT what generates a recurring schedule's next
+    // appointment (that is the visit date having passed plus a confirmed
+    // payment). This call is a harmless, idempotent nudge: it re-evaluates
+    // the schedule and creates the next appointment only if it is already due.
+    if (result.outcome === "completed" || result.outcome === "already-completed") {
+      await advanceScheduleAfterChange(bookingId);
+    }
     return NextResponse.json(
       { ok: result.outcome === "completed" || result.outcome === "already-completed", outcome: result.outcome, message: messageFor(result) },
       { status: STATUS_BY_OUTCOME[result.outcome] },
