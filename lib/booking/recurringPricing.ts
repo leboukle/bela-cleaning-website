@@ -25,7 +25,7 @@ import type { FrequencyId } from "./types";
 export const FIRST_VISIT_PRICING_POLICY = "first-visit-full-price-v1";
 
 /** Version of the consent wording the customer agreed to; stored on the schedule. */
-export const RECURRING_CONSENT_VERSION = "recurring-consent-v1";
+export const RECURRING_CONSENT_VERSION = "recurring-consent-v2";
 
 export function isRecurringFrequency(frequency: FrequencyId | null | undefined): boolean {
   return Boolean(frequency) && frequency !== "one-time";
@@ -73,16 +73,20 @@ export function getTotalLabel(kind: QuoteKind): string {
 export const FIRST_CLEANING_NOTICE =
   "Your first cleaning is charged at the regular price. After it is completed, we schedule your next cleaning automatically and apply your recurring discount to it and to every later cleaning. Each cleaning is charged to your saved card one hour after it ends.";
 
-/** What a recurring customer can do afterwards; shown beside the notice. */
+/**
+ * What a recurring customer can do afterwards; shown beside the notice.
+ * Two DIFFERENT actions: cancelling one cleaning keeps the schedule going;
+ * stopping ends the schedule (no fee for stopping itself).
+ */
 export const RECURRING_CONTROLS_NOTICE =
-  "You can cancel a single cleaning, or stop recurring cleanings entirely, anytime from Manage Booking.";
+  "In Manage Booking you can cancel one cleaning (your recurring cleanings continue) or stop recurring cleanings (no more cleanings are scheduled). Stopping itself has no fee; a cleaning cancelled within 24 hours of its start time is subject to the late-cancellation fee.";
 
 /**
  * The consent the customer must give to book a recurring schedule. The
  * wording version is stored with the schedule (RECURRING_CONSENT_VERSION).
  */
 export const RECURRING_CONSENT_TEXT =
-  "I authorize BeLa Cleaning to automatically schedule my recurring cleanings and to charge my saved card for each cleaning one hour after it ends. I understand I can cancel a single cleaning or stop recurring cleanings anytime in Manage Booking, and that cancelling within 24 hours of a cleaning is subject to the late-cancellation fee.";
+  "I authorize BeLa Cleaning to automatically schedule my recurring cleanings and to charge my saved card for each cleaning one hour after it ends, in the amount shown for that cleaning. I understand that cancelling one cleaning keeps my recurring schedule going, that stopping recurring cleanings ends the schedule with no fee for stopping, and that any cleaning cancelled within 24 hours of its start time is subject to the late-cancellation fee of 50% of its total.";
 
 /** "Weekly" -> "weekly", "Every other week" -> "every other week". */
 function frequencyPhrase(frequency: FrequencyId): string {

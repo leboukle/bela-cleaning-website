@@ -317,35 +317,46 @@ export default function ManageBookingActions({ token, initialBooking, initialAct
       {phase === "stop-confirm" && booking.recurring && (
         <div className="rounded-2xl border border-[#E3B7A6] bg-[#FBEEE8] p-6">
           <h2 className="font-heading text-lg text-[#3B2F27]">Stop recurring cleanings</h2>
-          <p className="mt-2 text-sm text-[#6B5B4C]">
-            This ends your {booking.recurring.frequency.toLowerCase()} recurring cleanings. No further cleanings will
-            be scheduled. Your booking and payment history are kept.
-          </p>
-          {booking.recurring.upcoming ? (
-            <div className="mt-3 text-sm text-[#6B5B4C]">
-              <p>
-                Your upcoming cleaning on{" "}
-                <span className="font-semibold text-[#3B2F27]">
-                  {formatReadableDate(booking.recurring.upcoming.serviceDate)} at{" "}
-                  {booking.recurring.upcoming.scheduleDisplayLabel}
-                </span>{" "}
-                ({formatCurrency(booking.recurring.upcoming.totalPrice)}) will be cancelled.
-              </p>
-              {booking.recurring.upcoming.isLateWindow && booking.recurring.upcoming.lateCancellationFeeCents !== null ? (
-                <p className="mt-2">
-                  That cleaning is within 24 hours, so a late-cancellation fee of{" "}
-                  <span className="font-semibold text-[#3B2F27]">
-                    {formatCurrency(booking.recurring.upcoming.lateCancellationFeeCents / 100)}
+          <div className="mt-3 rounded-xl border border-[#E7DECE] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#8A7A6B]">1. Ending your recurring cleanings</p>
+            <p className="mt-1 text-sm text-[#3B2F27]">
+              Your {booking.recurring.frequency.toLowerCase()} recurring cleanings end and no further cleanings will be
+              scheduled. <span className="font-semibold">Stopping has no fee.</span> Your booking and payment history are
+              kept.
+            </p>
+          </div>
+          <div className="mt-3 rounded-xl border border-[#E7DECE] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#8A7A6B]">2. Your upcoming cleaning</p>
+            {booking.recurring.upcoming ? (
+              <>
+                <p className="mt-1 text-sm text-[#3B2F27]">
+                  Your already-scheduled cleaning on{" "}
+                  <span className="font-semibold">
+                    {formatReadableDate(booking.recurring.upcoming.serviceDate)} at{" "}
+                    {booking.recurring.upcoming.scheduleDisplayLabel}
                   </span>{" "}
-                  (50% of its total) will be charged to your saved payment method.
+                  ({formatCurrency(booking.recurring.upcoming.totalPrice)}) will be cancelled.
                 </p>
-              ) : (
-                <p className="mt-2">This is more than 24 hours away, so cancelling it is free.</p>
-              )}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-[#6B5B4C]">You have no upcoming cleaning to cancel, so nothing will be charged.</p>
-          )}
+                {booking.recurring.upcoming.isLateWindow && booking.recurring.upcoming.lateCancellationFeeCents !== null ? (
+                  <p className="mt-2 text-sm text-[#B14A2E]">
+                    Because that cleaning starts within 24 hours, a{" "}
+                    <span className="font-semibold">
+                      late-cancellation fee of {formatCurrency(booking.recurring.upcoming.lateCancellationFeeCents / 100)}
+                    </span>{" "}
+                    (50% of its total) will be charged to your saved payment method. This fee is for cancelling that
+                    cleaning — not for stopping.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-[#1E5B3A]">
+                    <span className="font-semibold">No fee</span> — that cleaning is more than 24 hours away, so
+                    cancelling it is free.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-[#3B2F27]">You have no upcoming cleaning to cancel, so nothing will be charged.</p>
+            )}
+          </div>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               type="button"

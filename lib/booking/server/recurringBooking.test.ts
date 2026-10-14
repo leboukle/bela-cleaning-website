@@ -136,7 +136,7 @@ describe("submitting a recurring booking", () => {
       fullPriceTotal: 165,
       stripeCustomerId: "cus_test123",
       stripePaymentMethodId: "pm_test123",
-      consentVersion: "recurring-consent-v1",
+      consentVersion: "recurring-consent-v2",
       nextOccurrenceNumber: 2,
     });
     // The agreed recurring quote: discount on the bedroom base only.

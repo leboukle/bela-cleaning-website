@@ -9,6 +9,9 @@ export interface RecurringScheduleRepository {
   /** The schedule row for this ID, or null. If duplicate rows exist the FIRST (sheet order) wins. */
   getSchedule(scheduleId: string): Promise<RecurringScheduleRecord | null>;
 
+  /** Every schedule (one per ID, first row wins), in sheet order — for the owner dashboard. */
+  listSchedules(): Promise<RecurringScheduleRecord[]>;
+
   /**
    * Appends the schedule row unless one with this ID already exists.
    * Idempotent: returns `created: false` for an existing schedule and never
@@ -41,4 +44,7 @@ export interface RecurringScheduleRepository {
 
   /** True if any event (claim or otherwise) carries this claim key. */
   hasClaim(claimKey: string): Promise<boolean>;
+
+  /** Number of claim rows whose key starts with `keyPrefix` (used to number retry attempts). */
+  countClaims(keyPrefix: string): Promise<number>;
 }

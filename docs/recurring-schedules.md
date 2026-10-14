@@ -148,6 +148,8 @@ the matching confirmation). Rescheduling changes that appointment only.
 
 ## Owner operations
 
+**Day to day use the page `/internal/recurring`** (setup check, needs-attention list with Skip / Resume / End, mark complete / unperformed, convert an existing booking, run the check now). Step-by-step setup and a live test script are in [recurring-schedules-owner-guide.md](./recurring-schedules-owner-guide.md). The API calls below are what those buttons use.
+
 Endpoints require the internal admin session cookie or the
 `x-internal-admin-secret` header. `BASE` is the deployment URL.
 
@@ -168,7 +170,7 @@ curl -X POST -H "x-internal-admin-secret: $SECRET" "$BASE/api/internal/recurring
 # End a schedule (same handling as the customer's Stop)
 curl -X POST -H "x-internal-admin-secret: $SECRET" "$BASE/api/internal/recurring-schedules/<scheduleId>/end"
 
-# Convert ONE existing frequency-labelled booking, after the customer confirmed
+# Convert ONE existing frequency-labelled booking (also a form on the page), after the customer confirmed
 curl -X POST -H "x-internal-admin-secret: $SECRET" -H "content-type: application/json" \
   -d '{"bookingId":"BELA-…","customerConfirmed":true,"confirmationNote":"Confirmed by email on 2026-10-14"}' \
   "$BASE/api/internal/recurring-schedules/convert"

@@ -98,6 +98,10 @@ export const COMPLETION_MISSING_GRACE_MS = 24 * 60 * 60 * 1000;
 
 const SCHEDULE_SOURCE = "Recurring schedule";
 
+// Each once-only notification/alert may be attempted at most this many times
+// in total (a crash or failed send after a claim is retried by reconcile).
+const MAX_NOTIFY_ATTEMPTS = 3;
+
 function logError(step: string, id: string, error: unknown): void {
   console.error(`[recurringScheduleService] ${step} failed: id=${id}`, error instanceof Error ? error.message : "unknown error");
 }
@@ -306,12 +310,28 @@ async function flagForReview(
     }
   }
 
-  // The owner is told ONCE per (schedule, occurrence, issue) — the claim
-  // arbitrates across concurrent and repeated reconcile runs.
-  const claimKey = `alert:${schedule.scheduleId}:${alert.occurrenceNumber ?? 0}:${alert.code}`;
+  // The owner is told ONCE per (schedule, occurrence, issue). A successful
+  // send is recorded as an "alert-sent" claim; until then each attempt takes
+  // its own numbered claim (arbitrated across concurrent runs), so a crash
+  // or send failure after a claim is retried by the next reconcile instead
+  // of being lost — bounded at MAX_NOTIFY_ATTEMPTS.
+  const base = `${schedule.scheduleId}:${alert.occurrenceNumber ?? 0}:${alert.code}`;
   try {
-    if (await deps.schedules.claimOnce(claimKey, schedule.scheduleId, alert.headline, options.now)) {
-      await deps.notifications.sendInternalRecurringScheduleAlert(schedule, alert);
+    if (!(await deps.schedules.hasClaim(`alert-sent:${base}`))) {
+      const attempt = (await deps.schedules.countClaims(`alert:${base}:`)) + 1;
+      if (attempt <= MAX_NOTIFY_ATTEMPTS && (await deps.schedules.claimOnce(`alert:${base}:${attempt}`, schedule.scheduleId, alert.headline, options.now))) {
+        const sent = await deps.notifications.sendInternalRecurringScheduleAlert(schedule, alert);
+        if (sent.ok) {
+          await deps.schedules.appendEvent({
+            timestamp: formatOperationalTimestamp(options.now),
+            scheduleId: schedule.scheduleId,
+            occurrenceNumber: alert.occurrenceNumber ?? "",
+            eventType: EVENT_TYPE.CLAIM,
+            claimKey: `alert-sent:${base}`,
+            detail: alert.headline,
+          });
+        }
+      }
     }
     await deps.schedules.appendEvent({
       timestamp: formatOperationalTimestamp(options.now),
@@ -465,23 +485,35 @@ export async function ensureAppointmentNotifications(
   manageToken: string | null,
   now: Date,
 ): Promise<void> {
-  const claimed = await deps.schedules.claimOnce(`notify-created:${bookingId}`, schedule.scheduleId, bookingId, now);
+  // Attempt-numbered claim: concurrent callers race on the SAME attempt key
+  // (exactly one wins); a later caller — after a crash or a failed send —
+  // takes the next attempt, so nothing is lost and a sent email is never
+  // re-sent (only the channels whose status is not "Sent" are retried).
+  const attempt = (await deps.schedules.countClaims(`notify-created:${bookingId}:`)) + 1;
+  if (attempt > MAX_NOTIFY_ATTEMPTS) return;
+  const claimed = await deps.schedules.claimOnce(`notify-created:${bookingId}:${attempt}`, schedule.scheduleId, bookingId, now);
   if (!claimed) return;
 
   let record = await deps.bookings.getFullBookingRecord(bookingId);
   if (!record || record.bookingStatus === BOOKING_STATUS.CANCELLED) return;
+  const customerAlreadySent = record.customerConfirmationStatus === NOTIFICATION_STATUS.SENT;
+  const internalAlreadySent = record.internalNotificationStatus === NOTIFICATION_STATUS.SENT;
+  if (customerAlreadySent && internalAlreadySent) return;
 
+  // Only re-issue a link when the customer email still has to go out; a link
+  // that was already delivered must never be invalidated by a retry.
   let token = manageToken;
-  if (!token) {
+  if (!token && !customerAlreadySent) {
     token = generateManageToken();
     if (!deps.bookings.updateManageTokenHash) throw new Error("Repository cannot re-issue Manage Booking links.");
     await deps.bookings.updateManageTokenHash(bookingId, hashManageToken(token));
     record = { ...record, manageBookingTokenHash: hashManageToken(token) };
   }
 
+  const skipped = Promise.resolve<NotificationResult>({ ok: true });
   const [customerResult, internalResult] = await Promise.allSettled([
-    deps.notifications.sendRecurringAppointmentScheduled(record, token),
-    deps.notifications.sendInternalRecurringAppointmentCreated(record),
+    customerAlreadySent ? skipped : deps.notifications.sendRecurringAppointmentScheduled(record, token ?? ""),
+    internalAlreadySent ? skipped : deps.notifications.sendInternalRecurringAppointmentCreated(record),
   ]);
   const ok = (r: PromiseSettledResult<NotificationResult>) => r.status === "fulfilled" && r.value.ok;
   try {
@@ -765,7 +797,7 @@ export async function reconcileSchedule(
   // Recover confirmations for generated appointments that never got them.
   for (const row of canonical) {
     if (row.occurrenceNumber < 2 || row.bookingStatus === BOOKING_STATUS.CANCELLED) continue;
-    if (row.customerConfirmationStatus) continue;
+    if (row.customerConfirmationStatus === NOTIFICATION_STATUS.SENT && row.internalNotificationStatus === NOTIFICATION_STATUS.SENT) continue;
     const submitted = new Date(row.submittedAt);
     const ageMs = Number.isNaN(submitted.getTime()) ? Infinity : now.getTime() - submitted.getTime();
     if (ageMs < 10 * 60_000) continue; // let an in-flight creation finish first

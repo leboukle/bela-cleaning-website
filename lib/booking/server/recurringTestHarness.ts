@@ -268,6 +268,14 @@ export class InMemorySchedules implements RecurringScheduleRepository {
     await tick();
     return this.events.some((e) => e.claimKey === claimKey);
   }
+  async countClaims(keyPrefix: string): Promise<number> {
+    await tick();
+    return this.events.filter((e) => e.claimKey.startsWith(keyPrefix)).length;
+  }
+  async listSchedules(): Promise<RecurringScheduleRecord[]> {
+    await tick();
+    return this.schedules.map((s) => ({ ...s }));
+  }
 
   get(scheduleId: string): RecurringScheduleRecord {
     const s = this.schedules.find((x) => x.scheduleId === scheduleId);

@@ -30,6 +30,11 @@ export default async function AssignCleanerPage() {
       <div className="mx-auto max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
         <h1 className="font-heading text-2xl text-[#3B2F27]">Assign a cleaner</h1>
         <p className="mt-1 text-sm text-[#6B5B4C]">Internal BeLa Cleaning tool — not for customer or cleaner use.</p>
+        <p className="mt-2 text-sm">
+          <a href="/internal/recurring" className="underline underline-offset-2 text-[#6B5B4C] hover:text-[#3B2F27]">
+            Recurring cleanings (review, skip, resume, convert) →
+          </a>
+        </p>
         <div className="mt-8">{authenticated ? <AuthenticatedDashboard /> : <AdminLoginForm />}</div>
       </div>
     </div>

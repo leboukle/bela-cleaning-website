@@ -102,7 +102,7 @@ describe("schedule creation", () => {
       stripeCustomerId: "cus_test",
       stripePaymentMethodId: "pm_test",
       stripeSetupIntentId: "seti_test",
-      consentVersion: "recurring-consent-v1",
+      consentVersion: "recurring-consent-v2",
       sourceBookingId: initial.bookingId,
       nextOccurrenceNumber: 2,
       lastOccurrenceNumber: 1,

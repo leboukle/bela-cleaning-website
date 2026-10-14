@@ -24,6 +24,7 @@ import type {
 } from "./types";
 import type { NotificationStatusUpdate } from "./notificationStatus";
 import { manageTokenHashesMatch } from "./manageToken";
+import { FREQUENCY_OPTIONS } from "@/lib/booking/config";
 
 // How many of the most recent Bookings rows to scan when looking for a
 // duplicate idempotency token. Google Sheets has no index/query
@@ -291,6 +292,65 @@ export class GoogleSheetsBookingRepository implements BookingRepository {
       });
     }
     return rows;
+  }
+
+  /**
+   * Owner dashboard only: existing (not cancelled) bookings whose Frequency is
+   * weekly / every other week / monthly and that belong to no recurring
+   * schedule (blank Occurrence Number) — the candidates an owner may convert
+   * after the customer confirms. Read-only; nothing is ever converted from here.
+   */
+  async listRecurringLabelledUnconverted(): Promise<
+    Array<{
+      bookingId: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      frequency: string;
+      serviceDate: string;
+      serviceStartTime: string;
+      arrivalWindow: string;
+      totalPrice: number;
+      completedAt: string;
+    }>
+  > {
+    const recurringLabels = new Set(FREQUENCY_OPTIONS.filter((f) => f.id !== "one-time").map((f) => f.label));
+    const [ids, statuses, frequencies, occurrences, firsts, lasts, emails, dates, times, windows, totals, completed] =
+      await batchGetRanges([
+        columnRange("Booking ID"),
+        columnRange("Booking Status"),
+        columnRange("Frequency"),
+        columnRange("Occurrence Number"),
+        columnRange("First Name"),
+        columnRange("Last Name"),
+        columnRange("Email"),
+        columnRange("Service Date"),
+        columnRange("Service Start Time"),
+        columnRange("Arrival Window"),
+        columnRange("Total Price"),
+        columnRange("Completed At"),
+      ]);
+    const out = [];
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i]?.[0] ?? "";
+      if (!id) continue;
+      if ((statuses[i]?.[0] ?? "") === BOOKING_STATUS.CANCELLED) continue;
+      if (!recurringLabels.has(frequencies[i]?.[0] ?? "")) continue;
+      if (Number(occurrences[i]?.[0] || 0) > 0) continue;
+      out.push({
+        bookingId: id,
+        firstName: firsts[i]?.[0] ?? "",
+        lastName: lasts[i]?.[0] ?? "",
+        email: emails[i]?.[0] ?? "",
+        frequency: frequencies[i]?.[0] ?? "",
+        serviceDate: dates[i]?.[0] ?? "",
+        serviceStartTime: times[i]?.[0] ?? "",
+        arrivalWindow: windows[i]?.[0] ?? "",
+        totalPrice: Number(totals[i]?.[0] || 0),
+        completedAt: completed[i]?.[0] ?? "",
+      });
+    }
+    return out;
   }
 
   async linkBookingToRecurringSchedule(bookingId: string, scheduleId: string, occurrenceNumber: number): Promise<void> {
