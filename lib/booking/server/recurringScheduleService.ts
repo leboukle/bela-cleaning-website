@@ -411,7 +411,7 @@ async function flagForReview(
 }
 
 function reviewReasonForAvailability(reason: string | null): string {
-  if (reason === "blackout") return REVIEW_REASON.BLACKOUT;
+  if (reason === "blackout" || reason === "closed") return REVIEW_REASON.BLACKOUT;
   if (reason === "too-soon") return REVIEW_REASON.TOO_SOON;
   return REVIEW_REASON.UNAVAILABLE;
 }

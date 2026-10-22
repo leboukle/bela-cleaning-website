@@ -8,6 +8,7 @@ import { GoogleSheetsBookingRepository } from "@/lib/booking/server/googleSheets
 import { NotificationService } from "@/lib/booking/server/notificationService";
 import { GmailApiTransport } from "@/lib/booking/server/email/gmailTransport";
 import { isRateLimited } from "@/lib/booking/server/rateLimit";
+import { isServiceDateClosed, SERVICE_CLOSURE_MESSAGE } from "@/lib/booking/serviceClosures";
 
 export const runtime = "nodejs";
 
@@ -80,7 +81,8 @@ export async function POST(request: Request, context: { params: Promise<{ token:
       {
         ok: STATUS_BY_OUTCOME[result.outcome] < 400,
         outcome: result.outcome,
-        message: MESSAGE_BY_OUTCOME[result.outcome],
+        message:
+          result.outcome === "date-unavailable" && isServiceDateClosed(serviceDate) ? SERVICE_CLOSURE_MESSAGE : MESSAGE_BY_OUTCOME[result.outcome],
         serviceDate: result.serviceDate,
         serviceStartTime: result.serviceStartTime,
       },

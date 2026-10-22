@@ -9,6 +9,9 @@ import { NextResponse } from "next/server";
 import { createBookingSetupIntent } from "@/lib/booking/server/stripe/setupIntent";
 import { isRateLimited } from "@/lib/booking/server/rateLimit";
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
+import { checkDateAvailability } from "@/lib/booking/server/availability";
+import { isValidDateKey } from "@/lib/booking/server/dateUtils";
+import { SERVICE_CLOSURE_MESSAGE } from "@/lib/booking/serviceClosures";
 
 export const runtime = "nodejs";
 
@@ -19,6 +22,7 @@ type SetupIntentRequestBody = {
   lastName?: unknown;
   email?: unknown;
   phone?: unknown;
+  serviceDate?: unknown;
 };
 
 function asTrimmedString(value: unknown): string {
@@ -71,6 +75,37 @@ export async function POST(request: Request) {
       { ok: false, code: "validation", message: "A valid name, email, and phone number are required." },
       { status: 422 },
     );
+  }
+
+  // Card collection is only offered for an appointment that can still be
+  // booked. The date is optional on the wire (a browser tab loaded before this
+  // check existed does not send it; the final submission re-checks everything
+  // regardless), but when it is present an unavailable date never gets a
+  // SetupIntent.
+  const serviceDate = asTrimmedString(body.serviceDate);
+  if (serviceDate) {
+    if (!isValidDateKey(serviceDate)) {
+      return NextResponse.json({ ok: false, code: "validation", message: "Please choose a valid appointment date." }, { status: 422 });
+    }
+    try {
+      const availability = await checkDateAvailability(serviceDate);
+      if (!availability.available) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "date-unavailable",
+            message:
+              availability.reason === "closed"
+                ? SERVICE_CLOSURE_MESSAGE
+                : "That date is no longer available. Please go back and choose another appointment date.",
+          },
+          { status: 409 },
+        );
+      }
+    } catch (error) {
+      console.error("[api/payments/setup-intent] availability check failed:", error instanceof Error ? error.message : "unknown error");
+      return NextResponse.json({ ok: false, code: "server-error", message: "We couldn't set up payment right now. Please try again." }, { status: 500 });
+    }
   }
 
   try {

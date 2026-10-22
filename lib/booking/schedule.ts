@@ -3,6 +3,7 @@
 // and date-key helpers. Kept separate from pricing config since these are
 // availability rules, not cost rules.
 import type { ArrivalWindowId } from "./types";
+import { isServiceDateClosed } from "./serviceClosures";
 
 // Standing minimum-lead-time rule: an appointment must start at least
 // this many hours from the moment of booking (exactly 120h is eligible).
@@ -184,7 +185,9 @@ export function isDateSelectable(
   const max = getMaxSelectableDate(today);
   const day = startOfDay(date);
   if (day < min || day > max) return false;
-  if (options.unavailableDateKeys?.includes(toDateKey(day))) return false;
+  const key = toDateKey(day);
+  if (isServiceDateClosed(key)) return false;
+  if (options.unavailableDateKeys?.includes(key)) return false;
   return true;
 }
 

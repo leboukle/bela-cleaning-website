@@ -33,6 +33,9 @@ import { useDeepCleaningNotice } from "@/components/booking/useDeepCleaningNotic
 import { useAppointmentRevalidation } from "@/components/booking/useAppointmentRevalidation";
 import StepTransition from "@/components/booking/StepTransition";
 import IntroStep from "@/components/booking/steps/IntroStep";
+import StepShell from "@/components/booking/StepShell";
+import ServiceClosureNotice from "@/components/booking/ServiceClosureNotice";
+import { isServiceDateClosed } from "@/lib/booking/serviceClosures";
 import PropertyTypeStep from "@/components/booking/steps/PropertyTypeStep";
 import SquareFootageStep from "@/components/booking/steps/SquareFootageStep";
 import BedroomsStep from "@/components/booking/steps/BedroomsStep";
@@ -441,6 +444,25 @@ export default function BookingFlow() {
       );
     }
 
+    // A date can only be closed here if it was chosen before the closure was
+    // known to this tab (the calendar itself never offers one). Never let such
+    // an appointment reach card collection or submission: send the customer
+    // back to pick another date instead.
+    if ((currentStepId === "payment" || currentStepId === "review") && state.appointmentDate && isServiceDateClosed(state.appointmentDate)) {
+      return (
+        <StepShell question="Please choose a different date" onBack={goBack}>
+          <ServiceClosureNotice />
+          <button
+            type="button"
+            onClick={pickNewDate}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-[#3B2F27] px-7 py-3 text-sm font-medium text-white hover:bg-[#2A211C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
+          >
+            Choose a different date
+          </button>
+        </StepShell>
+      );
+    }
+
     switch (currentStepId) {
       case "intro":
         return <IntroStep onStart={advance} />;
@@ -549,6 +571,7 @@ export default function BookingFlow() {
             lastName={state.lastName}
             email={state.email}
             phone={state.phone}
+            appointmentDate={state.appointmentDate}
             totalPrice={estimate?.totalPrice ?? null}
             onSetupComplete={handleSetupComplete}
             onBack={goBack}

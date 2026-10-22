@@ -24,6 +24,7 @@ type PaymentStepProps = {
   lastName: string;
   email: string;
   phone: string;
+  appointmentDate: string | null;
   totalPrice: number | null;
   onSetupComplete: (setupIntentId: string) => void;
   onBack: () => void;
@@ -40,7 +41,7 @@ type SetupState =
 // SetupIntent every time this step is (re-)entered rather than trying to
 // reuse a stale clientSecret across visits — simpler and avoids any
 // question of whether a previously-fetched SetupIntent is still valid.
-export default function PaymentStep({ firstName, lastName, email, phone, totalPrice, onSetupComplete, onBack }: PaymentStepProps) {
+export default function PaymentStep({ firstName, lastName, email, phone, appointmentDate, totalPrice, onSetupComplete, onBack }: PaymentStepProps) {
   const [setup, setSetup] = useState<SetupState>({ status: "loading" });
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function PaymentStep({ firstName, lastName, email, phone, totalPr
         response = await fetch("/api/payments/setup-intent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ firstName, lastName, email, phone }),
+          body: JSON.stringify({ firstName, lastName, email, phone, serviceDate: appointmentDate ?? undefined }),
         });
       } catch {
         if (!cancelled) setSetup({ status: "error", message: "We couldn't reach the server. Please check your connection and try again." });

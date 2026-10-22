@@ -48,7 +48,7 @@ const LATER = new Date("2026-11-03T15:00:00.000Z");
 const FAR = new Date("2029-01-01T12:00:00.000Z");
 
 const AVAILABLE: ExactTimeAvailabilityResult = { available: true, reason: null, maxCapacity: 2, peakConcurrentCount: 0 };
-function unavailable(reason: "blackout" | "at-capacity" | "too-soon"): ExactTimeAvailabilityResult {
+function unavailable(reason: "blackout" | "closed" | "at-capacity" | "too-soon"): ExactTimeAvailabilityResult {
   return { available: false, reason, maxCapacity: 2, peakConcurrentCount: 0 };
 }
 
@@ -391,6 +391,18 @@ describe("owner review instead of silent shifting", () => {
     expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1); // nothing created, nothing shifted
     expect(h.schedules.get(scheduleId)).toMatchObject({ status: "Active", reviewReason: "blackout" });
     expect(h.notifications.sendInternalRecurringScheduleAlert).toHaveBeenCalledTimes(1); // once, not per retry
+  });
+
+  it("a date inside the code-level closure is handled exactly like a blackout: nothing created, nothing shifted, owner review", async () => {
+    const initial = await setup();
+    mockedAvailability.mockResolvedValue(unavailable("closed"));
+    h.bookings.pay(initial.bookingId);
+
+    const result = await afterAppointmentChanged(initial.bookingId, h.deps, LATER);
+
+    expect(result).toMatchObject({ outcome: "needs-review", reason: "blackout", occurrenceNumber: 2, serviceDate: "2026-11-09" });
+    expect(h.bookings.forSchedule(scheduleId)).toHaveLength(1);
+    expect(h.schedules.get(scheduleId)).toMatchObject({ status: "Active", reviewReason: "blackout" });
   });
 
   it("resumes through the same creation path once the blackout is resolved", async () => {

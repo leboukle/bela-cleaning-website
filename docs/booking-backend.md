@@ -152,8 +152,26 @@ the column contract doesn't need to change again then.
 ### Blackout Dates tab
 
 `Date, Reason, Active, Internal Notes` — a date is a blackout when `Active`
-is exactly `"TRUE"` (case-insensitive). Read by
+is `TRUE` (checkbox or text; `YES`/`Y`/`1` also count). Read by
 [`availability.ts`](../lib/booking/server/availability.ts).
+
+The Date may be typed in any ordinary form — Google Sheets converts it to a
+real date and returns it as displayed (`10/22/2026`, `Oct 22, 2026`), so the
+reader normalizes `yyyy-mm-dd`, `m/d/yyyy`, `Mon d, yyyy` and Sheets serial
+dates to `yyyy-mm-dd`. (Before this, only literal `yyyy-mm-dd` text matched,
+so a date typed into a date-formatted cell silently never blocked anything.)
+An Active row whose Date still cannot be read logs a count-only warning.
+
+### Code-level closures
+
+[`serviceClosures.ts`](../lib/booking/serviceClosures.ts) lists service-date
+ranges that are closed regardless of the Sheet (currently 2026-10-22 through
+2026-12-31 inclusive, America/New_York dates). It is consulted from inside the
+existing availability functions and the shared calendar rule, so the calendar,
+start times, booking submission, the card-collection (`setup-intent`) step,
+customer rescheduling and recurring generation (owner review, never a silent
+shift) all apply it. Existing bookings, Manage Booking, cancellation and
+payments are not touched.
 
 ### Availability Overrides tab
 

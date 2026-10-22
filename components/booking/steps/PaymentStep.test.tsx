@@ -52,6 +52,7 @@ const BASE_PROPS = {
   lastName: "Doe",
   email: "jane@example.com",
   phone: "5551234567",
+  appointmentDate: "2027-01-12",
   totalPrice: 190.5,
   onBack: vi.fn(),
 };

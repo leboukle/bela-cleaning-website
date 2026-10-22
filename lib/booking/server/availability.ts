@@ -19,6 +19,7 @@ import { BOOKING_STATUS, BOOKINGS_SHEET_NAME, columnLetter } from "./bookingsShe
 import { calculateServiceStart, resolveRecordStartSpec, ServiceTimeError } from "./serviceTime";
 import { isLessThanMinimumLeadTime } from "./dateUtils";
 import { filterStartTimesByDuration, getAllExactStartTimeCandidates, isPlausibleExactTimeFormat } from "@/lib/booking/schedule";
+import { getClosedDateKeysInWindow, isServiceDateClosed } from "@/lib/booking/serviceClosures";
 
 export class AvailabilityError extends Error {
   constructor(message: string) {
@@ -31,22 +32,70 @@ export class AvailabilityError extends Error {
 const BLACKOUT_RANGE = "Blackout Dates!A2:C"; // Date, Reason, Active
 const OVERRIDES_RANGE = "Availability Overrides!A2:D"; // Date, Maximum Bookings, Reason, Active
 
-function isActiveFlag(raw: string | undefined): boolean {
-  return (raw ?? "").trim().toUpperCase() === "TRUE";
+// The Sheets API returns a date-formatted cell the way it is DISPLAYED
+// ("10/22/2026", "Oct 22, 2026"), not as the yyyy-mm-dd text this module keys
+// everything by. A date the owner types into the Blackout Dates tab is
+// auto-converted to a real date by Sheets, so it must be read back in any of
+// those shapes. Anything unrecognized is returned trimmed (and a blackout row
+// with an unreadable date is reported — see getActiveBlackoutDateSet) rather
+// than silently turned into a different date.
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+function toKey(year: number, month: number, day: number): string {
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return "";
+  return d.toISOString().slice(0, 10);
 }
 
-function normalizeDateCell(raw: string | undefined): string {
+function trimCell(raw: string | undefined): string {
   return (raw ?? "").trim();
+}
+
+export function normalizeDateCell(raw: string | number | undefined): string {
+  const value = String(raw ?? "").trim();
+  let m: RegExpExecArray | null;
+  if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value)) || (m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(value))) {
+    return toKey(Number(m[1]), Number(m[2]), Number(m[3])) || value;
+  }
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value))) {
+    return toKey(Number(m[3]), Number(m[1]), Number(m[2])) || value;
+  }
+  if ((m = /^(?:[A-Za-z]+,?\s+)?([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(value))) {
+    const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1;
+    if (month > 0) return toKey(Number(m[3]), month, Number(m[2])) || value;
+  }
+  // Unformatted Sheets serial date (days since 1899-12-30).
+  if (/^\d{5}$/.test(value)) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Number(value) * 86_400_000);
+    return d.toISOString().slice(0, 10);
+  }
+  return value;
+}
+
+const ISO_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+function isActiveFlag(raw: string | number | boolean | undefined): boolean {
+  const value = String(raw ?? "").trim().toUpperCase();
+  return value === "TRUE" || value === "YES" || value === "Y" || value === "1";
 }
 
 export async function getActiveBlackoutDateSet(): Promise<Set<string>> {
   const rows = await getRange(BLACKOUT_RANGE);
   const dates = new Set<string>();
+  let unreadable = 0;
   for (const row of rows) {
     const [date, , active] = row;
     const key = normalizeDateCell(date);
-    if (key && isActiveFlag(active)) dates.add(key);
+    if (!key || !isActiveFlag(active)) continue;
+    if (!ISO_KEY.test(key)) {
+      unreadable += 1;
+      continue;
+    }
+    dates.add(key);
   }
+  // Never a date or customer detail — just the count, so an unreadable owner
+  // entry is visible in the logs instead of silently doing nothing.
+  if (unreadable > 0) console.warn(`[availability] ${unreadable} active Blackout Dates row(s) have a Date that could not be read.`);
   return dates;
 }
 
@@ -78,7 +127,7 @@ async function getActiveBookingCountsByDate(): Promise<Map<string, number>> {
   const rowCount = Math.max(dates.length, statuses.length);
   for (let i = 0; i < rowCount; i++) {
     const date = normalizeDateCell(dates[i]?.[0]);
-    const status = normalizeDateCell(statuses[i]?.[0]);
+    const status = trimCell(statuses[i]?.[0]);
     if (!date || status === BOOKING_STATUS.CANCELLED) continue;
     counts.set(date, (counts.get(date) ?? 0) + 1);
   }
@@ -91,7 +140,7 @@ function effectiveCapacity(dateKey: string, overrides: OverrideMap, settings: Bo
 
 export type AvailabilityResult = {
   available: boolean;
-  reason: "blackout" | "at-capacity" | null;
+  reason: "blackout" | "closed" | "at-capacity" | null;
   maxCapacity: number;
   currentCount: number;
 };
@@ -112,6 +161,9 @@ export async function checkDateAvailability(dateKey: string): Promise<Availabili
   const maxCapacity = effectiveCapacity(dateKey, overrides, settings);
   const currentCount = counts.get(dateKey) ?? 0;
 
+  if (isServiceDateClosed(dateKey)) {
+    return { available: false, reason: "closed", maxCapacity, currentCount };
+  }
   if (blackoutDates.has(dateKey)) {
     return { available: false, reason: "blackout", maxCapacity, currentCount };
   }
@@ -138,6 +190,7 @@ export async function getUnavailableDateKeysInWindow(startDateKey: string, endDa
   ]);
 
   const unavailable = new Set<string>(blackoutDates);
+  for (const closedKey of getClosedDateKeysInWindow(startDateKey, endDateKey)) unavailable.add(closedKey);
   for (const [dateKey, count] of counts) {
     if (dateKey < startDateKey || dateKey > endDateKey) continue;
     if (count >= effectiveCapacity(dateKey, overrides, settings)) {
@@ -178,7 +231,7 @@ async function getActiveBookingIntervalsByDate(): Promise<Map<string, BookingInt
 
   for (let i = 0; i < rowCount; i++) {
     const date = normalizeDateCell(dates[i]?.[0]);
-    const status = normalizeDateCell(statuses[i]?.[0]);
+    const status = trimCell(statuses[i]?.[0]);
     if (!date || status === BOOKING_STATUS.CANCELLED) continue;
 
     const durationMinutes = Number(durations[i]?.[0]);
@@ -187,8 +240,8 @@ async function getActiveBookingIntervalsByDate(): Promise<Map<string, BookingInt
     let spec;
     try {
       spec = resolveRecordStartSpec({
-        serviceStartTime: normalizeDateCell(startTimes[i]?.[0]),
-        arrivalWindow: normalizeDateCell(arrivalWindows[i]?.[0]),
+        serviceStartTime: trimCell(startTimes[i]?.[0]),
+        arrivalWindow: trimCell(arrivalWindows[i]?.[0]),
       });
     } catch (error) {
       if (error instanceof ServiceTimeError) continue; // defensive skip — see docstring
@@ -227,7 +280,7 @@ function peakConcurrentCount(existing: BookingInterval[], candidateStart: number
 
 export type ExactTimeAvailabilityResult = {
   available: boolean;
-  reason: "blackout" | "outside-operating-hours" | "too-soon" | "at-capacity" | null;
+  reason: "blackout" | "closed" | "outside-operating-hours" | "too-soon" | "at-capacity" | null;
   maxCapacity: number;
   peakConcurrentCount: number;
 };
@@ -266,6 +319,12 @@ export async function checkExactTimeAvailability(
     filterStartTimesByDuration([startTime], estimatedDurationMinutes).length === 0
   ) {
     return { available: false, reason: "outside-operating-hours", maxCapacity: settings.defaultDailyCapacity, peakConcurrentCount: 0 };
+  }
+
+  // Code-level closure: needs no Sheets read, and wins over every other reason
+  // so the customer is told the true one.
+  if (isServiceDateClosed(dateKey)) {
+    return { available: false, reason: "closed", maxCapacity: settings.defaultDailyCapacity, peakConcurrentCount: 0 };
   }
 
   const candidateStart = calculateServiceStart(dateKey, resolveRecordStartSpec({ serviceStartTime: startTime, arrivalWindow: "" }), settings.timezone);
@@ -308,6 +367,8 @@ export async function checkExactTimeAvailability(
  * submission; the server never trusts this list back regardless.
  */
 export async function getAvailableStartTimes(dateKey: string, estimatedDurationMinutes: number, now: Date = new Date()): Promise<string[]> {
+  if (isServiceDateClosed(dateKey)) return [];
+
   const settings = await getBookingSettings();
   const candidates = filterStartTimesByDuration(getAllExactStartTimeCandidates(), estimatedDurationMinutes).filter((time) => {
     const candidateStart = calculateServiceStart(dateKey, resolveRecordStartSpec({ serviceStartTime: time, arrivalWindow: "" }), settings.timezone);

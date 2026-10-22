@@ -419,14 +419,14 @@ describe("checkExactTimeAvailability — 120-hour minimum lead time", () => {
     expect(shortResult.reason).toBe("too-soon");
   });
 
-  it("resolves the 120-hour boundary correctly across the fall-back DST transition (2026-11-01)", async () => {
+  it("resolves the 120-hour boundary correctly across the fall-back DST transition (2027-11-07)", async () => {
     setupExactTimeData({});
-    // 1:00 PM EST November 1 (already past the 2am transition) = 2026-11-01T18:00:00Z.
-    // The real 120h-before instant is 2026-10-27T18:00:00Z.
-    const exactlyOnBoundary = new Date("2026-10-27T18:00:00.000Z");
-    const oneMinuteShort = new Date("2026-10-27T18:01:00.000Z");
-    const onBoundaryResult = await checkExactTimeAvailability("2026-11-01", "13:00", 60, exactlyOnBoundary);
-    const shortResult = await checkExactTimeAvailability("2026-11-01", "13:00", 60, oneMinuteShort);
+    // 1:00 PM EST November 7, 2027 (already past the 2am transition) = 2027-11-07T18:00:00Z.
+    // The real 120h-before instant is 2027-11-02T18:00:00Z.
+    const exactlyOnBoundary = new Date("2027-11-02T18:00:00.000Z");
+    const oneMinuteShort = new Date("2027-11-02T18:01:00.000Z");
+    const onBoundaryResult = await checkExactTimeAvailability("2027-11-07", "13:00", 60, exactlyOnBoundary);
+    const shortResult = await checkExactTimeAvailability("2027-11-07", "13:00", 60, oneMinuteShort);
     expect(onBoundaryResult.available).toBe(true);
     expect(shortResult.available).toBe(false);
   });

@@ -386,6 +386,20 @@ describe("submitBooking", () => {
     expect(repo.appended.length).toBe(0);
   });
 
+  it("rejects a closed service date with the closure message and appends nothing", async () => {
+    const repo = new InMemoryBookingRepository();
+    const notifications = createFakeNotificationSender();
+    mockedCheckAvailability.mockResolvedValue({ available: false, reason: "closed", maxCapacity: 2, currentCount: 0 });
+    const result = await submitBooking(validInput({ idempotencyToken: "closed-token" }), repo, notifications);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("date-unavailable");
+      expect("message" in result && result.message).toBe("We’re not accepting new cleaning appointments for the remainder of 2026. Thank you for your understanding.");
+    }
+    expect(mockedVerifySetupIntent).not.toHaveBeenCalled();
+    expect(repo.appended.length).toBe(0);
+  });
+
   it("returns the existing booking when the repository already has this idempotency token (authoritative dedupe)", async () => {
     const repo = new InMemoryBookingRepository();
     const notifications = createFakeNotificationSender();
