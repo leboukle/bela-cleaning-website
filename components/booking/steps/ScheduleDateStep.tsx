@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import Calendar from "@/components/booking/Calendar";
 import StepShell from "@/components/booking/StepShell";
-import ServiceClosureNotice from "@/components/booking/ServiceClosureNotice";
-import { formatReadableDate, toDateKey } from "@/lib/booking/schedule";
-import { isClosureNoticeActive } from "@/lib/booking/serviceClosures";
+import { formatReadableDate } from "@/lib/booking/schedule";
 
 type ScheduleDateStepProps = {
   appointmentDate: string | null;
@@ -43,11 +41,10 @@ export default function ScheduleDateStep({ appointmentDate, onSelect, onBack }: 
 
   return (
     <StepShell
-      question="When would you like us to visit?"
-      note="We're here seven days a week. Appointments must be booked at least 5 days (120 hours) in advance, and you can browse as far as six months ahead."
+      question="First, choose your preferred cleaning date."
+      note="Appointments must be booked at least 5 days (120 hours) in advance, and you can browse as far as six months ahead. Crossed-out dates are unavailable. Once we know a little about your home, we'll show the start times that fit."
       onBack={onBack}
     >
-      {isClosureNoticeActive(toDateKey(new Date())) && <ServiceClosureNotice className="mb-5" />}
       <Calendar selectedDateKey={appointmentDate} onSelect={onSelect} unavailableDateKeys={unavailableDateKeys} />
       {loadError && (
         <p className="mt-4 text-sm text-[#B14A2E]">

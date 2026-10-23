@@ -394,7 +394,7 @@ describe("submitBooking", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe("date-unavailable");
-      expect("message" in result && result.message).toBe("We’re not accepting new cleaning appointments for the remainder of 2026. Thank you for your understanding.");
+      expect("message" in result && result.message).toBe("This date is unavailable. Please choose another date.");
     }
     expect(mockedVerifySetupIntent).not.toHaveBeenCalled();
     expect(repo.appended.length).toBe(0);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getClosedDateKeysInWindow, isClosureNoticeActive, isServiceDateClosed, SERVICE_CLOSURE_MESSAGE } from "./serviceClosures";
+import { getClosedDateKeysInWindow, isServiceDateClosed, DATE_UNAVAILABLE_MESSAGE } from "./serviceClosures";
 import { isDateSelectable } from "./schedule";
 
 describe("service closure (2026-10-22 through 2026-12-31, inclusive)", () => {
@@ -30,16 +30,9 @@ describe("service closure (2026-10-22 through 2026-12-31, inclusive)", () => {
     expect(getClosedDateKeysInWindow("2027-01-01", "2027-02-01")).toEqual([]);
   });
 
-  it("uses the exact customer-facing wording", () => {
-    expect(SERVICE_CLOSURE_MESSAGE).toBe(
-      "We’re not accepting new cleaning appointments for the remainder of 2026. Thank you for your understanding.",
-    );
-  });
-
-  it("shows the notice until the closure has passed", () => {
-    expect(isClosureNoticeActive("2026-10-22")).toBe(true);
-    expect(isClosureNoticeActive("2026-12-31")).toBe(true);
-    expect(isClosureNoticeActive("2027-01-01")).toBe(false);
+  it("uses neutral wording that never claims the business is closed", () => {
+    expect(DATE_UNAVAILABLE_MESSAGE).toBe("This date is unavailable. Please choose another date.");
+    expect(DATE_UNAVAILABLE_MESSAGE).not.toMatch(/closed|not accepting|2026|temporar/i);
   });
 
   it("the shared calendar rule disables closed dates even when the availability API returned nothing", () => {

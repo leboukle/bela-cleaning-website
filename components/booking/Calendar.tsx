@@ -177,7 +177,8 @@ export default function Calendar({ selectedDateKey, onSelect, unavailableDateKey
                   else dayButtonRefs.current.delete(dateKey);
                 }}
                 type="button"
-                aria-label={readableLabel}
+                aria-label={selectable ? readableLabel : `${readableLabel}, unavailable`}
+                title={selectable ? undefined : "Unavailable"}
                 aria-current={isSelected ? "date" : undefined}
                 aria-disabled={!selectable}
                 tabIndex={isFocusTarget ? 0 : -1}

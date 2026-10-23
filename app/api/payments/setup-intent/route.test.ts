@@ -31,7 +31,7 @@ describe("POST /api/payments/setup-intent — card collection for an unavailable
     expect(body).toMatchObject({
       ok: false,
       code: "date-unavailable",
-      message: "We’re not accepting new cleaning appointments for the remainder of 2026. Thank you for your understanding.",
+      message: "This date is unavailable. Please choose another date.",
     });
     expect(mockedCreate).not.toHaveBeenCalled();
   });

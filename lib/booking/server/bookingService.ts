@@ -21,7 +21,7 @@ import { verifySucceededSetupIntent, type ConfirmedSetupIntent } from "./stripe/
 import { calculateScheduledChargeAt } from "./scheduledCharge";
 import { generateManageToken, hashManageToken } from "./manageToken";
 import { formatOperationalTimestamp } from "./dateUtils";
-import { SERVICE_CLOSURE_MESSAGE } from "@/lib/booking/serviceClosures";
+import { DATE_UNAVAILABLE_MESSAGE } from "@/lib/booking/serviceClosures";
 import {
   FIRST_VISIT_PRICING_POLICY,
   getSavedQuoteKind,
@@ -348,7 +348,7 @@ export async function submitBooking(
         code: "date-unavailable",
         message:
           dayAvailability.reason === "closed"
-            ? SERVICE_CLOSURE_MESSAGE
+            ? DATE_UNAVAILABLE_MESSAGE
             : "That date is no longer available. Please choose another appointment date.",
       };
     }
@@ -395,7 +395,7 @@ export async function submitBooking(
         ok: false,
         code: "date-unavailable",
         message:
-          exactAvailability.reason === "closed" ? SERVICE_CLOSURE_MESSAGE : "That appointment time is no longer available. Please choose another.",
+          exactAvailability.reason === "closed" ? DATE_UNAVAILABLE_MESSAGE : "That appointment time is no longer available. Please choose another.",
       };
     }
 
@@ -457,7 +457,7 @@ export async function submitBooking(
         ok: false,
         code: "date-unavailable",
         message:
-          exactRecheck.reason === "closed" ? SERVICE_CLOSURE_MESSAGE : "That appointment time just became unavailable. Please choose another.",
+          exactRecheck.reason === "closed" ? DATE_UNAVAILABLE_MESSAGE : "That appointment time just became unavailable. Please choose another.",
       };
     }
 

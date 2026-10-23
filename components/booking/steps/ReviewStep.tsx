@@ -182,8 +182,11 @@ export default function ReviewStep({
           )}
         </ReviewSection>
 
-        <ReviewSection title="Appointment" onEdit={() => onEdit("location")}>
+        <ReviewSection title="Service Area" onEdit={() => onEdit("location")}>
           <ReviewLine label="Service area" value={city ? `${city}, NJ ${state.zipCode}` : state.zipCode || "—"} />
+        </ReviewSection>
+
+        <ReviewSection title="Appointment" onEdit={() => onEdit("schedule-date")}>
           <ReviewLine
             label="Appointment date"
             value={state.appointmentDate ? formatReadableDate(state.appointmentDate) : "—"}

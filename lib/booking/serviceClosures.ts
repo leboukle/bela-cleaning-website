@@ -17,8 +17,9 @@ export type ServiceClosure = { start: string; end: string };
 
 export const SERVICE_CLOSURES: readonly ServiceClosure[] = [{ start: "2026-10-22", end: "2026-12-31" }];
 
-export const SERVICE_CLOSURE_MESSAGE =
-  "We’re not accepting new cleaning appointments for the remainder of 2026. Thank you for your understanding.";
+// Customer-facing wording for a date that cannot be booked. Deliberately
+// neutral: it never says why, and never implies the business is closed.
+export const DATE_UNAVAILABLE_MESSAGE = "This date is unavailable. Please choose another date.";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -41,9 +42,4 @@ export function getClosedDateKeysInWindow(startDateKey: string, endDateKey: stri
     for (let key = from; key <= to; key = addDaysToKey(key, 1)) keys.push(key);
   }
   return keys;
-}
-
-/** True while a closure has not fully passed — the notice stops showing once the closure is over. */
-export function isClosureNoticeActive(todayKey: string): boolean {
-  return SERVICE_CLOSURES.some((c) => todayKey <= c.end);
 }

@@ -15,9 +15,15 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
+const DATE_A_LABEL = "Monday, June 22, 2026";
+const DATE_B_LABEL = "Tuesday, June 23, 2026";
+const TIMES = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"];
+
 const H = {
+  date: "First, choose your preferred cleaning date.",
   property: "First, tell us about your property.",
   bedrooms: "How many bedrooms should we plan for?",
   bathrooms: "And how many bathrooms?",
@@ -40,10 +46,28 @@ function goBack() {
   fireEvent.click(screen.getByRole("button", { name: /back/i }));
 }
 
+// The date is the FIRST question now. Freeze only Date so the calendar is deterministic
+// (earliest bookable day = June 15) and serve a fixed availability response.
+function freezeCalendarAndAvailability(options: { times?: string[] } = {}) {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 5, 10, 10, 0, 0));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      const body = String(url).includes("available-times")
+        ? { ok: true, availableStartTimes: options.times ?? TIMES }
+        : { ok: true, unavailableDateKeys: [] };
+      return Promise.resolve({ json: () => Promise.resolve(body) } as Response);
+    }),
+  );
+}
+
 function startAndAnswerThrough(stopBefore: keyof typeof H) {
+  if (!vi.isFakeTimers()) freezeCalendarAndAvailability();
   render(<BookingFlow />);
   fireEvent.click(screen.getByRole("button", { name: /get started/i }));
   const sequence: Array<[keyof typeof H, () => void]> = [
+    ["date", () => fireEvent.click(screen.getByRole("button", { name: DATE_A_LABEL }))],
     ["property", () => pick(/^Apartment$/)],
     ["bedrooms", () => pick(/^2 bedrooms/)],
     ["bathrooms", () => pick(/^2 bathrooms/)],
@@ -66,9 +90,10 @@ function startAndAnswerThrough(stopBefore: keyof typeof H) {
 }
 
 describe("booking step order", () => {
-  it("STEP_ORDER asks Property → Bedrooms → Bathrooms → Cleaning Type → Extras → Square Footage → Frequency, then the unchanged later steps", () => {
+  it("STEP_ORDER asks the date first, then Property → Bedrooms → Bathrooms → Cleaning Type → Extras → Square Footage → Frequency, then the unchanged later steps", () => {
     expect([...STEP_ORDER]).toEqual([
       "intro",
+      "schedule-date",
       "property-type",
       "bedrooms",
       "bathrooms",
@@ -77,7 +102,6 @@ describe("booking step order", () => {
       "square-footage",
       "frequency",
       "location",
-      "schedule-date",
       "arrival-window",
       "customer-name",
       "customer-email",
@@ -117,78 +141,118 @@ describe("booking step order", () => {
   });
 });
 
-describe("BookingFlow: changing the appointment date", () => {
-  const DATE_A_LABEL = "Monday, June 22, 2026";
-  const DATE_B_LABEL = "Tuesday, June 23, 2026";
-  const TIMES = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00"];
-
+describe("BookingFlow: date first", () => {
   beforeEach(() => {
-    // Freeze only Date so the calendar is deterministic (earliest bookable day = June 15).
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(2026, 5, 10, 10, 0, 0));
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((url: string) => {
-        const body = String(url).includes("available-times")
-          ? { ok: true, availableStartTimes: TIMES }
-          : { ok: true, unavailableDateKeys: [] };
-        return Promise.resolve({ json: () => Promise.resolve(body) } as Response);
-      }),
-    );
+    freezeCalendarAndAvailability();
   });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  async function chooseDateAndTime(dateLabel: string, timeLabel: string) {
-    fireEvent.click(screen.getByRole("button", { name: dateLabel }));
-    fireEvent.click(await screen.findByRole("radio", { name: timeLabel }));
-  }
-
-  async function walkToTimeStepWithTimeSelected() {
-    startAndAnswerThrough("location");
-    fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "07030" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(currentHeading()).toBe("When would you like us to visit?");
-    await chooseDateAndTime(DATE_A_LABEL, "10:00 AM");
-    expect(currentHeading()).toBe("What should we call you?"); // advanced past the time step
-  }
 
   const checkedTimes = () => screen.queryAllByRole("radio").filter((r) => r.getAttribute("aria-checked") === "true");
 
-  it("changing to a different date clears the old time: the customer must choose one for the new date", async () => {
-    await walkToTimeStepWithTimeSelected();
+  function fillZipAndContinue() {
+    fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "07030" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  }
 
-    goBack(); // time step: the chosen time is remembered for Date A
+  it("shows the calendar immediately after 'Let's Get Started', before any property question, with no closure notice", () => {
+    render(<BookingFlow />);
+    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+    expect(currentHeading()).toBe(H.date);
+    expect(screen.queryByText(/not accepting new cleaning appointments/i)).toBeNull();
+    expect(screen.queryByText(/remainder of 2026/i)).toBeNull();
+  });
+
+  it("keeps unavailable dates visible but disabled, and does not skip ahead to a later month", async () => {
+    vi.setSystemTime(new Date(2026, 9, 22, 10, 0, 0)); // Oct 22, 2026: the restricted period starts today
+    render(<BookingFlow />);
+    fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+
+    // The first month shown is the earliest bookable month, not January.
+    expect(screen.getByText("October 2026")).toBeTruthy();
+    const nov = () => screen.getByRole("button", { name: /Next month/i });
+    fireEvent.click(nov());
+    expect(screen.getByText("November 2026")).toBeTruthy();
+
+    const closed = screen.getByRole("button", { name: /Monday, November 16, 2026/ }) as HTMLButtonElement;
+    expect(closed.disabled).toBe(true);
+    expect(closed.getAttribute("aria-label")).toMatch(/unavailable/i);
+    fireEvent.click(closed);
+    expect(currentHeading()).toBe(H.date); // cannot be selected
+
+    // Navigation to future months stays possible, and January 2027 dates are selectable.
+    fireEvent.click(nov()); // December
+    fireEvent.click(nov()); // January
+    expect(screen.getByText("January 2027")).toBeTruthy();
+    const jan = screen.getByRole("button", { name: /Tuesday, January 12, 2027/ }) as HTMLButtonElement;
+    expect(jan.disabled).toBe(false);
+    fireEvent.click(jan);
+    expect(currentHeading()).toBe(H.property);
+  });
+
+  it("preserves the selected date through Back navigation", () => {
+    startAndAnswerThrough("property");
+    expect(currentHeading()).toBe(H.property);
+    goBack();
+    expect(currentHeading()).toBe(H.date);
+    expect(screen.getByRole("button", { name: DATE_A_LABEL }).getAttribute("aria-current")).toBe("date");
+    fireEvent.click(screen.getByRole("button", { name: DATE_A_LABEL }));
+    expect(currentHeading()).toBe(H.property);
+  });
+
+  it("picks the start time AFTER the cleaning's duration is known, for the date chosen first", async () => {
+    startAndAnswerThrough("location");
+    fillZipAndContinue();
     expect(currentHeading()).toBe("What time works best?");
-    expect((await screen.findByRole("radio", { name: "10:00 AM" })).getAttribute("aria-checked")).toBe("true");
-
-    goBack(); // date step
-    expect(currentHeading()).toBe("When would you like us to visit?");
-    fireEvent.click(screen.getByRole("button", { name: DATE_B_LABEL }));
-
-    // Straight into the existing time step for Date B: times are listed, none pre-selected or carried over.
-    expect(currentHeading()).toBe("What time works best?");
-    expect(await screen.findByRole("radio", { name: "10:00 AM" })).toBeTruthy();
-    expect(screen.getAllByRole("radio").length).toBe(TIMES.length);
-    expect(checkedTimes()).toHaveLength(0);
-
-    // Choosing a time for Date B resumes the normal flow.
-    fireEvent.click(screen.getByRole("radio", { name: "11:00 AM" }));
+    const urls = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
+    const timesCall = urls.find((u) => u.includes("available-times")) ?? "";
+    expect(timesCall).toContain("date=2026-06-22");
+    expect(timesCall).toMatch(/durationMinutes=\d+/);
+    fireEvent.click(await screen.findByRole("radio", { name: "10:00 AM" }));
     expect(currentHeading()).toBe("What should we call you?");
   });
 
-  it("re-selecting the same date keeps the already-selected valid time", async () => {
-    await walkToTimeStepWithTimeSelected();
+  it("when no time fits, explains it and lets the customer change the date without losing entered details", async () => {
+    startAndAnswerThrough("location");
+    fillZipAndContinue();
+    // Date A has no start times for this cleaning; Date B does.
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      const body = String(url).includes("available-times")
+        ? { ok: true, availableStartTimes: String(url).includes("2026-06-23") ? TIMES : [] }
+        : { ok: true, unavailableDateKeys: [] };
+      return Promise.resolve({ json: () => Promise.resolve(body) } as Response);
+    });
+    // Re-enter the time step so it re-fetches with the new stub.
+    goBack();
+    fillZipAndContinue();
+    expect(await screen.findByText(/No start times are available on this date for a cleaning of this length/i)).toBeTruthy();
 
-    goBack(); // time step
-    goBack(); // date step
-    fireEvent.click(screen.getByRole("button", { name: DATE_A_LABEL })); // same date again
+    fireEvent.click(screen.getByRole("button", { name: "Choose a different date" }));
+    expect(currentHeading()).toBe(H.date);
+    fireEvent.click(screen.getByRole("button", { name: DATE_B_LABEL }));
 
+    // Straight back to the time step, now with times for the new date.
     expect(currentHeading()).toBe("What time works best?");
-    expect((await screen.findByRole("radio", { name: "10:00 AM" })).getAttribute("aria-checked")).toBe("true");
-    expect(checkedTimes()).toHaveLength(1);
+    expect(await screen.findByRole("radio", { name: "10:00 AM" })).toBeTruthy();
+    expect(checkedTimes()).toHaveLength(0);
+
+    // Everything entered earlier is still there.
+    goBack();
+    expect((screen.getByLabelText("ZIP code") as HTMLInputElement).value).toBe("07030");
+    goBack();
+    expect(screen.getByRole("radio", { name: /^One time/ }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("Back from the date step while changing the date returns to the time step, not the intro", async () => {
+    startAndAnswerThrough("location");
+    fillZipAndContinue();
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      Promise.resolve({ json: () => Promise.resolve({ ok: true, availableStartTimes: [], unavailableDateKeys: [] }) } as Response),
+    );
+    goBack();
+    fillZipAndContinue();
+    fireEvent.click(await screen.findByRole("button", { name: "Choose a different date" }));
+    expect(currentHeading()).toBe(H.date);
+    goBack();
+    expect(currentHeading()).toBe("What time works best?");
   });
 });
 
@@ -236,6 +300,10 @@ describe("BookingFlow navigation", () => {
     goBack();
     expect(currentHeading()).toBe(H.property);
     expect(screen.getByRole("radio", { name: /^Apartment$/ }).getAttribute("aria-checked")).toBe("true");
+
+    goBack();
+    expect(currentHeading()).toBe(H.date);
+    expect(screen.getByRole("button", { name: DATE_A_LABEL }).getAttribute("aria-current")).toBe("date");
   });
 
   it("re-answering square footage on the way back changes the running total but keeps every other selection", () => {

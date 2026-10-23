@@ -34,8 +34,7 @@ import { useAppointmentRevalidation } from "@/components/booking/useAppointmentR
 import StepTransition from "@/components/booking/StepTransition";
 import IntroStep from "@/components/booking/steps/IntroStep";
 import StepShell from "@/components/booking/StepShell";
-import ServiceClosureNotice from "@/components/booking/ServiceClosureNotice";
-import { isServiceDateClosed } from "@/lib/booking/serviceClosures";
+import { DATE_UNAVAILABLE_MESSAGE, isServiceDateClosed } from "@/lib/booking/serviceClosures";
 import PropertyTypeStep from "@/components/booking/steps/PropertyTypeStep";
 import SquareFootageStep from "@/components/booking/steps/SquareFootageStep";
 import BedroomsStep from "@/components/booking/steps/BedroomsStep";
@@ -130,7 +129,22 @@ export default function BookingFlow() {
     },
   });
 
+  // Where the date step sends the customer after a date is chosen, when they
+  // arrived at it to CHANGE the date (from the Review screen, or from the
+  // time step when no time fits) rather than as step 2 of the first pass.
+  // Everything else they entered is left untouched.
+  const [dateChangeReturn, setDateChangeReturn] = useState<StepId | null>(null);
+
   const goBack = () => setState((s) => ({ ...s, stepIndex: Math.max(s.stepIndex - 1, 0) }));
+
+  // Back from the date step: while changing the date, go back to where the
+  // change started instead of to the intro.
+  const goBackFromDate = () => {
+    if (!dateChangeReturn) return goBack();
+    const target = dateChangeReturn;
+    setDateChangeReturn(null);
+    setState((s) => ({ ...s, stepIndex: STEP_ORDER.indexOf(target), returnToStepId: target === "review" ? null : s.returnToStepId }));
+  };
 
   // Normally advances one step. But if the customer got here via a Review
   // "Edit" link (`returnToStepId` is set) and the step they're leaving is
@@ -159,6 +173,7 @@ export default function BookingFlow() {
   const editSection = (stepId: StepId) => {
     setSubmission({ status: "idle" });
     setSwitchedToDeepCleaning(false);
+    setDateChangeReturn(stepId === "schedule-date" ? "review" : null);
     setState((s) => ({
       ...s,
       stepIndex: STEP_ORDER.indexOf(stepId),
@@ -224,8 +239,27 @@ export default function BookingFlow() {
   const selectAppointmentDate = (dateKey: string) => {
     // A different date clears the previously selected start time (see
     // withAppointmentDate); re-selecting the same date keeps it.
-    setState((s) => withAppointmentDate(s, dateKey));
-    advance();
+    const returnTo = dateChangeReturn;
+    setDateChangeReturn(null);
+    setState((s) => {
+      const next = withAppointmentDate(s, dateKey);
+      if (!returnTo) {
+        // First pass: the date is asked first, then the property questions.
+        return { ...next, stepIndex: Math.min(s.stepIndex + 1, STEP_ORDER.length - 1) };
+      }
+      // Changing the date: a different date needs a (re)validated start time
+      // for this cleaning's duration, so go there; the same date goes straight back.
+      const changed = next !== s;
+      return {
+        ...next,
+        stepIndex: STEP_ORDER.indexOf(changed ? "arrival-window" : returnTo),
+        returnToStepId: returnTo === "review" && !changed ? null : s.returnToStepId,
+      };
+    });
+  };
+  const changeDateFromTimeStep = () => {
+    setDateChangeReturn("arrival-window");
+    setState((s) => ({ ...s, stepIndex: STEP_ORDER.indexOf("schedule-date") }));
   };
   const selectServiceStartTime = (time: string) => {
     setAppointmentNoLongerFits(false);
@@ -451,7 +485,9 @@ export default function BookingFlow() {
     if ((currentStepId === "payment" || currentStepId === "review") && state.appointmentDate && isServiceDateClosed(state.appointmentDate)) {
       return (
         <StepShell question="Please choose a different date" onBack={goBack}>
-          <ServiceClosureNotice />
+          <p className="rounded-2xl border border-[#D9A05B] bg-[#FBF0DE] p-4 text-sm font-medium text-[#3B2F27]">
+            {DATE_UNAVAILABLE_MESSAGE}
+          </p>
           <button
             type="button"
             onClick={pickNewDate}
@@ -506,7 +542,7 @@ export default function BookingFlow() {
         );
       case "schedule-date":
         return (
-          <ScheduleDateStep appointmentDate={state.appointmentDate} onSelect={selectAppointmentDate} onBack={goBack} />
+          <ScheduleDateStep appointmentDate={state.appointmentDate} onSelect={selectAppointmentDate} onBack={goBackFromDate} />
         );
       case "arrival-window":
         return (
@@ -516,6 +552,7 @@ export default function BookingFlow() {
             estimatedDurationMinutes={estimate?.totalDurationMinutes ?? null}
             timeNoLongerFits={appointmentNoLongerFits}
             onSelect={selectServiceStartTime}
+            onChangeDate={changeDateFromTimeStep}
             onBack={goBack}
           />
         );

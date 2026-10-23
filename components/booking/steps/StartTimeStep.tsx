@@ -12,6 +12,8 @@ type StartTimeStepProps = {
   /** True when a duration-lengthening change cleared the customer's previously selected time. */
   timeNoLongerFits?: boolean;
   onSelect: (time: string) => void;
+  /** Sends the customer to the date step to pick another date; everything else they entered is kept. */
+  onChangeDate?: () => void;
   onBack: () => void;
 };
 
@@ -28,6 +30,7 @@ export default function StartTimeStep({
   estimatedDurationMinutes,
   timeNoLongerFits = false,
   onSelect,
+  onChangeDate,
   onBack,
 }: StartTimeStepProps) {
   const [availableStartTimes, setAvailableStartTimes] = useState<string[]>([]);
@@ -90,9 +93,21 @@ export default function StartTimeStep({
         </p>
       )}
       {!loading && !loadError && availableStartTimes.length === 0 && (
-        <p className="text-sm text-[#B14A2E]">
-          No appointment times are available on this date. Please go back and choose another date.
-        </p>
+        <div className="rounded-xl border border-[#D9A05B] bg-[#FBF0DE] p-4" role="status">
+          <p className="text-sm font-medium text-[#3B2F27]">
+            No start times are available on this date for a cleaning of this length. Your answers are saved — you can
+            choose another date.
+          </p>
+          {onChangeDate && (
+            <button
+              type="button"
+              onClick={onChangeDate}
+              className="mt-3 rounded text-sm font-medium text-[#3B2F27] underline underline-offset-2 hover:text-[#6B5B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#3B2F27]"
+            >
+              Choose a different date
+            </button>
+          )}
+        </div>
       )}
       {!loading && !loadError && availableStartTimes.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

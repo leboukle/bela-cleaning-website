@@ -11,7 +11,7 @@ import { isRateLimited } from "@/lib/booking/server/rateLimit";
 import { isValidEmail, isValidUsPhone, isNonEmpty } from "@/lib/booking/validation";
 import { checkDateAvailability } from "@/lib/booking/server/availability";
 import { isValidDateKey } from "@/lib/booking/server/dateUtils";
-import { SERVICE_CLOSURE_MESSAGE } from "@/lib/booking/serviceClosures";
+import { DATE_UNAVAILABLE_MESSAGE } from "@/lib/booking/serviceClosures";
 
 export const runtime = "nodejs";
 
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
             code: "date-unavailable",
             message:
               availability.reason === "closed"
-                ? SERVICE_CLOSURE_MESSAGE
+                ? DATE_UNAVAILABLE_MESSAGE
                 : "That date is no longer available. Please go back and choose another appointment date.",
           },
           { status: 409 },

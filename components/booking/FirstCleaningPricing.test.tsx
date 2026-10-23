@@ -193,10 +193,14 @@ describe("Booking flow", () => {
   const pick = (name: RegExp) => fireEvent.click(screen.getByRole("radio", { name }));
 
   it("quotes the regular price for a recurring selection and never asks the server about a follow-up link", () => {
-    const fetchMock = vi.fn();
+    // The date is the first question; freeze Date so a known day is selectable.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 5, 10, 10, 0, 0));
+    const fetchMock = vi.fn((_url: string) => Promise.resolve({ json: () => Promise.resolve({ ok: true, unavailableDateKeys: [] }) } as Response));
     vi.stubGlobal("fetch", fetchMock);
     render(<BookingFlow />);
     fireEvent.click(screen.getByRole("button", { name: /get started/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Monday, June 22, 2026" }));
     pick(/^Apartment$/);
     pick(/^2 bedrooms/);
     pick(/^2 bathrooms/);
@@ -209,5 +213,6 @@ describe("Booking flow", () => {
     expect(screen.queryByText("$145.50")).toBeNull();
     expect(screen.getAllByText("First cleaning total").length).toBeGreaterThan(0);
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("follow-up"))).toBe(false);
+    vi.useRealTimers();
   });
 });

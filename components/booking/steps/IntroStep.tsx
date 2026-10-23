@@ -1,9 +1,6 @@
 "use client";
 
 import { Clock, ShieldCheck, Sparkles } from "lucide-react";
-import ServiceClosureNotice from "@/components/booking/ServiceClosureNotice";
-import { toDateKey } from "@/lib/booking/schedule";
-import { isClosureNoticeActive } from "@/lib/booking/serviceClosures";
 
 type IntroStepProps = {
   onStart: () => void;
@@ -18,7 +15,6 @@ const REASSURANCES = [
 export default function IntroStep({ onStart }: IntroStepProps) {
   return (
     <div className="max-w-xl py-4 sm:py-8">
-      {isClosureNoticeActive(toDateKey(new Date())) && <ServiceClosureNotice className="mb-8" />}
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8A7A6B]">BeLa Cleaning</p>
       <h1 className="mt-4 font-heading text-[2.5rem] leading-[1.1] text-[#3B2F27] text-balance sm:text-5xl">
         You&rsquo;re just a few steps away from a cleaner home.

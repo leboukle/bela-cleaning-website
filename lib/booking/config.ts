@@ -181,8 +181,8 @@ export const STEP_STAGE: Partial<Record<StepId, string>> = {
   extras: "Extras",
   "square-footage": "Size",
   frequency: "Frequency",
+  "schedule-date": "Date",
   location: "Appointment",
-  "schedule-date": "Appointment",
   "arrival-window": "Appointment",
   "customer-name": "Details",
   "customer-email": "Details",
@@ -194,7 +194,7 @@ export const STEP_STAGE: Partial<Record<StepId, string>> = {
   review: "Review",
 };
 
-export const PROGRESS_STAGES = ["Property", "Cleaning", "Extras", "Size", "Frequency", "Appointment", "Details", "Payment", "Review"] as const;
+export const PROGRESS_STAGES = ["Date", "Property", "Cleaning", "Extras", "Size", "Frequency", "Appointment", "Details", "Payment", "Review"] as const;
 
 // Groups of consecutive StepIds shown as one "Edit" action on the Review
 // screen. `endStep` is the step whose successful completion (advance())
@@ -216,7 +216,11 @@ export const EDIT_GROUPS: EditGroup[] = [
   { id: "extras", label: "Extras", startStep: "extras", endStep: "extras" },
   { id: "square-footage", label: "Square Footage", startStep: "square-footage", endStep: "square-footage" },
   { id: "frequency", label: "Frequency", startStep: "frequency", endStep: "frequency" },
-  { id: "appointment", label: "Appointment", startStep: "location", endStep: "arrival-window" },
+  { id: "service-area", label: "Service Area", startStep: "location", endStep: "location" },
+  // The date is chosen first in the flow (right after the intro) and the start time later, once the
+  // cleaning's duration is known, so this group is not contiguous: editing it enters at the date, and
+  // BookingFlow's selectAppointmentDate sends a changed date on to the time step before Review.
+  { id: "appointment", label: "Appointment", startStep: "schedule-date", endStep: "arrival-window" },
   { id: "contact", label: "Contact", startStep: "customer-name", endStep: "service-address" },
   { id: "special-instructions", label: "Special Instructions", startStep: "access", endStep: "special-instructions" },
 ];

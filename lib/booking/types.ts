@@ -49,6 +49,7 @@ export type AccessId = "home" | "not-home";
 // off of.
 export const STEP_ORDER = [
   "intro",
+  "schedule-date",
   "property-type",
   "bedrooms",
   "bathrooms",
@@ -57,7 +58,6 @@ export const STEP_ORDER = [
   "square-footage",
   "frequency",
   "location",
-  "schedule-date",
   "arrival-window",
   "customer-name",
   "customer-email",
