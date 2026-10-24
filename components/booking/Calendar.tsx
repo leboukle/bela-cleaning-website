@@ -6,6 +6,7 @@ import {
   fromDateKey,
   getMaxSelectableDate,
   getMinSelectableDate,
+  getNewYorkToday,
   isDateSelectable,
   toDateKey,
 } from "@/lib/booking/schedule";
@@ -47,9 +48,19 @@ export default function Calendar({ selectedDateKey, onSelect, unavailableDateKey
   const minDate = useMemo(() => getMinSelectableDate(referenceToday), [referenceToday]);
   const maxDate = useMemo(() => getMaxSelectableDate(referenceToday), [referenceToday]);
 
-  const initialFocusDate = selectedDateKey ? fromDateKey(selectedDateKey) : minDate;
+  // The calendar opens on the CURRENT month in America/New_York (or the month of
+  // an already-selected date) — never on "the first month that has something
+  // available". When every date in the opening months is unavailable the
+  // customer still sees them, disabled, and pages forward themselves.
+  const currentMonth = useMemo(() => startOfMonth(getNewYorkToday(referenceToday)), [referenceToday]);
+  const initialMonth = selectedDateKey ? startOfMonth(fromDateKey(selectedDateKey)) : currentMonth;
+  const initialFocusDate = selectedDateKey
+    ? fromDateKey(selectedDateKey)
+    : isSameMonth(minDate, initialMonth)
+      ? minDate
+      : initialMonth;
 
-  const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(initialFocusDate));
+  const [visibleMonth, setVisibleMonth] = useState(() => initialMonth);
   const [focusedDateKey, setFocusedDateKey] = useState(() => toDateKey(initialFocusDate));
   const dayButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const shouldRestoreFocusRef = useRef(false);
@@ -61,7 +72,7 @@ export default function Calendar({ selectedDateKey, onSelect, unavailableDateKey
     }
   }, [focusedDateKey, visibleMonth]);
 
-  const canGoPrevMonth = !isSameMonth(visibleMonth, startOfMonth(minDate)) && visibleMonth > startOfMonth(minDate);
+  const canGoPrevMonth = visibleMonth > currentMonth;
   const canGoNextMonth = !isSameMonth(visibleMonth, startOfMonth(maxDate)) && visibleMonth < startOfMonth(maxDate);
 
   const goToMonth = (next: Date) => {

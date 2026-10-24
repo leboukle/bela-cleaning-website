@@ -170,6 +170,19 @@ export function getMinSelectableDate(today: Date = new Date()): Date {
   return candidate;
 }
 
+/**
+ * Today's calendar date in America/New_York (BeLa's service timezone), as a
+ * local-midnight Date so it composes with the rest of this file's
+ * calendar-date helpers. Used to decide which month the calendar opens on, so
+ * a customer's own timezone (or UTC at the end of an evening) never shows the
+ * wrong month.
+ */
+export function getNewYorkToday(now: Date = new Date()): Date {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return new Date(get("year"), get("month") - 1, get("day"));
+}
+
 export function getMaxSelectableDate(today: Date = new Date()): Date {
   const max = startOfDay(today);
   max.setMonth(max.getMonth() + MAX_MONTHS_AHEAD);
